@@ -39,6 +39,10 @@ export default defineConfig({
     /** Self-hosted / tunnel-friendly; no Manus-specific host allowlist. */
     allowedHosts: true,
     hmr: { overlay: false },
+    /** Local dev against a locally running backend (`uv run uvicorn app.main:app`). */
+    proxy: {
+      "/api": "http://localhost:8000",
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],

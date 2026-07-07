@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
-import { clerkApiFetch } from "@/lib/clerkApiFetch";
+import { apiFetch } from "@/api/http";
 import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -224,7 +224,7 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     if (state.conferenceMode) fd.append("fixtureId", "project-delta");
 
     try {
-      const response = await clerkApiFetch("/api/simpero/analyse?async=1", {
+      const response = await apiFetch("/api/simpero/analyse?async=1", {
         method: "POST",
         body: fd,
         credentials: "include",

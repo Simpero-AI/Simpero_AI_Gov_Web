@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { clerkApiFetch } from "@/lib/clerkApiFetch";
+import { apiFetch } from "@/api/http";
 import {
   X, CheckCircle2, AlertTriangle, BookOpen,
   BarChart2, TrendingUp, ExternalLink, ChevronDown, FileText, Building2,
@@ -86,7 +86,7 @@ function SecEdgarPanel({ companyName }: { companyName: string }) {
     setError(null);
     setData(null);
     try {
-      const res = await clerkApiFetch(`/api/simpero/sec-search?q=${encodeURIComponent(name)}`);
+      const res = await apiFetch(`/api/simpero/sec-search?q=${encodeURIComponent(name)}`);
       const json = (await res.json()) as SecSearchResult & { error?: string };
       if (!res.ok) throw new Error(json.error ?? "SEC search failed");
       setData({ total: json.total, results: json.results.slice(0, 5) });
@@ -211,7 +211,7 @@ function CorroborationSourceItem({ source }: { source: ExternalSource }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await clerkApiFetch(`/api/simpero/sec-search?q=${encodeURIComponent(source.searchQuery)}`);
+      const res = await apiFetch(`/api/simpero/sec-search?q=${encodeURIComponent(source.searchQuery)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Search failed");
       setResults(data);

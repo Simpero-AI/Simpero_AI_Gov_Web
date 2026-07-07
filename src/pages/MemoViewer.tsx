@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { clerkApiFetch } from "@/lib/clerkApiFetch";
+import { apiFetch } from "@/api/http";
 import { TRPCClientError } from "@trpc/client";
 import { useLocation, useParams } from "wouter";
 import { toast } from "@/components/mvp/primitives/sonner";
@@ -516,7 +516,7 @@ export default function MemoViewer() {
     }
     setExporting(true);
     try {
-      const response = await clerkApiFetch("/api/simpero/export-pdf", {
+      const response = await apiFetch("/api/simpero/export-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(memo),
@@ -1732,7 +1732,7 @@ function CorroborationSourceItem({ source }: { source: ExternalSource }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await clerkApiFetch(`/api/simpero/sec-search?q=${encodeURIComponent(source.searchQuery)}`);
+      const res = await apiFetch(`/api/simpero/sec-search?q=${encodeURIComponent(source.searchQuery)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Search failed");
       setResults(data);

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { clerkApiFetch } from "@/lib/clerkApiFetch";
+import { apiFetch } from "@/api/http";
 import { useLocation } from "wouter";
 import { useDropzone } from "react-dropzone";
 import { toast } from "@/components/mvp/primitives/sonner";
@@ -125,7 +125,7 @@ export default function VerifyOutput() {
         setProgress((p) => (p < 85 ? p + 5 : p));
       }, 600);
 
-      const response = await clerkApiFetch("/api/simpero/verify", {
+      const response = await apiFetch("/api/simpero/verify", {
         method: "POST",
         body: formData,
       });
