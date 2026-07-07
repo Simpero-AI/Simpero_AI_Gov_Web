@@ -1,0 +1,60 @@
+import { z } from "zod";
+export declare const MandateInputSchema: z.ZodObject<{
+    checkSize: z.ZodOptional<z.ZodString>;
+    revenueBand: z.ZodOptional<z.ZodString>;
+    ebitda: z.ZodOptional<z.ZodString>;
+    grossMargin: z.ZodOptional<z.ZodString>;
+    holdPeriod: z.ZodOptional<z.ZodString>;
+    targetReturn: z.ZodOptional<z.ZodString>;
+    ownership: z.ZodOptional<z.ZodString>;
+    mandateSectorLabels: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    mandateGeoLabels: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    mustHaves: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    dealBreakers: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    investmentStages: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    maxValuation: z.ZodOptional<z.ZodString>;
+    esgCriteria: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    specialNotes: z.ZodOptional<z.ZodString>;
+    dealStrategies: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    sectors: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    regions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    exclusions: z.ZodOptional<z.ZodArray<z.ZodString>>;
+}, z.core.$loose>;
+export declare const FrameworkCriterionSchema: z.ZodObject<{
+    id: z.ZodString;
+    name: z.ZodString;
+    benchmark: z.ZodOptional<z.ZodString>;
+    subWeight: z.ZodOptional<z.ZodNumber>;
+}, z.core.$strip>;
+export declare const FrameworkCategorySchema: z.ZodObject<{
+    id: z.ZodString;
+    name: z.ZodString;
+    weight: z.ZodNumber;
+    criteria: z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        name: z.ZodString;
+        benchmark: z.ZodOptional<z.ZodString>;
+        subWeight: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strip>>;
+}, z.core.$strip>;
+export declare const WeightsInputSchema: z.ZodObject<{
+    framework: z.ZodOptional<z.ZodObject<{
+        categories: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            name: z.ZodString;
+            weight: z.ZodNumber;
+            criteria: z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                name: z.ZodString;
+                benchmark: z.ZodOptional<z.ZodString>;
+                subWeight: z.ZodOptional<z.ZodNumber>;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
+    }, z.core.$strip>>;
+    preset: z.ZodOptional<z.ZodString>;
+    financial_health: z.ZodOptional<z.ZodNumber>;
+    market_position: z.ZodOptional<z.ZodNumber>;
+    management_quality: z.ZodOptional<z.ZodNumber>;
+    deal_structure: z.ZodOptional<z.ZodNumber>;
+    esg_impact: z.ZodOptional<z.ZodNumber>;
+}, z.core.$loose>;

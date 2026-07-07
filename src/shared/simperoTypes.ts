@@ -574,7 +574,7 @@ export interface ICMemoResult {
   /** Framework IDs selected by the user at upload time (defaults to all 4 if not set) */
   selectedFrameworks?: string[];
   /** Contract review result — populated when DocumentClassifierAgent identifies a contract document type (SPA, LPA, NDA, etc.) */
-  contractReview?: import("../server/contractReviewAgent").ContractReview | null;
+  contractReview?: import("./contractReview").ContractReview | null;
   /** Document type classification from DocumentClassifierAgent */
   documentType?: string;
   /** Jurisdiction resolved by JurisdictionAgent */
