@@ -11,17 +11,19 @@ const port = process.env.E2E_PORT ?? "4173";
 const baseURL = `http://127.0.0.1:${port}`;
 
 /**
- * Async jobs: strip DB after dotenv (see `scripts/run-dev.mjs`) unless `E2E_DATABASE_URL` is set,
- * so `analysis_jobs` / local Postgres are not required for E2E.
+ * The suite runs against a static production build (`vite preview`) — the old
+ * monorepo Express dev server is gone. The backend comes from either:
+ *   (a) a locally running FastAPI (default: http://localhost:8000, reached via
+ *       the preview proxy in vite.config.ts), or
+ *   (b) a remote staging App — set VITE_API_BASE_URL before running so the
+ *       build points at it directly.
  *
- * Optional: set `E2E_DATABASE_URL` when running Playwright so the dev auth bypass can create a DB user
- * — required for the `@ux` attestation gate test in `e2e/memo-viewer-ux.spec.ts` (otherwise skipped).
- */
-const e2eUseDatabase = Boolean(process.env.E2E_DATABASE_URL?.trim());
-
-/**
- * SKIP_AUTH_DEV + empty TEST_APP_PASSWORD: hit /api/simpero without login in CI.
- * Matches layered .env from run-dev; PORT avoids clashing with a dev server on 3000.
+ * Auth: real Clerk. CI uses Clerk testing tokens — set CLERK_PUBLISHABLE_KEY +
+ * CLERK_SECRET_KEY (test instance only) and e2e/global.setup.ts activates them.
+ * This replaces the old SKIP_AUTH_DEV server bypass.
+ *
+ * Specs tagged @needs-backend-fixtures self-skip until the FastAPI fixture
+ * endpoints exist (set E2E_BACKEND_FIXTURES=1 to re-enable).
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -31,6 +33,7 @@ export default defineConfig({
   workers: process.env.CI ? 4 : undefined,
   reporter: "list",
   timeout: 30_000,
+  globalSetup: "./e2e/global.setup.ts",
   // `{platform}` + `{projectName}` are required to keep Linux/macOS
   // baselines from overwriting each other. Without them, Playwright
   // emits a single `{arg}{ext}` file and CI silently fights local.
@@ -48,19 +51,14 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `SKIP_AUTH_DEV=true PORT=${port} TEST_APP_PASSWORD= node scripts/run-dev.mjs`,
-    url: `${baseURL}/healthz`,
+    command: `pnpm build && pnpm exec vite preview --port ${port} --strictPort`,
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
     stdout: "pipe",
     stderr: "pipe",
     env: {
       ...process.env,
-      /** Enables `share.get` fixture token for Shared Memo UX tests (see `shared/e2eUxMemoFixture.ts`). */
-      E2E_SHARED_MEMO_FIXTURE: "1",
-      ...(e2eUseDatabase
-        ? { DATABASE_URL: process.env.E2E_DATABASE_URL! }
-        : { SIMPERO_E2E_MEMORY_ONLY: "1" }),
     },
   },
 });

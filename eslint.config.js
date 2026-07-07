@@ -4,7 +4,8 @@ import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 
 export default [
-  { ignores: ["dist/", "node_modules/", ".pnpm-store/", "**/*.config.js", "**/*.config.ts"] },
+  // src/api/_legacy is a machine-generated frozen .d.ts snapshot (FE-4) — not lintable code.
+  { ignores: ["dist/", "node_modules/", ".pnpm-store/", "**/*.config.js", "**/*.config.ts", "src/api/_legacy/"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

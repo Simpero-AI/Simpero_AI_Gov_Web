@@ -1,4 +1,12 @@
 import { test, expect } from "@playwright/test";
+
+// @needs-backend-fixtures — depends on backend-seeded fixtures (E2E_SHARED_MEMO_FIXTURE /
+// E2E_DATABASE_URL dev bypass) that the FastAPI backend does not provide yet (backend
+// playbook BE-5). Set E2E_BACKEND_FIXTURES=1 to re-enable once equivalents exist.
+test.skip(
+  !process.env.E2E_BACKEND_FIXTURES,
+  "@needs-backend-fixtures: backend fixture endpoints not yet available"
+);
 import {
   E2E_DELIVERABLE_DEAL_ID,
   E2E_DELIVERABLE_SESSION_ID,

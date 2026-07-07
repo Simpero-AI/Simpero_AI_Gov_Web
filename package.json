@@ -75,6 +75,7 @@
   },
   "devDependencies": {
     "@builder.io/vite-plugin-jsx-loc": "^0.1.1",
+    "@clerk/testing": "^2.2.3",
     "@eslint/js": "^9.39.4",
     "@playwright/test": "^1.49.1",
     "@tailwindcss/vite": "^4.1.3",

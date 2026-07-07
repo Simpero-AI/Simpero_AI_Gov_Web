@@ -48,4 +48,10 @@ export default defineConfig({
       deny: ["**/.*"],
     },
   },
+  /** `vite preview` (Playwright webServer) needs the same /api forwarding as dev. */
+  preview: {
+    proxy: {
+      "/api": "http://localhost:8000",
+    },
+  },
 });
