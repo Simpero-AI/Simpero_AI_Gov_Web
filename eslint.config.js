@@ -4,11 +4,11 @@ import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 
 export default [
-  { ignores: ["dist/", "node_modules/", "drizzle/", ".pnpm-store/", "**/*.config.js", "**/*.config.ts"] },
+  { ignores: ["dist/", "node_modules/", ".pnpm-store/", "**/*.config.js", "**/*.config.ts"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["client/**/*.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}"],
     plugins: { react, "react-hooks": reactHooks },
     languageOptions: {
       ecmaVersion: 2022,
@@ -60,25 +60,19 @@ export default [
 
   // The mvp/primitives barrel re-exports from ui/ and from "sonner" by design.
   {
-    files: ["client/src/components/mvp/primitives/**/*.{ts,tsx}"],
+    files: ["src/components/mvp/primitives/**/*.{ts,tsx}"],
     rules: { "no-restricted-imports": "off" },
   },
   // shadcn-generated ui/ components legitimately compose each other internally
   // (e.g. alert-dialog imports button, sidebar imports sheet, etc.).
   // The Carbon swap boundary applies to *consumer* code outside ui/.
   {
-    files: ["client/src/components/ui/**/*.{ts,tsx}"],
+    files: ["src/components/ui/**/*.{ts,tsx}"],
     rules: { "no-restricted-imports": "off" },
   },
   // ComponentShowcase is an unrouted developer sandbox (gap G-27).
   {
-    files: ["client/src/pages/ComponentShowcase.tsx"],
-    rules: { "no-restricted-imports": "off" },
-  },
-  // Multi-entry Vite samples (preserved per spec §"Multi-entry samples")
-  // — unrouted from the SPA, kept for Phase 2 Carbon regression playground.
-  {
-    files: ["client/src/samples/**", "client/src/carbon-sample-main.tsx", "client/src/radix-sample-*.tsx"],
+    files: ["src/pages/ComponentShowcase.tsx"],
     rules: { "no-restricted-imports": "off" },
   },
 ];

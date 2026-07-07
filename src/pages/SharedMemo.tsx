@@ -8,10 +8,10 @@ import { Badge } from "@/components/mvp/primitives/badge";
 import { Button } from "@/components/mvp/primitives/button";
 import { Pass2LowConfidenceBanner } from "@/components/Pass2LowConfidenceBanner";
 import { trpc } from "@/lib/trpc";
-import type { ICMemoResult, Claim } from "../../../shared/simperoTypes";
-import { DOJ_ECCP_URL, DOJ_ECCP_PDF_URL } from "../../../shared/complianceAlignments";
-import { buildDiligenceQueueResult } from "../../../shared/diligenceQueue";
-import { getSectionConfidence } from "../../../shared/sectionConfidence";
+import type { ICMemoResult, Claim } from "@shared/simperoTypes";
+import { DOJ_ECCP_URL, DOJ_ECCP_PDF_URL } from "@shared/complianceAlignments";
+import { buildDiligenceQueueResult } from "@shared/diligenceQueue";
+import { getSectionConfidence } from "@shared/sectionConfidence";
 
 /**
  * SharedMemo — read-only view of a shared IC memo.

@@ -36,8 +36,8 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { UNAUTHED_ERR_MSG } from "@shared/const";
-import type { ICMemoResult, Claim, MemoSection } from "../../../shared/simperoTypes";
-import { governanceFlagReviewerNote } from "../../../shared/simperoTypes";
+import type { ICMemoResult, Claim, MemoSection } from "@shared/simperoTypes";
+import { governanceFlagReviewerNote } from "@shared/simperoTypes";
 import {
   classifyClaimType,
   getExternalSources,
@@ -46,23 +46,23 @@ import {
   type ClaimType,
   type ExternalSource,
   type FinancialBenchmark,
-} from "../../../shared/claimEnrichment";
+} from "@shared/claimEnrichment";
 import {
   ECCP_PANEL_INTRO,
   DOJ_ECCP_URL,
   DOJ_ECCP_PDF_URL,
   eccpNoteForGovernanceCategory,
   buildGovernanceModelCardStub,
-} from "../../../shared/complianceAlignments";
-import { safeMemoExportStem } from "../../../shared/exportNaming";
+} from "@shared/complianceAlignments";
+import { safeMemoExportStem } from "@shared/exportNaming";
 import {
   buildDiligenceQueueResult,
   diligenceIssuesToCsv,
   diligenceQueueToJson,
   type DiligenceSeverityLabel,
-} from "../../../shared/diligenceQueue";
-import { getSectionConfidence } from "../../../shared/sectionConfidence";
-import { readPass2Acknowledged, writePass2Acknowledged } from "../../../shared/pass2Ack";
+} from "@shared/diligenceQueue";
+import { getSectionConfidence } from "@shared/sectionConfidence";
+import { readPass2Acknowledged, writePass2Acknowledged } from "@shared/pass2Ack";
 import { RefreshCw } from "lucide-react";
 
 interface CitationPanel {

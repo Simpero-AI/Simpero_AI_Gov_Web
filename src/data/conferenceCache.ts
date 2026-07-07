@@ -8,7 +8,7 @@
  * A fictional AI-enabled SaaS company for demo purposes.
  */
 
-import type { ICMemoResult } from "../../../shared/simperoTypes";
+import type { ICMemoResult } from "@shared/simperoTypes";
 
 export const CONFERENCE_CACHE: ICMemoResult = {
   sessionId: "DEMO-NOVASPARK-2026",

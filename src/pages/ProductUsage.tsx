@@ -23,8 +23,8 @@ import {
   XCircle,
   Layers,
 } from "lucide-react";
-import type { LlmUsageByModelRow, LlmUsageRollup } from "../../../shared/llmUsageRollup";
-import type { LlmUsageReportByModelRow } from "../../../shared/llmUsageReportPayload";
+import type { LlmUsageByModelRow, LlmUsageRollup } from "@shared/llmUsageRollup";
+import type { LlmUsageReportByModelRow } from "@shared/llmUsageReportPayload";
 
 function Tok({ n }: { n: number }) {
   return <span className="font-mono tabular-nums">{n.toLocaleString()}</span>;

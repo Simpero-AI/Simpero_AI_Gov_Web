@@ -1,4 +1,19 @@
-import type { AnalysisJobPhase } from "../server/analysisJobStore";
+/**
+ * Vendored from simpero_GOV_AI `server/analysisJobStore.ts` (the backend's
+ * job phase union) — the wire values of `analysis_jobs.phase` the progress
+ * API reports. Must stay in sync with the backend's phase names.
+ */
+export type AnalysisJobPhase =
+  | "queued"
+  | "parsing"
+  | "classify"
+  | "pass1"
+  | "pass2"
+  | "governance"
+  | "ofac"
+  | "pass3_compose"
+  | "pass4_score"
+  | "finalize";
 
 export interface PipelineStep {
   phase: AnalysisJobPhase;

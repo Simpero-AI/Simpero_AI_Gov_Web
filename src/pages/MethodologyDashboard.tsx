@@ -16,7 +16,7 @@ import { StatusChip } from "@/components/mvp/common/StatusChip";
 import { buildMvpNav } from "@/components/mvp/nav/mvpNav";
 import { usePageTitle } from "@/components/mvp/common/usePageTitle";
 import { Shield, ArrowLeft, TrendingUp, AlertTriangle, CheckCircle2, XCircle, BarChart3, RefreshCw } from "lucide-react";
-import { ALL_FRAMEWORKS } from "../../../shared/complianceFrameworks";
+import { ALL_FRAMEWORKS } from "@shared/complianceFrameworks";
 
 // Category display names and descriptions for the Methodology Library
 const CATEGORY_META: Record<string, { label: string; regulation: string; description: string }> = {

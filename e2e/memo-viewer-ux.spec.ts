@@ -3,7 +3,7 @@ import {
   buildE2eUxMemo,
   E2E_UX_MEMO_SESSION_ID,
   E2E_SHARED_MEMO_TOKEN,
-} from "../shared/e2eUxMemoFixture";
+} from "@shared/e2eUxMemoFixture";
 
 function seedMemoSession(page: import("@playwright/test").Page) {
   const memo = buildE2eUxMemo();

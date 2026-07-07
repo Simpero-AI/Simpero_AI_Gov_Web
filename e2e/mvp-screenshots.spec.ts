@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, type Page } from "@playwright/test";
-import { buildE2eUxMemo, E2E_SHARED_MEMO_TOKEN, E2E_UX_MEMO_SESSION_ID } from "../shared/e2eUxMemoFixture";
+import { buildE2eUxMemo, E2E_SHARED_MEMO_TOKEN, E2E_UX_MEMO_SESSION_ID } from "@shared/e2eUxMemoFixture";
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_DIR = path.join(repoRoot, "ux-ui", "mvp-screenshots");

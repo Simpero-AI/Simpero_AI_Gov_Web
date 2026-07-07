@@ -10,25 +10,21 @@ export default defineConfig({
   css: { postcss: {} },
   resolve: {
     alias: {
-      "@": path.resolve(templateRoot, "client", "src"),
-      "@shared": path.resolve(templateRoot, "shared"),
-      "@assets": path.resolve(templateRoot, "attached_assets"),
+      "@": path.resolve(templateRoot, "src"),
+      "@shared": path.resolve(templateRoot, "src", "shared"),
     },
   },
   test: {
-    // Server/shared tests stay in node; client tests use jsdom. Picked per
-    // glob so we don't accidentally give server code DOM globals it never
-    // had before.
+    // Shared tests stay in node; the rest of src (components, pages, lib)
+    // uses jsdom. Picked per glob so pure-logic shared modules keep the
+    // node environment they had in the monorepo.
     environment: "node",
     environmentMatchGlobs: [
-      ["client/src/**/*.test.{ts,tsx}", "jsdom"],
+      // First match wins: shared stays node, everything else in src is jsdom.
+      ["src/shared/**/*.test.ts", "node"],
+      ["src/**/*.test.{ts,tsx}", "jsdom"],
     ],
-    include: [
-      "server/**/*.test.ts",
-      "server/**/*.spec.ts",
-      "shared/**/*.test.ts",
-      "client/src/**/*.test.{ts,tsx}",
-    ],
+    include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: [path.join(templateRoot, "vitest.setup.ts")],
   },
 });

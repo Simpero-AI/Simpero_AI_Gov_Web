@@ -116,41 +116,12 @@ jspm_packages/
 tmp/
 temp/
 
-# Local pg_dump backups (see npm run db:backup)
-/backups/
-
 # Database
 *.db
 *.sqlite
 *.sqlite3
 
-# Webdev artifacts (checkpoint zips, migrations, etc.)
-.webdev/
-
-# Manus IDE / local tooling (db query dumps, etc.) — not used by Simpero at runtime
-.manus/
-# Vite Manus debug collector (see vite.config.ts)
-.manus-logs/
-
-# Claude Code sandbox + Playwright MCP screenshot/log scratch
-.sandbox/
-
-# Superpowers brainstorming visual companion (per-session mockup HTML + state)
-.superpowers/
-
-# Claude Code session working notes — local-only, not part of shipped docs
-self-doc/
-
-# Ad-hoc Playwright MCP screenshots / debug images at the repo root.
-# Persistent screenshots belong under docs/superpowers/verification/screenshots/.
+# Ad-hoc debug screenshots at the repo root
 /*.png
 /*.jpg
 /*.jpeg
-.agents
-skills-lock.json
-.claude/skills
-.claude/settings.json
-
-
-ARCHITECTURE.md
-docs/FS/local_plans

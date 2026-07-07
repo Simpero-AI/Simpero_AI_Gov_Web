@@ -79,7 +79,7 @@ import type {
 } from "@shared/simperoTypes";
 import { proseFieldToString } from "@shared/simperoTypes";
 import type { FrameworkResult } from "@shared/complianceFrameworks";
-import { buildE2eUxMemo } from "../../../shared/e2eUxMemoFixture";
+import { buildE2eUxMemo } from "@shared/e2eUxMemoFixture";
 import { SummaryTab } from "./dealAnalysis/SummaryTab";
 import { ScorecardTab } from "./dealAnalysis/ScorecardTab";
 import { FinancialsTab } from "./dealAnalysis/FinancialsTab";

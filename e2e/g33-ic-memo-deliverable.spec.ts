@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import {
   E2E_DELIVERABLE_SESSION_ID,
   E2E_EMPTY_DELIVERABLE_SESSION_ID,
-} from "../shared/e2eUxMemoFixture";
+} from "@shared/e2eUxMemoFixture";
 
 /**
  * G-33 Task 22 — Playwright coverage for the polished /memo/:sessionId

@@ -1,4 +1,4 @@
-import { ALL_FRAMEWORKS } from "../../../../../shared/complianceFrameworks";
+import { ALL_FRAMEWORKS } from "@shared/complianceFrameworks";
 
 const FRAMEWORK_OPTIONS = [
   { id: "finra_3110", label: "FINRA 3110", geo: "US", desc: "Broker-dealer supervisory standard" },

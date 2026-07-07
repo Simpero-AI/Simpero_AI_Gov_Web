@@ -12,7 +12,7 @@ import {
   getFinancialBenchmarkContext,
   type ClaimType,
   type ExternalSource,
-} from "../../../../../shared/claimEnrichment";
+} from "@shared/claimEnrichment";
 import type { Citation } from "@shared/simperoTypes";
 
 export interface CitationSidebarData {

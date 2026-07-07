@@ -1,5 +1,5 @@
 import { ArrowLeft, CheckCircle, Info, Sparkles, Zap } from "lucide-react";
-import { PIPELINE_STEPS } from "../../../../shared/pipelineSteps";
+import { PIPELINE_STEPS } from "@shared/pipelineSteps";
 import { Switch } from "@/components/mvp/primitives/switch";
 import type { WizardState, WizardAction } from "./newDealWizardReducer";
 
