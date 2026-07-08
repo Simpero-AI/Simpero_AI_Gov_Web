@@ -60,7 +60,7 @@ wholesale in FE-7 when the last tRPC call site moves to the generated OpenAPI cl
 
 | Step | What | Blocked on |
 |---|---|---|
-| FE-6 | orval/OpenAPI codegen pipeline → `src/api/generated/`; Zod-guarded pass-through fetchers for deep payloads | Backend playbook BE-2: `Simpero_AI_Gov_Alpha` must export a committed `openapi.json` (currently it has only `health` + a stubbed `GET /deals/`) |
+| FE-6 | orval/OpenAPI codegen pipeline → `src/api/generated/`; Zod-guarded pass-through fetchers for deep payloads | Backend playbook BE-2: `Simpero_AI_Gov_Alpha` must export a committed `openapi.json` (currently it has only `health` + a stubbed `GET /deals/`). The frontend's full endpoint requirements are enumerated in `docs/api-inventory.md` |
 | FE-7 | Migrate ~45 tRPC call sites + delete `trpc.ts`, `ClerkTrpcProvider`, `_legacy/`, `@trpc/*`, `superjson`; keep `docs/api-migration.md` checklist | FE-6 + backend endpoints landing phase by phase (BE-3…BE-5) |
 | FE-8 | Dual-maintenance rules: `docs/dual-applied-fixes.md` here + PR-template checkbox in the monorepo | Nothing — can be done any time (touches the monorepo) |
 | FE-9 | DO App Platform static-site component (staging first) | Repo pushed to GitHub; the DO App from backend playbook BE-7 |
