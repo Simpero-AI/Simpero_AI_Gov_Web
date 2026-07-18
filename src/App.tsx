@@ -1,6 +1,7 @@
 import { Toaster } from "@/components/mvp/primitives/sonner";
 import { TooltipProvider } from "@/components/mvp/primitives/tooltip";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useProfileSync } from "@/_core/hooks/useProfileSync";
 import NotFound from "@/pages/NotFound";
 import { RedirectToSignIn } from "@clerk/clerk-react";
 import type { ReactNode } from "react";
@@ -75,6 +76,9 @@ function Router() {
  */
 function AuthGate({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
+  // Fills name/email on the FastAPI users row after sign-in (and provisions
+  // brand-new users/orgs as a side effect) — see useProfileSync.
+  useProfileSync();
   if (loading) return null;
   if (user) return <>{children}</>;
   return <RedirectToSignIn />;

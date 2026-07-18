@@ -125,3 +125,6 @@ temp/
 /*.png
 /*.jpg
 /*.jpeg
+
+
+.claude*
