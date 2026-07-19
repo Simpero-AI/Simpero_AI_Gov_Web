@@ -12,14 +12,14 @@ export interface FrameworkCategory {
   criteria: FrameworkCriterion[];
 }
 
-/** Shape returned by trpc.investmentProfile.get — used as prop type in mandate blocks. */
+/** Shape returned by GET /investment-profile — used as prop type in mandate blocks. */
 export interface InvestmentProfile {
   firmName: string | null;
   firmType: string | null;
   aumBand: string | null;
   mandate: Record<string, unknown>;
   weights: Record<string, unknown>;
-  updatedAt: Date;
+  updatedAt: string; // ISO date string (no superjson on the wire)
 }
 
 export const MANDATE_DEFAULTS = {

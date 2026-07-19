@@ -9,14 +9,17 @@ import type { FrameworkResult } from "@shared/complianceFrameworks";
 interface ScorecardTabProps {
   memoTyped: Partial<ICMemoResult> | null;
   sessionId: string | null;
-  dealId: number;
+  dealId: string;
 }
 
 export function ScorecardTab({ memoTyped, sessionId, dealId }: ScorecardTabProps) {
   const utils = trpc.useUtils();
   const profileQuery = trpc.investmentProfile.get.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
   const rescoreMutation = trpc.memo.rescore.useMutation({
-    onSuccess: () => { void utils.deals.get.invalidate({ dealId }); },
+    // ponytail: trpc.deals.get still expects the frozen legacy numeric dealId
+    // (untouched, Phase 3 territory) — this invalidate is a no-op against the
+    // new UUID deal space until this file migrates off tRPC.
+    onSuccess: () => { void utils.deals.get.invalidate({ dealId: Number(dealId) }); },
     onError: (err) => toast.error(err.message || "Scoring failed"),
   });
 

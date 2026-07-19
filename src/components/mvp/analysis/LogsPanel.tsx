@@ -106,9 +106,12 @@ function MetaPreview({ meta }: { meta: Record<string, unknown> | null }) {
 // Audit Trail tab
 // ---------------------------------------------------------------------------
 
-function AuditTrailTab({ dealId }: { dealId: number }) {
+function AuditTrailTab({ dealId }: { dealId: string }) {
+  // ponytail: trpc.logs.auditTrail still expects the frozen legacy numeric
+  // dealId (untouched, Phase 3 territory) — this returns no rows against the
+  // new UUID deal space until this file migrates off tRPC.
   const { data, isLoading, isError } = trpc.logs.auditTrail.useQuery(
-    { dealId },
+    { dealId: Number(dealId) },
     { refetchOnWindowFocus: false, retry: 1 }
   );
 
@@ -197,9 +200,10 @@ function phaseStatus(
   return "pending";
 }
 
-function AgentActivityTab({ dealId }: { dealId: number }) {
+function AgentActivityTab({ dealId }: { dealId: string }) {
+  // ponytail: same legacy-numeric-dealId caveat as AuditTrailTab above.
   const { data, isLoading, isError } = trpc.logs.jobActivity.useQuery(
-    { dealId },
+    { dealId: Number(dealId) },
     { refetchOnWindowFocus: false, retry: 1 }
   );
 
@@ -316,7 +320,7 @@ function AgentActivityTab({ dealId }: { dealId: number }) {
 // Exported LogsPanel
 // ---------------------------------------------------------------------------
 
-export function LogsPanel({ dealId }: { dealId: number }) {
+export function LogsPanel({ dealId }: { dealId: string }) {
   return (
     <div className="flex flex-col h-full">
       <Tabs defaultValue="audit" className="flex flex-col flex-1 min-h-0">

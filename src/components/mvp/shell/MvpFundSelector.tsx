@@ -1,6 +1,7 @@
 import { Building2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { trpc } from "@/lib/trpc";
+import { INVESTMENT_PROFILE_QUERY_KEY, fetchInvestmentProfile } from "@/api/investmentProfile";
 import { useAuth } from "@/_core/hooks/useAuth";
 
 export interface MvpFundSelectorProps {
@@ -19,7 +20,9 @@ const AUM_LABELS: Record<string, string> = {
 
 export function MvpFundSelector({ className, ...rest }: MvpFundSelectorProps) {
   const { user } = useAuth();
-  const profileQuery = trpc.investmentProfile.get.useQuery(undefined, {
+  const profileQuery = useQuery({
+    queryKey: INVESTMENT_PROFILE_QUERY_KEY,
+    queryFn: fetchInvestmentProfile,
     enabled: Boolean(user),
     retry: false,
     refetchOnWindowFocus: false,

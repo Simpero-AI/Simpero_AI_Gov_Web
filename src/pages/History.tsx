@@ -1,9 +1,18 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { History as HistoryIcon, Lock, Trash2 } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
-import { trpc } from "@/lib/trpc";
+import {
+  HISTORY_LIST_QUERY_KEY,
+  clearHistory,
+  deleteHistoryItem,
+  fetchHistoryItem,
+  fetchHistoryList,
+  historyItemQueryKey,
+  type HistoryListItem,
+} from "@/api/history";
 import { Button } from "@/components/mvp/primitives/button";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
 import { MvpSidebar } from "@/components/mvp/shell/MvpSidebar";
@@ -19,18 +28,9 @@ import { PipelineCell } from "@/components/mvp/pipeline/PipelineRow";
 import { buildMvpNav, ROUTES } from "@/components/mvp/nav/mvpNav";
 import { usePageTitle } from "@/components/mvp/common/usePageTitle";
 
-type MemoRow = {
-  // `memo_sessions.id` is a serial integer in drizzle/schema.pg.ts.
-  id: number;
-  sessionId: string;
-  fileName: string;
-  matchRate: number;
-  // superjson decodes server `Date` columns as `Date` instances; legacy callers may pass strings.
-  createdAt: Date | string;
-  selectedFrameworks: string;
-};
+type MemoRow = HistoryListItem;
 
-function formatCreated(d: Date | string): string {
+function formatCreated(d: string): string {
   return new Date(d).toLocaleDateString();
 }
 
@@ -64,24 +64,25 @@ export default function History() {
   const role: "user" | "admin" = (user?.role ?? "user") as "user" | "admin";
   const nav = buildMvpNav({ id: user?.id ?? "anon", role });
 
-  const list = trpc.history.list.useQuery(undefined, { enabled: Boolean(user) });
-  const rows: MemoRow[] = (list.data ?? []) as MemoRow[];
+  const list = useQuery({ queryKey: HISTORY_LIST_QUERY_KEY, queryFn: fetchHistoryList, enabled: Boolean(user) });
+  const rows: MemoRow[] = list.data ?? [];
 
-  // Preserve the existing delete behavior from the old History.tsx.
-  // history.delete takes { sessionId }, NOT { id } (server/routers.ts:166-176).
-  const deleteMutation = trpc.history.delete.useMutation({
+  // Preserve the existing delete behavior from the old History.tsx: takes { sessionId }, NOT { id }.
+  const deleteMutation = useMutation({
+    mutationFn: (vars: { sessionId: string }) => deleteHistoryItem(vars.sessionId),
     onSuccess: () => list.refetch(),
   });
 
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearError, setClearError] = useState<string | null>(null);
-  const clearAllMutation = trpc.history.clearAll.useMutation({
+  const clearAllMutation = useMutation({
+    mutationFn: clearHistory,
     onSuccess: () => {
       setShowClearConfirm(false);
       setClearError(null);
       void list.refetch();
     },
-    onError: (err) => {
+    onError: (err: Error) => {
       setClearError(err.message);
     },
   });
@@ -89,19 +90,18 @@ export default function History() {
   // Preserve the existing open-memo flow: hydrate sessionStorage with the
   // memo JSON before navigating so MemoViewer can render synchronously.
   //
-  // history.get is a QUERY (not a mutation) and returns the parsed
-  // ICMemoResult directly (server/db.ts:546-562) — there is no `.memoJson`
-  // wrapper. The legacy stateful pattern from History.tsx:62-74:
-  //
-  //   1. setSelectedSessionId triggers history.get.useQuery({ sessionId })
+  // GET /history/{sessionId} returns { memo, dealId } directly — the stateful
+  // pattern:
+  //   1. setSelectedSessionId triggers the fetchHistoryItem query
   //   2. useEffect watches the result, hydrates sessionStorage + navigates
   //
   // is the only shape that actually works.
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-  const { data: selectedMemo } = trpc.history.get.useQuery(
-    { sessionId: selectedSessionId ?? "" },
-    { enabled: Boolean(selectedSessionId) }
-  );
+  const { data: selectedMemo } = useQuery({
+    queryKey: historyItemQueryKey(selectedSessionId ?? ""),
+    queryFn: () => fetchHistoryItem(selectedSessionId ?? ""),
+    enabled: Boolean(selectedSessionId),
+  });
   useEffect(() => {
     if (!selectedMemo || !selectedSessionId) return;
     sessionStorage.setItem("simpero_memo", JSON.stringify(selectedMemo.memo));

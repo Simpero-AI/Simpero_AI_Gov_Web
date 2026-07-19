@@ -43,8 +43,9 @@ import { StatusChip } from "@/components/mvp/common/StatusChip";
 import { DataTableShell } from "@/components/mvp/common/DataTableShell";
 import { buildMvpNav } from "@/components/mvp/nav/mvpNav";
 import { usePageTitle } from "@/components/mvp/common/usePageTitle";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { trpc } from "@/lib/trpc";
+import { dealQueryKey, dealStatusQueryKey, fetchDeal, fetchDealStatus } from "@/api/deals";
 import { Button } from "@/components/mvp/primitives/button";
 import { Card, CardContent } from "@/components/mvp/primitives/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/mvp/primitives/tabs";
@@ -454,12 +455,12 @@ function AnalysisTabs({
   memoData: unknown;
   deal: {
     name: string;
-    gpSource: string;
+    gpSource: string | null;
     sectorTags: string[];
     dealSizeMinUsd: number | null;
     dealSizeMaxUsd: number | null;
   };
-  dealId: number;
+  dealId: string;
   sessionId: string | null;
 }) {
   const [tab, setTab] = useTabFromUrl();
@@ -1092,7 +1093,7 @@ function AnalysisTabs({
 // ---------------------------------------------------------------------------
 
 export interface DealAnalysisProps {
-  dealId: number;
+  dealId: string;
 }
 
 export default function DealAnalysis({ dealId }: DealAnalysisProps) {
@@ -1122,34 +1123,33 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
   const nav = buildMvpNav({ id: user?.id ?? "anon", role });
   const { userInitial, userName, userRoleLabel } = useUserDisplay();
 
-  const dealQuery = trpc.deals.get.useQuery({ dealId });
-  const statusQuery = trpc.deals.status.useQuery(
-    { dealId },
-    {
-      refetchInterval: (q) => {
-        const s = q.state.data?.jobStatus;
-        // Stop immediately on any terminal state — do not wait for next cycle
-        if (s === "complete" || s === "error" || s === "no_job") return false;
-        return s === "processing" || s === "queued" ? 2000 : false;
-      },
-    }
-  );
+  const dealQuery = useQuery({ queryKey: dealQueryKey(dealId), queryFn: () => fetchDeal(dealId) });
+  const statusQuery = useQuery({
+    queryKey: dealStatusQueryKey(dealId),
+    queryFn: () => fetchDealStatus(dealId),
+    refetchInterval: (q) => {
+      const s = q.state.data?.jobStatus;
+      // Stop immediately on any terminal state — do not wait for next cycle
+      if (s === "complete" || s === "error" || s === "no_job") return false;
+      return s === "processing" || s === "queued" ? 2000 : false;
+    },
+  });
 
   // dealQuery (which carries the freshly persisted memoJson) doesn't poll,
   // so when the async pipeline transitions queued/processing → complete we
   // must invalidate it to pick up the new memo session in the same view —
   // otherwise the tabs render against the empty pre-pipeline snapshot and
   // the user sees N/A until they manually refresh.
-  const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const jobStatus = statusQuery.data?.jobStatus;
   const prevJobStatusRef = useRef(jobStatus);
   useEffect(() => {
     const prev = prevJobStatusRef.current;
     prevJobStatusRef.current = jobStatus;
     if ((prev === "processing" || prev === "queued") && jobStatus === "complete") {
-      void utils.deals.get.invalidate({ dealId });
+      void queryClient.invalidateQueries({ queryKey: dealQueryKey(dealId) });
     }
-  }, [jobStatus, dealId, utils]);
+  }, [jobStatus, dealId, queryClient]);
 
   const deal = dealQuery.data?.deal;
   const latestMemoSession = dealQuery.data?.latestMemoSession;

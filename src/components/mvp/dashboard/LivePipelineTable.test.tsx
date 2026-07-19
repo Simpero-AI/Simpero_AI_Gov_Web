@@ -5,7 +5,7 @@ import type { LivePipelineRow } from "@shared/dealsListPipeline";
 
 function makeRow(over: Partial<LivePipelineRow> = {}): LivePipelineRow {
   return {
-    dealId: 1,
+    dealId: "1",
     name: "Acme",
     gpSource: "GP",
     sectorTags: [],
@@ -54,7 +54,7 @@ describe("LivePipelineTable", () => {
   it("filters by sector pill click", () => {
     const rows: LivePipelineRow[] = [
       fixtureRow,
-      makeRow({ dealId: 2, name: "MedCorp", sectorTags: ["Healthcare"] }),
+      makeRow({ dealId: "2", name: "MedCorp", sectorTags: ["Healthcare"] }),
     ];
     render(<LivePipelineTable rows={rows} />);
     expect(screen.getByText("Acme")).toBeInTheDocument();

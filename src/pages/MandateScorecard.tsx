@@ -2,8 +2,10 @@ import React, { useRef, useState } from "react";
 import { useUserDisplay } from "@/hooks/useUserDisplay";
 import { Link, Redirect } from "wouter";
 import { CheckCircle, Layers, ListChecks, RotateCcw, Save, ShieldAlert, SlidersHorizontal, Target, Users } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { INVESTMENT_PROFILE_QUERY_KEY, fetchInvestmentProfile } from "@/api/investmentProfile";
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/mvp/primitives/button";
 import { toast } from "@/components/mvp/primitives/sonner";
@@ -58,17 +60,26 @@ export default function MandateScorecard({ section }: Props) {
   const mandateSaveRef = useRef<(() => void) | null>(null);
   const firmSaveRef = useRef<(() => void) | null>(null);
 
-  // All TRPC hooks — must be called unconditionally before any early returns
+  // All hooks — must be called unconditionally before any early returns.
+  // upsert is still tRPC (Phase 2 write path); its cache lives separately from
+  // the migrated `investmentProfile.get` read below, so both must be
+  // invalidated on save or this page and MvpFundSelector go stale.
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const resetMutation = trpc.investmentProfile.upsert.useMutation({
     onSuccess: async () => {
-      await utils.investmentProfile.get.invalidate();
+      await Promise.all([
+        utils.investmentProfile.get.invalidate(),
+        queryClient.invalidateQueries({ queryKey: INVESTMENT_PROFILE_QUERY_KEY }),
+      ]);
       toast.success("Reset to defaults.");
       setShowResetModal(false);
     },
     onError: (err) => toast.error(err.message),
   });
-  const profileQuery = trpc.investmentProfile.get.useQuery(undefined, {
+  const profileQuery = useQuery({
+    queryKey: INVESTMENT_PROFILE_QUERY_KEY,
+    queryFn: fetchInvestmentProfile,
     enabled: Boolean(user),
     retry: false,
     refetchOnWindowFocus: false,

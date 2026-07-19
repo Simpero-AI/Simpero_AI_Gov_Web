@@ -13,8 +13,16 @@ import {
   ShieldCheck,
   Activity,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { trpc } from "@/lib/trpc";
+import {
+  DEALS_DASHBOARD_STATS_QUERY_KEY,
+  DEALS_PIPELINE_QUERY_KEY,
+  fetchDashboardStats,
+  fetchDealsPipeline,
+} from "@/api/deals";
+import { INVESTMENT_PROFILE_QUERY_KEY, fetchInvestmentProfile } from "@/api/investmentProfile";
+import { fetchRecentActivity, recentActivityQueryKey, type RecentActivity } from "@/api/logs";
 import { Button } from "@/components/mvp/primitives/button";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
 import { MvpSidebar } from "@/components/mvp/shell/MvpSidebar";
@@ -53,7 +61,9 @@ export default function Dashboard() {
     setInvestmentBannerDismissed(true);
   }, []);
 
-  const investmentProfileQuery = trpc.investmentProfile.get.useQuery(undefined, {
+  const investmentProfileQuery = useQuery({
+    queryKey: INVESTMENT_PROFILE_QUERY_KEY,
+    queryFn: fetchInvestmentProfile,
     enabled: Boolean(user),
     retry: false,
     refetchOnWindowFocus: false,
@@ -69,9 +79,11 @@ export default function Dashboard() {
   const userName = user?.name ?? user?.email?.split("@")[0] ?? undefined;
   const userRoleLabel = user?.role === "admin" ? "Admin" : user?.role ? "Analyst" : undefined;
 
-  const statsQuery = trpc.deals.dashboardStats.useQuery();
-  const pipelineQuery = trpc.deals.listPipeline.useQuery();
-  const auditQuery = trpc.logs.recentActivity.useQuery({ limit: 20 }, {
+  const statsQuery = useQuery({ queryKey: DEALS_DASHBOARD_STATS_QUERY_KEY, queryFn: fetchDashboardStats });
+  const pipelineQuery = useQuery({ queryKey: DEALS_PIPELINE_QUERY_KEY, queryFn: fetchDealsPipeline });
+  const auditQuery = useQuery({
+    queryKey: recentActivityQueryKey(20),
+    queryFn: () => fetchRecentActivity(20),
     enabled: Boolean(user),
     refetchOnWindowFocus: false,
   });
@@ -324,20 +336,8 @@ function NoMandateBanner({ onConfigure }: { onConfigure: () => void }) {
 
 // ----- Audit Activity Panel -----
 
-type AuditRow = {
-  id: number;
-  createdAt: string;
-  action: string;
-  sessionId: string | null;
-  jobId: string | null;
-};
-
-type AuditData = {
-  total: number;
-  warnings: number;
-  critical: number;
-  rows: AuditRow[];
-};
+type AuditRow = RecentActivity["rows"][number];
+type AuditData = RecentActivity;
 
 const WARN_ACTIONS = new Set([
   "section_regenerate_scaffold",

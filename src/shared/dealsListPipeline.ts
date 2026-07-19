@@ -7,7 +7,7 @@ import type { DealMetrics } from "./simperoTypes";
  * nullable; the client renders `"N/A"` for null. See spec Section 2.
  */
 export interface LivePipelineRow {
-  dealId: number;
+  dealId: string;
   name: string;
   gpSource: string;
   sectorTags: string[];

@@ -1,7 +1,8 @@
 // client/src/pages/AnalysisRedirect.tsx
 import { Redirect } from "wouter";
 import { Loader2, BarChart2 } from "lucide-react";
-import { trpc } from "@/lib/trpc";
+import { useQuery } from "@tanstack/react-query";
+import { DEALS_PIPELINE_QUERY_KEY, fetchDealsPipeline } from "@/api/deals";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
 import { MvpSidebar } from "@/components/mvp/shell/MvpSidebar";
@@ -19,7 +20,7 @@ export default function AnalysisRedirect() {
   const { user, loading: authLoading } = useAuth();
   const role: "user" | "admin" = (user?.role ?? "user") as "user" | "admin";
   const nav = buildMvpNav({ id: user?.id ?? "anon", role });
-  const query = trpc.deals.listPipeline.useQuery(undefined, { enabled: Boolean(user) });
+  const query = useQuery({ queryKey: DEALS_PIPELINE_QUERY_KEY, queryFn: fetchDealsPipeline, enabled: Boolean(user) });
 
   if (authLoading || query.isLoading) {
     return (

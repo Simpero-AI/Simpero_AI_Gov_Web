@@ -27,7 +27,7 @@ export function useProfileSync() {
     const key = `profile-synced:${clerkUser.id}`;
     if (sessionStorage.getItem(key) === payload) return;
 
-    void apiFetch("/auth/sync-profile", {
+    void apiFetch("/api/auth/sync-profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: payload,

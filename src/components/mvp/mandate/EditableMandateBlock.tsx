@@ -4,7 +4,9 @@ import {
   ChevronDown, ChevronUp, DollarSign, Target,
   CheckCircle2, XCircle, Leaf, FileText, Plus, X,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
+import { INVESTMENT_PROFILE_QUERY_KEY } from "@/api/investmentProfile";
 import { toast } from "@/components/mvp/primitives/sonner";
 import { Textarea } from "@/components/mvp/primitives/textarea";
 import { MANDATE_DEFAULTS, type InvestmentProfile } from "@/data/mandateDefaults";
@@ -28,9 +30,15 @@ function getStringArray(mandate: Record<string, unknown>, key: string, fallback:
 
 export function EditableMandateBlock({ profile, saveRef }: Props) {
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const upsertMutation = trpc.investmentProfile.upsert.useMutation({
     onSuccess: async () => {
-      await utils.investmentProfile.get.invalidate();
+      // Invalidate both caches: the trpc-backed write still lives here, but
+      // readers (MandateScorecard, MvpFundSelector) migrated to apiFetch.
+      await Promise.all([
+        utils.investmentProfile.get.invalidate(),
+        queryClient.invalidateQueries({ queryKey: INVESTMENT_PROFILE_QUERY_KEY }),
+      ]);
       setIsDirty(false);
       toast.success("Mandate saved.");
     },

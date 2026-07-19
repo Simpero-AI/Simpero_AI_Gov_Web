@@ -22,7 +22,7 @@ export type AuthUser = {
 export const AUTH_ME_QUERY_KEY = ["auth", "me"] as const;
 
 async function fetchMe(): Promise<AuthUser | null> {
-  const res = await apiFetch("/auth/me");
+  const res = await apiFetch("/api/auth/me");
   if (res.status === 401 || res.status === 403) return null;
   if (!res.ok) throw new Error(`GET /auth/me failed: ${res.status}`);
   return (await res.json()) as AuthUser;
@@ -51,6 +51,8 @@ export function useAuth(options?: UseAuthOptions) {
   });
 
   const logout = useCallback(async () => {
+    // Best-effort audit row (auth_sign_out) — must never block the actual sign-out.
+    void apiFetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     try {
       await clerk.signOut();
     } finally {

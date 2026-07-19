@@ -1,7 +1,9 @@
 import type React from "react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Users } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
+import { INVESTMENT_PROFILE_QUERY_KEY } from "@/api/investmentProfile";
 import { toast } from "@/components/mvp/primitives/sonner";
 import { Textarea } from "@/components/mvp/primitives/textarea";
 import { MANDATE_DEFAULTS, type InvestmentProfile } from "@/data/mandateDefaults";
@@ -22,9 +24,15 @@ const lbl = "block text-[10px] font-semibold uppercase tracking-wide text-gray-4
 
 export function FirmProfileBlock({ profile, saveRef }: Props) {
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const upsertMutation = trpc.investmentProfile.upsert.useMutation({
     onSuccess: async () => {
-      await utils.investmentProfile.get.invalidate();
+      // Invalidate both caches: the trpc-backed write still lives here, but
+      // readers (MandateScorecard, MvpFundSelector) migrated to apiFetch.
+      await Promise.all([
+        utils.investmentProfile.get.invalidate(),
+        queryClient.invalidateQueries({ queryKey: INVESTMENT_PROFILE_QUERY_KEY }),
+      ]);
       toast.success("Firm profile saved.");
     },
     onError: (err) => toast.error(err.message),

@@ -41,9 +41,9 @@ function Router() {
       <Route path="/analysis" component={AnalysisRedirect} />
       <Route path="/analysis/:dealId">
         {(params) => {
-          const id = Number(params.dealId);
-          if (!Number.isFinite(id) || id <= 0) return <NotFound />;
-          return <DealAnalysis dealId={id} />;
+          // dealId is an opaque UUID string now — no numeric coercion.
+          if (!params.dealId) return <NotFound />;
+          return <DealAnalysis dealId={params.dealId} />;
         }}
       </Route>
       <Route path="/history" component={History} />
