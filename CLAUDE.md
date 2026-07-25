@@ -11,6 +11,21 @@ Current migration state: **FE-0…FE-5 done, FE-6…FE-10 pending** — see
 `docs/split-implementation-status.md` for the full ledger, what's blocked on the
 backend, and what needs a human decision.
 
+## Docs map (this repo's own `docs/`, distinct from the monorepo docs above)
+
+- `docs/plans/` — architect-authored implementation plans, written before a
+  feature is built. Can drift from what actually shipped — see caveat under
+  Admin Portal below.
+- `docs/implementations/` — dated, post-hoc summaries of what was actually
+  built for a given feature/session (features, gaps, future work). Add a new
+  dated file here after finishing a non-trivial feature; this is the
+  authoritative "what happened" record, prefer it over `docs/plans/` when
+  they disagree.
+- `docs/split-implementation-status.md` — the FE-0…FE-10 migration ledger
+  (see above).
+- `docs/api-inventory.md`, `docs/e2e-implementation-plan.md` — standing
+  reference docs, updated in place rather than dated.
+
 ## Provenance & the faithful-copy rule
 
 - Import baseline: `simpero_GOV_AI @ 4cdfe5ce1c382febf777e5289ee2e209d0c4479f`
@@ -53,6 +68,72 @@ build-time — changing one requires a rebuild.
   `src/lib/trpc.ts`. Excluded from eslint. Deleted in FE-7.
 - `src/lib/trpc.ts` + `src/lib/ClerkTrpcProvider.tsx` — legacy tRPC client, still
   the live data layer for all ~45 procedure call sites until FE-7 migrates them.
+
+## Admin Portal
+
+`src/admin/**` is a platform/org-admin management UI — create/delete client
+orgs, invite members and org admins (own org or, for platform admins, an
+arbitrary client org), remove members, and change a member's role between
+`member`/`admin` — a separate application mounted in `App.tsx`'s outer
+`<Switch>`, **outside** `Router()`/`AuthGate`, lazy-loaded so its code never
+enters the main product bundle. Routes: `/admin/sign-up`, `/admin/sign-in`
+(must precede `/admin` itself or the nest swallows them), then `/admin`
+(nest) → `AdminApp.tsx`'s own child `<Switch>` (`/organizations`,
+`/organizations/:orgId` — the per-org detail page for platform admins,
+`/members`, `/invitations`). Guarded internally by `AdminGuard` (Clerk
+signed-in + `GET /api/admin/context`, not `AuthGate`) — a signed-in user who
+isn't any kind of admin is redirected to `~/admin/sign-in?error=access_denied`
+(not shown an in-place error), which offers sign-out if they're still
+holding a non-admin session. Full build history and gaps:
+`docs/implementations/2026-07-23-admin-portal.md`; original plan:
+`docs/plans/admin-portal-frontend.md` (has since drifted substantially from
+the implementation — trust the implementation doc where they conflict). See
+also the separation rule directly below.
+
+**Member role is three things kept in sync, not one**: a member's Clerk org
+membership role (`org:member`/`org:admin`), the local `users.role` column,
+and their `clerk_admin_users` row (which is what actually grants `/admin`
+portal access) all change together on every promote/demote — backend-side,
+not something this repo enforces, but the frontend's role `Select` assumes
+this invariant holds. **Member removal is a soft-delete**: removed members
+get `status: "inactive"` and stay visible in the Members/org-detail lists
+(not filtered out) with a one-click re-invite action, rather than
+disappearing — don't "fix" a list that shows inactive members, that's
+intentional.
+
+## Admin portal / product portal separation
+
+`src/admin/**` (the platform/org-admin portal) and the rest of `src/` (the
+product portal) are **independent surfaces and must stay that way**:
+
+- No coupling in either direction. Admin code must never import product
+  components, hooks, or shell code (`src/components/mvp/shell/**`, product
+  auth hooks, etc.) and vice versa — `AdminLayout`/`AdminNav` are deliberately
+  hand-rolled rather than reusing `MvpAppShell`/`MvpSidebar` for this reason.
+  Shared primitives (`@/components/mvp/primitives`) and generic libs
+  (`@/lib/*`) are fine to share; anything product-specific or admin-specific
+  is not.
+- Auth is separate: admin sign-in/sign-out (`useClerk()` directly) is not the
+  product's `useAuth()`/logout flow — do not reuse or bridge them.
+  `getAdminContext`/`clerk_admin_users` never creates a product `users` row.
+  Route guards (`AdminGuard` vs whatever gates the product) stay independent.
+- If a task seems to need admin code to call into product code (or the
+  reverse) to avoid duplicating a few lines, duplicate the few lines instead
+  — that's the correct trade, not a shortcut.
+
+## Backend changes belong in the backend repo's own session
+
+This repo's Claude Code sessions must **never** implement changes in
+`Simpero_AI_Gov_Alpha` (the sibling FastAPI backend), even when a feature
+change here clearly requires a paired backend change. Instead:
+
+1. Implement the frontend half only, against the target API contract.
+2. Produce a copy-pastable, self-contained prompt describing exactly what
+   the backend needs (endpoints, schema/field changes, request/response
+   shapes, why, and any relevant existing-code context) for the user to hand
+   to a separate Claude Code session running in the backend repo.
+3. Do not `cd` into, read for the purpose of editing, or write files in the
+   backend repo from this repo's session.
 
 ## Gotchas (learned the hard way)
 

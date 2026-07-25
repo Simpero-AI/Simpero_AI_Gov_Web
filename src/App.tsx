@@ -1,10 +1,11 @@
+import { Spinner } from "@/components/mvp/primitives";
 import { Toaster } from "@/components/mvp/primitives/sonner";
 import { TooltipProvider } from "@/components/mvp/primitives/tooltip";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useProfileSync } from "@/_core/hooks/useProfileSync";
 import NotFound from "@/pages/NotFound";
 import { RedirectToSignIn } from "@clerk/clerk-react";
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -26,6 +27,25 @@ import DecisionFeedPage from "./pages/intelligence/DecisionFeed";
 import AskMePage from "./pages/intelligence/AskMe";
 import InstitutionalMemoryPage from "./pages/intelligence/InstitutionalMemory";
 import NewDealWizard from "@/pages/NewDealWizard";
+
+// Admin Portal — lazy so its code never enters the main product bundle
+// (docs/plans/admin-portal-frontend.md). Mounted in the outer <Switch>
+// below, NOT inside Router()/AuthGate — admins are an admin-only identity
+// (no product `users` row) and must never hit /auth/me.
+const AdminSignUp = lazy(() => import("@/admin/pages/AdminSignUp"));
+const AdminSignIn = lazy(() => import("@/admin/pages/AdminSignIn"));
+const AdminApp = lazy(() => import("@/admin/AdminApp"));
+
+/** Suspense fallback for the admin chunks — product-independent, matches the
+ * admin sign-up/sign-in visual language (--mvp-sidebar-bg), deliberately
+ * not the product shell's loader (AdminLayout doesn't exist until Phase 1). */
+function AdminBootFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[color:var(--mvp-sidebar-bg)]">
+      <Spinner className="size-6 text-white" />
+    </div>
+  );
+}
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -102,6 +122,25 @@ function App() {
             <Route path="/sign-in/*" component={SignInPage} />
             <Route path="/sign-up" component={SignUpPage} />
             <Route path="/sign-up/*" component={SignUpPage} />
+            {/* Admin Portal (F1/F2) — outside AuthGate, guarded internally by
+                AdminGuard (Clerk signed-in + GET /api/admin/context). Ordering
+                matters: /admin/sign-up and /admin/sign-in must precede /admin,
+                or the /admin nest would swallow their sub-routes. */}
+            <Route path="/admin/sign-up" nest>
+              <Suspense fallback={<AdminBootFallback />}>
+                <AdminSignUp />
+              </Suspense>
+            </Route>
+            <Route path="/admin/sign-in" nest>
+              <Suspense fallback={<AdminBootFallback />}>
+                <AdminSignIn />
+              </Suspense>
+            </Route>
+            <Route path="/admin" nest>
+              <Suspense fallback={<AdminBootFallback />}>
+                <AdminApp />
+              </Suspense>
+            </Route>
             <Route>
               <AuthGate>
                 <Router />
