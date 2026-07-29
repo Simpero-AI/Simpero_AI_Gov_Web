@@ -116,11 +116,8 @@ mirroring the backend repo's own `-plan`/gated pair pattern exactly.
 - [x] **B2. Add secrets to all four environments.** **Done** 2026-07-30 — `DO_TOKEN`,
   `SPACES_ACCESS_KEY_ID`, `SPACES_SECRET_ACCESS_KEY` on all four.
 
-- [x] **B3 (staging), partial.** `APP_ID`/`LIVE_URL` are set and proven working (real `deploy`/`smoke`
-  runs succeeded). **Still need `DEFAULT_INGRESS`** — added to the `staging` Environment's variables (same
-  place, same non-secret treatment) so `smoke` checks DO's own hostname rather than the custom domain. Get
-  the value from a `terraform-apply` job summary (prints `default_ingress` now) or
-  `terraform output -raw default_ingress` locally.
+- [x] **B3 (staging).** **Done** — `APP_ID`, `LIVE_URL`, `DEFAULT_INGRESS` all set on the `staging`
+  Environment.
 - [ ] **B3 (production).** Not started — same three variables (`APP_ID`, `LIVE_URL`, `DEFAULT_INGRESS`),
   set after production's first `terraform-apply` (E2).
 
@@ -188,7 +185,13 @@ mirroring the backend repo's own `-plan`/gated pair pattern exactly.
      This is where you find out whether DO's Node buildpack handles pnpm 10.4.1 and the `wouter` patch
      correctly (R1) — confirmed fine, the deep-link check passed.
   5. For every deploy after this one, use `run_terraform: false` (the default) — it skips Terraform
-     entirely and just ships the latest `staging` branch tip.
+     entirely and just ships the latest `staging` branch tip. **Found and fixed 2026-07-30**: `smoke` was
+     silently *skipped* (not failed) on a routine `run_terraform: false` deploy — GitHub's implicit `if`
+     for a job with `needs` checks the whole upstream chain, not just direct needs, so `smoke` was getting
+     swept up by `terraform-plan`/`terraform-apply`'s skipped status even though `deploy` itself succeeded.
+     Fixed with an explicit `if: always() && needs.guard.result == 'success' && needs.deploy.result ==
+     'success'` on `smoke` (plan doc R8). **Do one more routine deploy and confirm `smoke` actually runs
+     (not skipped) this time**, now that the fix is in — not independently verified yet.
   6. **Still to do**: the negative test — dispatch again with `environment: production` while still on
      the `staging` branch and confirm the `guard` job fails immediately with a clear error, touching
      nothing on DO.

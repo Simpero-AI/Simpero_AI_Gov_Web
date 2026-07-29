@@ -181,6 +181,14 @@ jobs:
   smoke:
     needs: [guard, deploy]
     runs-on: ubuntu-latest
+    # `always()` is load-bearing here too, same reasoning as `deploy`'s own
+    # comment below: GitHub's implicit default `if` for a job with `needs`
+    # checks the *entire* upstream chain, not just direct needs — so without
+    # this, smoke gets skipped whenever terraform-plan/terraform-apply are
+    # skipped (every routine run_terraform: false deploy), even though guard
+    # and deploy both actually succeeded. Confirmed 2026-07-30 — smoke was
+    # silently skipped on a real run_terraform: false deploy before this fix.
+    if: ${{ always() && needs.guard.result == 'success' && needs.deploy.result == 'success' }}
     # Needed to read vars.DEFAULT_INGRESS / vars.APP_ID — GitHub Environment
     # variables are only readable by jobs that declare that `environment:`.
     # Expected to not re-trigger the reviewer gate a second time in the same
