@@ -1,0 +1,100 @@
+name: Destroy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        default: staging
+      confirm_environment:
+        description: Type the environment name exactly (e.g. "staging") to confirm
+        type: string
+        required: true
+
+concurrency:
+  group: infra-${{ inputs.environment }}
+  cancel-in-progress: false # never race a destroy against deploy.yml
+
+env:
+  TF_VERSION: 1.14.0 # matches deploy.yml
+
+jobs:
+  terraform-destroy-plan:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}-plan
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Verify typed confirmation matches the target environment
+        working-directory: .
+        run: |
+          if [ "${{ inputs.confirm_environment }}" != "${{ inputs.environment }}" ]; then
+            echo "::error::confirm_environment must exactly match environment ('${{ inputs.environment }}'), got '${{ inputs.confirm_environment }}'"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Init
+        working-directory: infra
+        run: terraform init -backend-config=env/${{ inputs.environment }}.backend.hcl
+
+      - name: Plan destroy
+        working-directory: infra
+        run: terraform plan -destroy -var-file=env/${{ inputs.environment }}.tfvars -out=tfplan
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: destroy-tfplan-${{ inputs.environment }}
+          path: infra/tfplan
+          retention-days: 7
+
+  terraform-destroy-apply:
+    needs: terraform-destroy-plan
+    runs-on: ubuntu-latest
+    # Same gated Environment deploy.yml's terraform-apply/deploy use —
+    # inherits the same reviewer + branch-restriction rules automatically.
+    environment:
+      name: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: destroy-tfplan-${{ inputs.environment }}
+          path: infra
+
+      - name: Init
+        run: terraform init -backend-config=env/${{ inputs.environment }}.backend.hcl
+
+      - name: Apply destroy plan
+        run: terraform apply tfplan
+
+      - name: Post-destroy reminder
+        run: |
+          {
+            echo "### Infrastructure destroyed — ${{ inputs.environment }}"
+            echo ""
+            echo "- The \`APP_ID\` / \`LIVE_URL\` Environment variables for \`${{ inputs.environment }}\` now point at a destroyed App — clear or update them before the next deploy."
+            echo "- The custom domain's DNS records (D9/V8 domain setup) now point at a dead App — remove or repoint them."
+          } >> "$GITHUB_STEP_SUMMARY"
