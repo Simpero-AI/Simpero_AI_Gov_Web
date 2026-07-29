@@ -10,12 +10,16 @@ infra, same pattern, proven to work.
 Do these roughly in order — later steps depend on earlier ones. Check items off as you go; this file is
 meant to be updated in place, not re-read from scratch each time.
 
-**Status as of 2026-07-30:** Groups A and B are done, except **B3** (`APP_ID`/`LIVE_URL` variables — can't
-be set until the first `terraform-apply` exists to print them). Group C is done for **staging** (Clerk key
-set, allowed-origins confirmed not needed); production's Clerk key/origins are still pending on Group D's
-domain work. **Nothing has been applied yet — no App Platform app exists.** The next real action is
-**Group E, E1**: the first `deploy.yml` run (`environment: staging`, `run_terraform: true`), which creates
-the staging App and is also where B3 finally gets filled in.
+**Status as of 2026-07-30:** Staging is live. `terraform-apply` succeeded, `deploy`/`smoke` are passing,
+`app-staging.simpero.com` resolves and serves 200s with the catchall confirmed working (D1 done). Groups A
+and B are done; B3 has `APP_ID`/`LIVE_URL` set (proven by real successful runs) but needs `DEFAULT_INGRESS`
+added too — a fix that makes `smoke` check DO's own `*.ondigitalocean.app` hostname instead of the custom
+domain got reverted along with some other uncommitted work at some point and was just reapplied to
+`deploy.yml`; nothing currently reads `DEFAULT_INGRESS` in a live run yet, add it before the next dispatch.
+Group C done for staging; production's Clerk key/origins still pending Group D's production DNS. Remaining:
+the negative test (E1 step 5/6), then production (E2 onward).
+**Reminder — recheck after any "changes lost" incident**: `git status`/`git diff HEAD` against `deploy.yml`,
+`destroy.yml`, and this file before trusting any of the above, in case more got reverted than caught here.
 
 ---
 
@@ -112,11 +116,13 @@ mirroring the backend repo's own `-plan`/gated pair pattern exactly.
 - [x] **B2. Add secrets to all four environments.** **Done** 2026-07-30 — `DO_TOKEN`,
   `SPACES_ACCESS_KEY_ID`, `SPACES_SECRET_ACCESS_KEY` on all four.
 
-- [ ] **B3. Add `APP_ID`/`LIVE_URL` variables — not yet possible.** These go on the **gated** `staging`/
-  `production` Environments only (not the `-plan` pair), as **Environment variables**, not secrets — an
-  App Platform app ID isn't sensitive. They don't exist yet because nothing's been provisioned — this step
-  happens in Group E, right after each environment's first `terraform-apply` prints them to the job
-  summary. The only item left blocking Group E.
+- [x] **B3 (staging), partial.** `APP_ID`/`LIVE_URL` are set and proven working (real `deploy`/`smoke`
+  runs succeeded). **Still need `DEFAULT_INGRESS`** — added to the `staging` Environment's variables (same
+  place, same non-secret treatment) so `smoke` checks DO's own hostname rather than the custom domain. Get
+  the value from a `terraform-apply` job summary (prints `default_ingress` now) or
+  `terraform output -raw default_ingress` locally.
+- [ ] **B3 (production).** Not started — same three variables (`APP_ID`, `LIVE_URL`, `DEFAULT_INGRESS`),
+  set after production's first `terraform-apply` (E2).
 
 - [x] **B4. Branch protection.** **Done** 2026-07-30 — see A9 (branch protection was actioned once, covers
   both).
@@ -143,9 +149,12 @@ mirroring the backend repo's own `-plan`/gated pair pattern exactly.
 
 ## Group D — domain and DNS
 
-- [ ] **D1. Add DNS records for the staging app.** After Phase 1 (Group E, E1) creates the staging App, DO
-  shows the CNAME/TXT records it needs for `app-staging.simpero.com` (App Platform → your app → Settings →
-  Domains). Add them wherever `simpero.com`'s DNS is actually hosted.
+- [x] **D1. Add DNS records for the staging app.** **Done and confirmed live** 2026-07-30 —
+  `https://app-staging.simpero.com/` returns `200` with `x-do-static-catchall-document: index.html`
+  (catchall confirmed active). Required a **CNAME** (`app-staging` → the app's `*.ondigitalocean.app`
+  hostname), not an A record — an A record was tried first and failed (pointed at a Cloudflare IP that
+  wasn't the app). CNAME resolves through DO's own Cloudflare-fronted CDN, which is expected, not a
+  misconfiguration. `LIVE_URL` is now a meaningful check for staging, not just `DEFAULT_INGRESS` (R8).
 
 - [ ] **D2. Add DNS records for the production app**, same process, once the production App exists
   (Group E, E2).
@@ -168,23 +177,28 @@ mirroring the backend repo's own `-plan`/gated pair pattern exactly.
      it). Read the plan in the `terraform-plan` job's summary before approving `terraform-apply` — it
      should show creating one `digitalocean_app` and one `digitalocean_project_resources` assignment,
      nothing about destroying anything.
-  2. Approve the `terraform-apply` gate. Once it finishes, copy `app_id`/`live_url` from its job summary
-     into the `staging` Environment's `APP_ID`/`LIVE_URL` **variables** (B3) — `deploy` and `smoke` read
-     these directly, not a Terraform output.
-  3. The same run's `deploy` job ships the first real build. This is where you'll find out whether DO's
-     Node buildpack handles pnpm 10.4.1 and the `wouter` patch correctly (plan doc's R1) — the `smoke`
-     job's deep-link check (`/admin/organizations` or similar returning the app shell, not a 404) is the
-     signal to watch, not a local test.
-  4. For every deploy after this one, use `run_terraform: false` (the default) — it skips Terraform
+  2. Approve the `terraform-apply` gate. Once it finishes, copy `app_id`/`live_url`/`default_ingress` from
+     its job summary into the `staging` Environment's `APP_ID`/`LIVE_URL`/`DEFAULT_INGRESS` **variables**
+     (B3) — `deploy` and `smoke` read these directly, not a Terraform output.
+  3. **Expected failure on the very first run, not a bug**: `deploy` runs right after `terraform-apply` in
+     the same dispatch and fails with `doctl apps create-deployment ""` — `vars.APP_ID` can't exist before
+     `terraform-apply` creates the app. Do step 2, then **Actions → the run → Re-run jobs → Re-run failed
+     jobs** (retries only `deploy`/`smoke`, not Terraform). Confirmed 2026-07-30 — see plan doc R8.
+  4. **Status: done for staging** — `deploy`/`smoke` are passing, `app-staging.simpero.com` is live (D1).
+     This is where you find out whether DO's Node buildpack handles pnpm 10.4.1 and the `wouter` patch
+     correctly (R1) — confirmed fine, the deep-link check passed.
+  5. For every deploy after this one, use `run_terraform: false` (the default) — it skips Terraform
      entirely and just ships the latest `staging` branch tip.
-  5. Run the negative test the plan calls for: dispatch again with `environment: production` while still on
+  6. **Still to do**: the negative test — dispatch again with `environment: production` while still on
      the `staging` branch and confirm the `guard` job fails immediately with a clear error, touching
      nothing on DO.
 
 - [ ] **E2. Phase 2 — production**, once Groups A–D are fully done for production specifically (project
   name confirmed, DNS, Clerk production instance, environment reviewer). Same process as E1 (`run_terraform:
   true` for the first run only, then `false`), dispatched only from the `main` branch — still no local
-  apply.
+  apply. **Expect the same `deploy` failure E1 hit** (empty `vars.APP_ID` on the first run) — set
+  `production`'s `APP_ID`/`LIVE_URL`/`DEFAULT_INGRESS` from `terraform-apply`'s summary, then
+  **Re-run failed jobs**.
 
 - [ ] **E3. Phase 3 — follow-ups, not blocking.** Once a staging backend with test fixtures exists (backend
   repo's own timeline), point the `E2E_API_BASE_URL` repo variable at it and flip `E2E_ENABLED` to `"true"`

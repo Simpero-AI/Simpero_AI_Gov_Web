@@ -134,14 +134,21 @@ jobs:
       - name: Apply saved plan
         run: terraform apply tfplan
 
+      # On a first-ever apply for this environment, the `deploy` job below
+      # WILL fail (vars.APP_ID is still empty — doctl apps create-deployment ""
+      # -> DO 405, confirmed 2026-07-30). Not a bug: copy the values below into
+      # this environment's APP_ID/LIVE_URL/DEFAULT_INGRESS variables, then
+      # re-run failed jobs (retries only deploy/smoke, not Terraform). See
+      # plan doc R8.
       - name: Summarize App outputs
         run: |
           {
             echo "### Terraform outputs — ${{ inputs.environment }}"
             echo "- app_id: \`$(terraform output -raw app_id)\`"
             echo "- live_url: \`$(terraform output -raw live_url)\`"
+            echo "- default_ingress: \`$(terraform output -raw default_ingress)\`"
             echo ""
-            echo "If this is the first apply for this environment, or the App was recreated, copy these into the \`APP_ID\` / \`LIVE_URL\` Environment **variables** (not secrets — not sensitive) for \`${{ inputs.environment }}\` before the next deploy."
+            echo "If this is the first apply for this environment, or the App was recreated, copy these into the \`APP_ID\` / \`LIVE_URL\` / \`DEFAULT_INGRESS\` Environment **variables** (not secrets — not sensitive) for \`${{ inputs.environment }}\` before the next deploy. \`smoke\` checks \`DEFAULT_INGRESS\` (App Platform's own \`*.ondigitalocean.app\` hostname), not \`LIVE_URL\` — \`LIVE_URL\` becomes the custom domain once DNS/cert are live (Group D), which isn't true immediately after a first apply. On a first apply, the \`deploy\` job in **this same run** will already have failed with an empty app ID — set the variables now, then use **Re-run jobs → Re-run failed jobs**."
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
@@ -174,11 +181,17 @@ jobs:
   smoke:
     needs: [guard, deploy]
     runs-on: ubuntu-latest
-    # Needed to read vars.LIVE_URL / vars.APP_ID — GitHub Environment
+    # Needed to read vars.DEFAULT_INGRESS / vars.APP_ID — GitHub Environment
     # variables are only readable by jobs that declare that `environment:`.
     # Expected to not re-trigger the reviewer gate a second time in the same
     # run (protection rules fire on first entry into the environment, not
     # per job) — not independently verified against live GitHub behavior.
+    #
+    # Checks DEFAULT_INGRESS (App Platform's own *.ondigitalocean.app
+    # hostname), not LIVE_URL — LIVE_URL becomes the custom domain once
+    # DNS/cert are live (Group D), which isn't guaranteed right after an
+    # apply. Confirmed 2026-07-30: checking LIVE_URL before DNS exists just
+    # fails on an unresolvable/uncertified custom domain, not a real signal.
     environment:
       name: ${{ inputs.environment }}
     steps:
@@ -188,34 +201,55 @@ jobs:
 
       - name: GET / is 200
         run: |
-          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ vars.LIVE_URL }}/")
+          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ vars.DEFAULT_INGRESS }}/")
           [ "$status" = "200" ] || { echo "::error::GET / returned $status"; exit 1; }
 
       - name: Deep link falls back to the SPA shell (proves catchall_document)
         run: |
-          status=$(curl -s -o /tmp/deep.html -w '%{http_code}' "${{ vars.LIVE_URL }}/this/route/does/not/exist")
+          status=$(curl -s -o /tmp/deep.html -w '%{http_code}' "${{ vars.DEFAULT_INGRESS }}/this/route/does/not/exist")
           [ "$status" = "200" ] || { echo "::error::deep route returned $status instead of 200"; exit 1; }
           grep -q '<div id="root"' /tmp/deep.html || { echo "::error::deep route did not return the SPA shell"; exit 1; }
 
       - name: A hashed asset resolves
         run: |
-          curl -s "${{ vars.LIVE_URL }}/" -o /tmp/index.html
+          curl -s "${{ vars.DEFAULT_INGRESS }}/" -o /tmp/index.html
           asset=$(grep -oE '/assets/[^"]+\.(js|css)' /tmp/index.html | head -n1)
           [ -n "$asset" ] || { echo "::error::no /assets/* reference found in index.html"; exit 1; }
-          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ vars.LIVE_URL }}${asset}")
+          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ vars.DEFAULT_INGRESS }}${asset}")
           [ "$status" = "200" ] || { echo "::error::asset $asset returned $status"; exit 1; }
+
+      # Best-effort, not a hard gate (continue-on-error): before Group D's DNS
+      # exists for a fresh environment, LIVE_URL is expected to fail — that's
+      # not a real regression, DEFAULT_INGRESS above already proved the app
+      # itself works. Once DNS/cert are live (confirmed for staging
+      # 2026-07-30), this is what actually validates the real user-facing
+      # domain, which DEFAULT_INGRESS alone never touches.
+      - name: LIVE_URL (custom domain) is 200, if DNS/cert are live yet
+        continue-on-error: true
+        run: |
+          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ vars.LIVE_URL }}/")
+          if [ "$status" = "200" ]; then
+            echo "LIVE_URL is live and serving (200)."
+          else
+            echo "::warning::LIVE_URL (${{ vars.LIVE_URL }}) returned $status — expected if DNS/cert for this environment aren't set up yet (Group D). Not blocking."
+          fi
 
       - name: Deployed commit matches the dispatched sha
         run: |
-          # TODO: confirm the exact JSON field against a real
-          # `doctl apps get-deployment <app-id> <deployment-id> -o json`
-          # response at first real run — no live DO API access from here.
-          # Best guess is source_commit_hash under the static_sites entry,
-          # per the DO API's Deployment schema.
-          deployed_sha=$(doctl apps get-deployment "${{ vars.APP_ID }}" "${{ needs.deploy.outputs.deployment_id }}" -o json \
-            | jq -r '.static_sites[0].source_commit_hash // .services[0].source_commit_hash // empty')
+          # `doctl ... -o json` wraps single-resource `get` output in a JSON
+          # array too — confirmed 2026-07-30 (root-level `.static_sites`
+          # failed with "Cannot index array with string"; fixed with `.[0]`).
+          # `.[0].static_sites[0].source_commit_hash` itself is now confirmed
+          # correct against a real deployment response (same run). `.services`
+          # fallback kept defensively — not applicable to this static-site
+          # app, only relevant if a service component is ever added.
+          raw=$(doctl apps get-deployment "${{ vars.APP_ID }}" "${{ needs.deploy.outputs.deployment_id }}" -o json)
+          deployed_sha=$(echo "$raw" | jq -r '.[0].static_sites[0].source_commit_hash // .[0].services[0].source_commit_hash // empty')
           expected_sha="${{ needs.guard.outputs.sha }}"
           if [ "$deployed_sha" != "$expected_sha" ]; then
             echo "::error::deployed commit $deployed_sha does not match dispatched sha $expected_sha"
+            echo "::group::Raw doctl response"
+            echo "$raw" | jq .
+            echo "::endgroup::"
             exit 1
           fi

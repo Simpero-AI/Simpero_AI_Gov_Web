@@ -95,6 +95,6 @@ jobs:
           {
             echo "### Infrastructure destroyed — ${{ inputs.environment }}"
             echo ""
-            echo "- The \`APP_ID\` / \`LIVE_URL\` Environment variables for \`${{ inputs.environment }}\` now point at a destroyed App — clear or update them before the next deploy."
+            echo "- The \`APP_ID\` / \`LIVE_URL\` / \`DEFAULT_INGRESS\` Environment variables for \`${{ inputs.environment }}\` now point at a destroyed App — clear or update them before the next deploy."
             echo "- The custom domain's DNS records (D9/V8 domain setup) now point at a dead App — remove or repoint them."
           } >> "$GITHUB_STEP_SUMMARY"
