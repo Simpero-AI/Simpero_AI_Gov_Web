@@ -1,0 +1,221 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        required: true
+      run_terraform:
+        description: Apply Terraform changes to the App spec (skip for routine deploys — most deploys should)
+        type: boolean
+        default: false
+
+concurrency:
+  group: infra-${{ inputs.environment }}
+  cancel-in-progress: false # never cancel a half-applied deploy/destroy
+
+env:
+  TF_VERSION: 1.14.0 # matches the locally-installed CLI used to author infra/
+
+jobs:
+  # Deliberately first in the graph, no `needs` (Vansh, 2026-07-30) — CI runs
+  # before the branch<->environment guard rather than after it. Trade-off:
+  # a wrong environment/branch pairing now costs a full CI run instead of
+  # failing in seconds, but every dispatch gets a CI signal up front,
+  # matching PR-creation CI's own priority.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  # No `ref` input by design (D5) — the branch is whichever one you dispatch
+  # from (github.ref_name). This job makes the illegal branch<->environment
+  # pairing fail before any Terraform/DO step, even though it now runs after
+  # `ci` rather than before it.
+  guard:
+    needs: ci
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: Verify branch matches environment
+        run: |
+          expected=$([ "${{ inputs.environment }}" = production ] && echo main || echo staging)
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "::error::environment=${{ inputs.environment }} deploys only from '$expected' (got '$GITHUB_REF_NAME')"
+            exit 1
+          fi
+
+      - name: Resolve dispatched commit
+        id: resolve
+        run: echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+  terraform-plan:
+    needs: guard
+    if: ${{ inputs.run_terraform }}
+    runs-on: ubuntu-latest
+    # Ungated per-environment Environment, reviewable before approval since
+    # the plan itself isn't gated — the branch restriction on this
+    # Environment is still enforced, only the reviewer requirement isn't.
+    environment:
+      name: ${{ inputs.environment }}-plan
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Init
+        run: terraform init -backend-config=env/${{ inputs.environment }}.backend.hcl
+
+      - name: Validate
+        run: terraform validate
+
+      - name: Plan
+        run: terraform plan -var-file=env/${{ inputs.environment }}.tfvars -out=tfplan
+
+      - name: Write plan to job summary
+        run: |
+          {
+            echo "### Terraform plan — ${{ inputs.environment }}"
+            echo '```'
+            terraform show -no-color tfplan
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: infra/tfplan
+          retention-days: 7
+
+  terraform-apply:
+    needs: terraform-plan
+    if: ${{ inputs.run_terraform }}
+    runs-on: ubuntu-latest
+    # Gated Environment — this is what makes the required-reviewer and
+    # deployment-branch-policy rules fire (D5/V7).
+    environment:
+      name: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DO_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: infra
+
+      - name: Init
+        run: terraform init -backend-config=env/${{ inputs.environment }}.backend.hcl
+
+      - name: Apply saved plan
+        run: terraform apply tfplan
+
+      - name: Summarize App outputs
+        run: |
+          {
+            echo "### Terraform outputs — ${{ inputs.environment }}"
+            echo "- app_id: \`$(terraform output -raw app_id)\`"
+            echo "- live_url: \`$(terraform output -raw live_url)\`"
+            echo ""
+            echo "If this is the first apply for this environment, or the App was recreated, copy these into the \`APP_ID\` / \`LIVE_URL\` Environment **variables** (not secrets — not sensitive) for \`${{ inputs.environment }}\` before the next deploy."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: [ci, terraform-apply]
+    runs-on: ubuntu-latest
+    # `always()` is load-bearing: without it, GitHub implicitly ANDs in
+    # `success()` across the whole expression, which would block this job
+    # whenever terraform-apply is skipped — i.e. every routine
+    # run_terraform: false deploy, since a skipped job's result is
+    # 'skipped', not 'success'.
+    if: ${{ always() && needs.ci.result == 'success' && (inputs.run_terraform == false || needs.terraform-apply.result == 'success') }}
+    # Gated Environment, same as terraform-apply — reads vars.APP_ID (an App
+    # Platform app ID isn't a credential, hence a variable not a secret) and
+    # secrets.DO_TOKEN. No Terraform or its credentials needed here.
+    environment:
+      name: ${{ inputs.environment }}
+    outputs:
+      deployment_id: ${{ steps.create.outputs.deployment_id }}
+    steps:
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DO_TOKEN }}
+
+      - name: Create deployment
+        id: create
+        run: |
+          id=$(doctl apps create-deployment "${{ vars.APP_ID }}" --wait --format ID --no-header)
+          echo "deployment_id=$id" >> "$GITHUB_OUTPUT"
+
+  smoke:
+    needs: [guard, deploy]
+    runs-on: ubuntu-latest
+    # Needed to read vars.LIVE_URL / vars.APP_ID — GitHub Environment
+    # variables are only readable by jobs that declare that `environment:`.
+    # Expected to not re-trigger the reviewer gate a second time in the same
+    # run (protection rules fire on first entry into the environment, not
+    # per job) — not independently verified against live GitHub behavior.
+    environment:
+      name: ${{ inputs.environment }}
+    steps:
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DO_TOKEN }}
+
+      - name: GET / is 200
+        run: |
+          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ vars.LIVE_URL }}/")
+          [ "$status" = "200" ] || { echo "::error::GET / returned $status"; exit 1; }
+
+      - name: Deep link falls back to the SPA shell (proves catchall_document)
+        run: |
+          status=$(curl -s -o /tmp/deep.html -w '%{http_code}' "${{ vars.LIVE_URL }}/this/route/does/not/exist")
+          [ "$status" = "200" ] || { echo "::error::deep route returned $status instead of 200"; exit 1; }
+          grep -q '<div id="root"' /tmp/deep.html || { echo "::error::deep route did not return the SPA shell"; exit 1; }
+
+      - name: A hashed asset resolves
+        run: |
+          curl -s "${{ vars.LIVE_URL }}/" -o /tmp/index.html
+          asset=$(grep -oE '/assets/[^"]+\.(js|css)' /tmp/index.html | head -n1)
+          [ -n "$asset" ] || { echo "::error::no /assets/* reference found in index.html"; exit 1; }
+          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ vars.LIVE_URL }}${asset}")
+          [ "$status" = "200" ] || { echo "::error::asset $asset returned $status"; exit 1; }
+
+      - name: Deployed commit matches the dispatched sha
+        run: |
+          # TODO: confirm the exact JSON field against a real
+          # `doctl apps get-deployment <app-id> <deployment-id> -o json`
+          # response at first real run — no live DO API access from here.
+          # Best guess is source_commit_hash under the static_sites entry,
+          # per the DO API's Deployment schema.
+          deployed_sha=$(doctl apps get-deployment "${{ vars.APP_ID }}" "${{ needs.deploy.outputs.deployment_id }}" -o json \
+            | jq -r '.static_sites[0].source_commit_hash // .services[0].source_commit_hash // empty')
+          expected_sha="${{ needs.guard.outputs.sha }}"
+          if [ "$deployed_sha" != "$expected_sha" ]; then
+            echo "::error::deployed commit $deployed_sha does not match dispatched sha $expected_sha"
+            exit 1
+          fi
