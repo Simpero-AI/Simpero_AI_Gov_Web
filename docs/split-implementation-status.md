@@ -71,7 +71,8 @@ wholesale in FE-7 when the last tRPC call site moves to the generated OpenAPI cl
 1. **Review this repo, then approve GitHub creation + push** — the FE-5 gate is
    reached; nothing is pushed and no remote exists (deliberate, per the playbook's
    explicit-approval rule). Also confirm the GitHub org/owner (playbook FE-9 sketch
-   assumed `Digitallick/Simpero_AI_Gov_Web`).
+   assumed `Digitallick/Simpero_AI_Gov_Web`; the repo now belongs to the
+   `Simpero-AI` org instead).
 2. **Decide when to do FE-8** (dual-maintenance log + monorepo PR-template checkbox)
    — recommended immediately after the first push, since interim monorepo `client/`
    bugfixes must be mirrored here from day one.

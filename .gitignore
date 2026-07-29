@@ -129,3 +129,13 @@ temp/
 
 .claude*
 docs/plans
+
+# Local secrets, never commit
+creds.txt
+*creds*.txt
+
+# Terraform (infra/.terraform.lock.hcl is committed on purpose — provider hash pins)
+infra/.terraform/
+*.tfstate*
+tfplan
+creds.txt
