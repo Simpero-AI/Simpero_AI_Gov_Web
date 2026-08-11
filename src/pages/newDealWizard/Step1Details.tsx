@@ -8,8 +8,10 @@ import type { WizardAction, WizardState } from "./newDealWizardReducer";
 interface Step1DetailsProps {
   state: WizardState;
   dispatch: (action: WizardAction) => void;
-  onContinue: () => void;
+  onContinue: () => void | Promise<void>;
   attached: boolean;
+  /** True only when attach mode came from `?dealId=` in the URL (vs. a deal created in-session). */
+  attachedViaUrl: boolean;
 }
 
 interface Errors {
@@ -19,7 +21,7 @@ interface Errors {
   dealSizeMaxM?: string;
 }
 
-export function Step1Details({ state, dispatch, onContinue, attached }: Step1DetailsProps) {
+export function Step1Details({ state, dispatch, onContinue, attached, attachedViaUrl }: Step1DetailsProps) {
   const [errors, setErrors] = useState<Errors>({});
   const [showErrors, setShowErrors] = useState(false);
 
@@ -64,7 +66,15 @@ export function Step1Details({ state, dispatch, onContinue, attached }: Step1Det
           className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900"
           data-testid="wizard-attach-banner"
         >
-          <strong className="font-semibold">Attaching to existing deal.</strong> Deal details are read-only here; edits land via the deal page.
+          {attachedViaUrl ? (
+            <>
+              <strong className="font-semibold">Attaching to existing deal.</strong> Deal details are read-only here; edits land via the deal page.
+            </>
+          ) : (
+            <>
+              <strong className="font-semibold">Deal created.</strong> Details are locked in — attach materials to continue.
+            </>
+          )}
         </div>
       )}
 
@@ -187,6 +197,15 @@ export function Step1Details({ state, dispatch, onContinue, attached }: Step1Det
         readOnly={attached}
       />
 
+      {state.submitError && (
+        <div
+          className="px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700"
+          data-testid="wizard-submit-error"
+        >
+          {state.submitError}
+        </div>
+      )}
+
       <div className="flex justify-end">
         <button
           type="button"
@@ -195,7 +214,10 @@ export function Step1Details({ state, dispatch, onContinue, attached }: Step1Det
           data-testid="wizard-continue-step-1"
           className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Continue <ArrowRight className="w-4 h-4" />
+          {/* In attach mode the deal already exists, so this is a plain step advance;
+              otherwise the click is what actually creates the deal. */}
+          {attached ? "Continue" : state.submitting ? "Creating…" : "Create Deal"}
+          <ArrowRight className="w-4 h-4" />
         </button>
       </div>
     </div>

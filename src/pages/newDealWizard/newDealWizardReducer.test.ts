@@ -107,20 +107,53 @@ describe("newDealWizardReducer", () => {
     const s0 = initialWizardState(DEFAULT_FRAMEWORKS);
     const s1 = newDealWizardReducer(s0, {
       type: "set_attach_deal_id",
-      dealId: 17,
+      dealId: "17",
       deal: {
         name: "Existing Deal", gpSource: "Sequoia",
         dealSizeMinUsd: 300_000_000, dealSizeMaxUsd: 700_000_000,
         sectorTags: ["SaaS"],
       },
     });
-    expect(s1.attachDealId).toBe(17);
+    expect(s1.attachDealId).toBe("17");
     expect(s1.dealName).toBe("Existing Deal");
     expect(s1.gpSource).toBe("Sequoia");
     // 300_000_000 cents = $3M = 3 millions
     expect(s1.dealSizeMinM).toBe("3");
     expect(s1.dealSizeMaxM).toBe("7");
     expect(s1.sectorTags).toEqual(["SaaS"]);
+  });
+
+  it("deal_created sets attachDealId and clears submitting", () => {
+    const s0: WizardState = { ...initialWizardState(DEFAULT_FRAMEWORKS), submitting: true };
+    const s1 = newDealWizardReducer(s0, { type: "deal_created", dealId: "42" });
+    expect(s1.attachDealId).toBe("42");
+    // Nothing else clears this — the wizard never remounts, so a stuck `true`
+    // leaves Step 3's "Start Analysis" permanently disabled.
+    expect(s1.submitting).toBe(false);
+  });
+
+  it("deal_created leaves the user's Step 1 input untouched", () => {
+    const s0: WizardState = {
+      ...initialWizardState(DEFAULT_FRAMEWORKS),
+      dealName: "CloudMed", gpSource: "Sequoia",
+      dealSizeMinM: "3", dealSizeMaxM: "7",
+      sectorTags: ["SaaS"],
+      submitting: true,
+    };
+    const s1 = newDealWizardReducer(s0, { type: "deal_created", dealId: "42" });
+    // Unlike set_attach_deal_id, this must not overwrite Step 1 from the server.
+    expect(s1.dealName).toBe("CloudMed");
+    expect(s1.gpSource).toBe("Sequoia");
+    expect(s1.dealSizeMinM).toBe("3");
+    expect(s1.dealSizeMaxM).toBe("7");
+    expect(s1.sectorTags).toEqual(["SaaS"]);
+  });
+
+  it("document_uploaded sets hasUploadedDocument and nothing else", () => {
+    const s0 = initialWizardState(DEFAULT_FRAMEWORKS);
+    const s1 = newDealWizardReducer(s0, { type: "document_uploaded" });
+    expect(s1.hasUploadedDocument).toBe(true);
+    expect(s1).toEqual({ ...s0, hasUploadedDocument: true });
   });
 
   it("submitting_start flips the flag and clears prior error", () => {

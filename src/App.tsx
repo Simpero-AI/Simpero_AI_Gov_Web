@@ -55,7 +55,7 @@ function Router() {
       <Route path="/mandate-scorecard/:section">{(params) => <MandateScorecard section={params.section} />}</Route>
       <Route path="/mandate-scorecard"><Redirect to="/mandate-scorecard/firm" /></Route>
       <Route path="/setup/investment-profile"><Redirect to="/mandate-scorecard/firm" /></Route>
-      <Route path="/upload/:step?">
+      <Route path="/new-deal/:step?">
         {(params) => <NewDealWizard step={params.step} />}
       </Route>
       <Route path="/analysis" component={AnalysisRedirect} />

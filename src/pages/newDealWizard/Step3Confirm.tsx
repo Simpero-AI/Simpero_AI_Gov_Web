@@ -11,7 +11,6 @@ interface Step3ConfirmProps {
 }
 
 export function Step3Confirm({ state, dispatch, onBack, onSubmit }: Step3ConfirmProps) {
-  const fileCount = [state.primaryFile, state.financialModelFile].filter(Boolean).length;
   const dealSizeLabel = formatDealSize(state.dealSizeMinM, state.dealSizeMaxM);
   const sectorsLabel = state.sectorTags.length > 0 ? state.sectorTags.join(", ") : "—";
 
@@ -20,7 +19,7 @@ export function Step3Confirm({ state, dispatch, onBack, onSubmit }: Step3Confirm
     { label: "GP / Source", value: state.gpSource },
     { label: "Deal Size", value: dealSizeLabel },
     { label: "Sectors", value: sectorsLabel },
-    { label: "Documents", value: `${fileCount} file${fileCount !== 1 ? "s" : ""} uploaded` },
+    { label: "Documents", value: state.hasUploadedDocument ? "Documents attached" : "No documents attached" },
     { label: "Frameworks", value: state.selectedFrameworks.length > 0 ? state.selectedFrameworks.join(", ") : "—" },
   ];
 

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
-import { apiFetch } from "@/api/http";
 import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { trpc } from "@/lib/trpc";
+import { useQuery } from "@tanstack/react-query";
+import { AnalysisApiError, createDeal, dealQueryKey, fetchDeal, startDealAnalysis } from "@/api/deals";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
 import { MvpSidebar } from "@/components/mvp/shell/MvpSidebar";
 import { MvpFundSelector } from "@/components/mvp/shell/MvpFundSelector";
@@ -17,8 +18,8 @@ import { getLoginUrl } from "@/const";
 
 import { WizardProgressBar } from "./newDealWizard/WizardProgressBar";
 import { Step1Details } from "./newDealWizard/Step1Details";
-import { Step2Materials } from "./newDealWizard/Step2Materials";
 import { Step3Confirm } from "./newDealWizard/Step3Confirm";
+import { DealDocumentUpload } from "@/components/deals/DealDocumentUpload";
 import {
   newDealWizardReducer,
   initialWizardState,
@@ -33,8 +34,8 @@ import {
   type PersistedStep1,
 } from "./newDealWizard/storage";
 
-const VALID_STEPS = new Set(["details", "materials", "confirm"]);
-type StepName = "details" | "materials" | "confirm";
+const VALID_STEPS = new Set(["details", "upload-files", "confirm"]);
+type StepName = "details" | "upload-files" | "confirm";
 
 interface NewDealWizardProps {
   step?: string;
@@ -42,7 +43,7 @@ interface NewDealWizardProps {
 
 export default function NewDealWizard({ step }: NewDealWizardProps) {
   usePageTitle("New Deal");
-  const { user: authUser } = useAuth();
+  const { user: authUser, refresh } = useAuth();
   const role: "user" | "admin" = (authUser?.role ?? "user") as "user" | "admin";
   const nav = buildMvpNav({ id: authUser?.id ?? "anon", role });
   const [, navigate] = useLocation();
@@ -55,15 +56,14 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     return step as StepName;
   }, [step]);
 
-  const currentStepIdx: 1 | 2 | 3 = stepName === "details" ? 1 : stepName === "materials" ? 2 : 3;
+  const currentStepIdx: 1 | 2 | 3 = stepName === "details" ? 1 : stepName === "upload-files" ? 2 : 3;
 
-  // Parse `?dealId=` for attach mode.
+  // Parse `?dealId=` for attach mode. dealId is an opaque UUID string
+  // (Deal.id in the backend) — no numeric coercion, same idiom as DealAnalysis.tsx.
   const attachDealIdFromUrl = useMemo(() => {
     const params = new URLSearchParams(search);
     const raw = params.get("dealId");
-    if (!raw) return null;
-    const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : null;
+    return raw && raw.trim() !== "" ? raw : null;
   }, [search]);
 
   const [state, dispatch] = useReducer(
@@ -115,11 +115,14 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     state.attachDealId,
   ]);
 
-  // Attach-mode deal fetch.
-  const dealQuery = trpc.deals.get.useQuery(
-    { dealId: attachDealIdFromUrl ?? 0 },
-    { enabled: attachDealIdFromUrl != null }
-  );
+  // Attach-mode deal fetch — same REST idiom as DealAnalysis.tsx. `fetchDeal`
+  // resolves `null` on 404 rather than throwing, so that case is handled via
+  // the `dealQuery.data === null` check below, not `isError`.
+  const dealQuery = useQuery({
+    queryKey: dealQueryKey(attachDealIdFromUrl ?? ""),
+    queryFn: () => fetchDeal(attachDealIdFromUrl as string),
+    enabled: attachDealIdFromUrl != null,
+  });
   useEffect(() => {
     if (attachDealIdFromUrl == null) return;
     if (!dealQuery.data) return;
@@ -130,7 +133,7 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
       dealId: attachDealIdFromUrl,
       deal: {
         name: d.name,
-        gpSource: d.gpSource,
+        gpSource: d.gpSource ?? "",
         dealSizeMinUsd: d.dealSizeMinUsd ?? null,
         dealSizeMaxUsd: d.dealSizeMaxUsd ?? null,
         sectorTags: parseSectorTags(d.sectorTags),
@@ -139,31 +142,79 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dealQuery.data, attachDealIdFromUrl]);
 
-  // Attach-mode error handling: invalid dealId → redirect to /upload (drop the query).
+  // Attach-mode error handling: invalid dealId → redirect to /new-deal (drop the query).
+  // `fetchDeal` returns `null` (not a thrown error) on 404, so a resolved-but-null
+  // query counts as "not found" alongside a genuine fetch error.
   useEffect(() => {
     if (attachDealIdFromUrl == null) return;
-    if (!dealQuery.isError) return;
+    if (dealQuery.isLoading) return;
+    if (!dealQuery.isError && dealQuery.data !== null) return;
     toast.error("Deal not found", { description: "The link may be stale or the deal was deleted." });
-    navigate("/upload");
-  }, [attachDealIdFromUrl, dealQuery.isError, navigate]);
+    navigate("/new-deal");
+  }, [attachDealIdFromUrl, dealQuery.isError, dealQuery.isLoading, dealQuery.data, navigate]);
 
-  // Step guards.
+  // Step guards. In URL-attach mode `attachDealId` (and the Step 1 fields) are
+  // only populated once `dealQuery` resolves, so suppress the guards during
+  // that in-flight window — dealQuery.isError above covers the genuine failure.
+  const attachPending = attachDealIdFromUrl != null && state.attachDealId == null;
   useEffect(() => {
-    if (stepName === "materials") {
+    if (attachPending) return;
+    if (stepName === "upload-files") {
       if (state.dealName.trim() === "" || state.gpSource.trim() === "") {
         toast.error("Complete deal details first");
-        navigate("/upload");
+        navigate("/new-deal");
+      } else if (state.attachDealId == null) {
+        // Steps 2 and 3 need a real dealId (DealDocumentUpload can't render without one).
+        toast.error("Create the deal first");
+        navigate("/new-deal");
       }
     } else if (stepName === "confirm") {
-      if (state.primaryFile == null) {
+      if (state.attachDealId == null) {
+        toast.error("Create the deal first");
+        navigate("/new-deal");
+      } else if (!state.hasUploadedDocument) {
         toast.error("Attach a primary document first");
-        navigate("/upload/materials");
+        navigate("/new-deal/upload-files");
       }
     }
-  }, [stepName, state.dealName, state.gpSource, state.primaryFile, navigate]);
+  }, [attachPending, stepName, state.dealName, state.gpSource, state.hasUploadedDocument, state.attachDealId, navigate]);
 
-  const utils = trpc.useUtils();
-  const createDealMutation = trpc.deals.create.useMutation();
+  // Step 1 → Step 2: the deal is created here (not at final submit) so that
+  // Step 2 has a real dealId to hang document uploads off.
+  const handleCreateDeal = async () => {
+    if (state.attachDealId != null) {
+      // Deal already exists (URL attach mode, or the user came back to Step 1).
+      navigate("/new-deal/upload-files");
+      return;
+    }
+    if (state.submitting) return;
+    dispatch({ type: "submitting_start" });
+
+    const minP = parseDealSizeM(state.dealSizeMinM);
+    const maxP = parseDealSizeM(state.dealSizeMaxM);
+    if (minP.kind === "error" || maxP.kind === "error") {
+      dispatch({ type: "submitting_error", message: "Fix Deal Size before submitting." });
+      return;
+    }
+    const dealSizeMinUsd = minP.kind === "ok" ? minP.cents : null;
+    const dealSizeMaxUsd = maxP.kind === "ok" ? maxP.cents : null;
+
+    try {
+      const created = await createDeal({
+        name: state.dealName,
+        gpSource: state.gpSource,
+        dealSizeMinUsd,
+        dealSizeMaxUsd,
+        sectorTags: state.sectorTags,
+      });
+      dispatch({ type: "deal_created", dealId: created.id });
+      navigate("/new-deal/upload-files");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not create deal";
+      dispatch({ type: "submitting_error", message });
+      toast.error("Could not create deal", { description: message });
+    }
+  };
 
   const handleSubmit = async () => {
     if (state.submitting) return;
@@ -174,83 +225,50 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     const maxP = parseDealSizeM(state.dealSizeMaxM);
     if (minP.kind === "error" || maxP.kind === "error") {
       dispatch({ type: "submitting_error", message: "Fix Deal Size before submitting." });
-      navigate("/upload");
+      navigate("/new-deal");
       return;
     }
-    const dealSizeMinUsd = minP.kind === "ok" ? minP.cents : null;
-    const dealSizeMaxUsd = maxP.kind === "ok" ? maxP.cents : null;
 
     // Auth check (mirrors Home.tsx behavior).
-    const me = await utils.auth.me.fetch();
-    if (!me) {
+    const meResult = await refresh();
+    if (!meResult.data) {
       dispatch({ type: "submitting_error", message: "Session expired — redirecting to login…" });
       toast.error("Session expired", { description: "Redirecting to login…" });
       window.location.href = getLoginUrl();
       return;
     }
 
-    let dealId: number;
-    if (state.attachDealId != null) {
-      dealId = state.attachDealId;
-    } else {
-      try {
-        const { dealId: created } = await createDealMutation.mutateAsync({
-          name: state.dealName,
-          gpSource: state.gpSource,
-          dealSizeMinUsd,
-          dealSizeMaxUsd,
-          sectorTags: state.sectorTags,
-        });
-        dealId = created;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Could not create deal";
-        dispatch({ type: "submitting_error", message });
-        toast.error("Could not create deal", { description: message });
-        return;
-      }
-    }
-
-    // Build the multipart POST.
-    const fd = new FormData();
-    if (!state.primaryFile) {
-      dispatch({ type: "submitting_error", message: "Primary document missing." });
+    // The deal is created on the Step 1 → Step 2 transition, and the step guard
+    // keeps this step unreachable without it.
+    const dealId = state.attachDealId;
+    if (dealId == null) {
+      dispatch({ type: "submitting_error", message: "Deal missing — start again from Step 1." });
       return;
     }
-    fd.append("document", state.primaryFile);
-    if (state.financialModelFile) fd.append("financialModel", state.financialModelFile);
-    fd.append("selectedFrameworks", JSON.stringify(state.selectedFrameworks));
-    fd.append("dealId", String(dealId));
-    if (state.conferenceMode) fd.append("conferenceMode", "true");
-    if (state.conferenceMode) fd.append("fixtureId", "project-delta");
 
     try {
-      const response = await apiFetch("/api/simpero/analyse?async=1", {
-        method: "POST",
-        body: fd,
-        credentials: "include",
-      });
-      if (response.status === 401) {
-        dispatch({ type: "submitting_error", message: "Session expired — redirecting to login…" });
-        toast.error("Session expired", { description: "Redirecting to login…" });
-        window.location.href = getLoginUrl();
-        return;
-      }
-      if (!response.ok) {
-        const errBody = (await response.json().catch(() => ({}))) as { error?: string };
-        const message = errBody.error ?? `Analysis request failed (${response.status})`;
+      await startDealAnalysis(dealId, { selectedFrameworks: state.selectedFrameworks });
+    } catch (err) {
+      // Pragmatic string match against the backend doc's stated 409 "already
+      // running" detail text — no real endpoint exists yet to verify the exact
+      // wording against, firm this up once it does. That case isn't a failure:
+      // the user's intent (an analysis running for this deal) is already met.
+      const alreadyRunning =
+        err instanceof AnalysisApiError &&
+        err.status === 409 &&
+        err.message.toLowerCase().includes("already running");
+      if (!alreadyRunning) {
+        const message = err instanceof Error ? err.message : "Could not start analysis";
         dispatch({ type: "submitting_error", message });
         toast.error("Could not start analysis", { description: message });
         return;
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Network error starting analysis";
-      dispatch({ type: "submitting_error", message });
-      toast.error("Could not start analysis", { description: message });
-      return;
     }
 
-    // Success — clear draft and redirect.
-    if (state.attachDealId == null && authUser?.id != null) {
+    // Success — clear draft and redirect. Keyed off the URL param, not
+    // `state.attachDealId` (always set by now): only a genuine URL-attach
+    // session never wrote a draft in the first place.
+    if (attachDealIdFromUrl == null && authUser?.id != null) {
       clearDraft(authUser.id);
     }
     navigate(`/analysis/${dealId}`);
@@ -293,22 +311,50 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
               state={state}
               dispatch={dispatch}
               attached={state.attachDealId != null}
-              onContinue={() => navigate("/upload/materials")}
+              attachedViaUrl={attachDealIdFromUrl != null}
+              onContinue={handleCreateDeal}
             />
           )}
-          {stepName === "materials" && (
-            <Step2Materials
-              state={state}
-              dispatch={dispatch}
-              onBack={() => navigate("/upload")}
-              onContinue={() => navigate("/upload/confirm")}
-            />
+          {stepName === "upload-files" && (
+            <div className="space-y-5" data-testid="wizard-step-2">
+              {/* `state.attachDealId != null` narrows for the DealDocumentUpload
+                  prop below — the step guard effect above redirects away from
+                  this step once attachDealId is null, but that redirect is async,
+                  so this narrowing check covers the brief window before it fires. */}
+              {state.attachDealId != null && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Upload Files</h2>
+                  <DealDocumentUpload
+                    dealId={state.attachDealId}
+                    onUploaded={() => dispatch({ type: "document_uploaded" })}
+                  />
+                </div>
+              )}
+              <div className="flex justify-between">
+                <button
+                  type="button"
+                  onClick={() => navigate("/new-deal")}
+                  className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-sm text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
+                  data-testid="wizard-back-step-2"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/new-deal/confirm")}
+                  data-testid="wizard-continue-step-2"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition"
+                >
+                  Continue <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           )}
           {stepName === "confirm" && (
             <Step3Confirm
               state={state}
               dispatch={dispatch}
-              onBack={() => navigate("/upload/materials")}
+              onBack={() => navigate("/new-deal/upload-files")}
               onSubmit={handleSubmit}
             />
           )}

@@ -45,7 +45,7 @@ test.describe("MVP screenshots", () => {
 
   test("01 — Upload / intake (desktop 1440×900)", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/upload", { waitUntil: "domcontentloaded" });
+    await page.goto("/new-deal", { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: /New Deal/i }).waitFor({ state: "visible", timeout: 30_000 });
     await page.screenshot({
       path: path.join(OUT_DIR, "01-upload-desktop.png"),
@@ -55,7 +55,7 @@ test.describe("MVP screenshots", () => {
 
   test("02 — Upload / intake (tablet 834×1112)", async ({ page }) => {
     await page.setViewportSize({ width: 834, height: 1112 });
-    await page.goto("/upload", { waitUntil: "domcontentloaded" });
+    await page.goto("/new-deal", { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: /New Deal/i }).waitFor({ state: "visible", timeout: 30_000 });
     await page.screenshot({
       path: path.join(OUT_DIR, "02-upload-tablet.png"),

@@ -9,7 +9,7 @@ test.describe("Simpero UI smoke", () => {
   });
 
   test("upload intake shows workspace layout", async ({ page }) => {
-    await page.goto("/upload", { waitUntil: "domcontentloaded" });
+    await page.goto("/new-deal", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: /New Deal/i })).toBeVisible({
       timeout: 30_000,
     });
