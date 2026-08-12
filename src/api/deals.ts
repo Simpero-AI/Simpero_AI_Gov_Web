@@ -63,11 +63,64 @@ export async function fetchDeal(dealId: string): Promise<DealWithLatestMemo | nu
   return (await res.json()) as DealWithLatestMemo;
 }
 
+export type CreateDealRequest = {
+  name: string;
+  gpSource: string;
+  dealSizeMinUsd: number | null;
+  dealSizeMaxUsd: number | null;
+  sectorTags: string[];
+};
+
+export type CreateDealResponse = {
+  id: string;
+};
+
+/** POST /deals — create a new deal, returns its id. */
+export async function createDeal(body: CreateDealRequest): Promise<CreateDealResponse> {
+  const res = await apiFetch("/api/deals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`POST /deals failed: ${res.status}`);
+  return (await res.json()) as CreateDealResponse;
+}
+
 export type { DealStatusPayload };
 
 /** GET /deals/{dealId}/status — polled by the progress UI. */
 export async function fetchDealStatus(dealId: string): Promise<DealStatusPayload> {
   const res = await apiFetch(`/api/deals/${dealId}/status`);
   if (!res.ok) throw new Error(`GET /deals/${dealId}/status failed: ${res.status}`);
+  return (await res.json()) as DealStatusPayload;
+}
+
+export type StartAnalysisRequest = {
+  selectedFrameworks: string[];
+};
+
+/** Thrown on a non-ok response from POST /deals/{dealId}/analysis — lets callers branch on `status` (e.g. the two documented 409 cases vs. 422). */
+export class AnalysisApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/** POST /deals/{dealId}/analysis — starts a deal's parse fan-out. */
+export async function startDealAnalysis(
+  dealId: string,
+  body: StartAnalysisRequest
+): Promise<DealStatusPayload> {
+  const res = await apiFetch(`/api/deals/${dealId}/analysis`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const errBody = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new AnalysisApiError(res.status, errBody.detail ?? `POST /deals/${dealId}/analysis failed: ${res.status}`);
+  }
   return (await res.json()) as DealStatusPayload;
 }

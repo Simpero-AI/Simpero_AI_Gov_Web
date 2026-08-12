@@ -49,7 +49,7 @@ test.describe("MVP shell on /", () => {
 
   test("each shipped nav link navigates", async ({ page }) => {
     const dest: { name: RegExp; path: string }[] = [
-      { name: /^New Deal$/, path: "/upload" },
+      { name: /^New Deal$/, path: "/new-deal" },
       // Deal Analysis (/analysis) uses AnalysisRedirect which redirects to the most recent
       // completed deal or "/" when none exist — skip stable URL assertion for this link.
       { name: /^Memo History$/, path: "/history" },

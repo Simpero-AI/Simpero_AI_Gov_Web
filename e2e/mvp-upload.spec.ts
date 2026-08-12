@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("MVP /upload (G-31 wizard)", () => {
+test.describe("MVP /new-deal (G-31 wizard)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/upload", { waitUntil: "domcontentloaded" });
+    await page.goto("/new-deal", { waitUntil: "domcontentloaded" });
   });
 
   test("chrome + breadcrumb + active nav", async ({ page }) => {
@@ -15,7 +15,7 @@ test.describe("MVP /upload (G-31 wizard)", () => {
   test("Step 1 framework checkbox group is interactive", async ({ page }) => {
     // Frameworks moved into Step 1 of the wizard (G-31). The four framework
     // buttons live inside the framework-selector card; the FINRA 3110 toggle
-    // is a button (not <input type=checkbox>) — same as the legacy /upload.
+    // is a button (not <input type=checkbox>) — same as the legacy /new-deal.
     const finra = page.getByRole("button", { name: /FINRA 3110/ });
     await expect(finra).toBeVisible();
     await expect(finra).toHaveAttribute("aria-pressed", "true");

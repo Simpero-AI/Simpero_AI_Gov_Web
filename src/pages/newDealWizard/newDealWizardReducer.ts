@@ -17,6 +17,8 @@ export type WizardState = {
   financialModelFile: File | null;
   materialsTicked: Partial<Record<MaterialKey, boolean>>;
   uploadTab: UploadTab;
+  /** Set once `DealDocumentUpload` reports at least one successful upload this session — gates the Step 3 guard (primaryFile is dead state, nothing sets it since Step2Materials was unmounted). */
+  hasUploadedDocument: boolean;
 
   // Step 3
   submitting: boolean;
@@ -24,8 +26,8 @@ export type WizardState = {
   conferenceMode: boolean;
   fixtureId: string;
 
-  // Attach mode (set when /upload?dealId=<n> is loaded)
-  attachDealId: number | null;
+  // Attach mode (set when /new-deal?dealId=<uuid> is loaded)
+  attachDealId: string | null;
 };
 
 export type WizardAction =
@@ -37,16 +39,18 @@ export type WizardAction =
   | { type: "set_financial_model_file"; file: File | null }
   | { type: "set_material_ticked"; key: MaterialKey; ticked: boolean }
   | { type: "set_upload_tab"; tab: UploadTab }
+  | { type: "document_uploaded" }
   | { type: "submitting_start" }
   | { type: "submitting_error"; message: string }
   | { type: "set_conference_mode"; enabled: boolean }
   | { type: "set_fixture_id"; id: string }
   | { type: "rehydrate"; partial: Partial<PersistedStep1> }
-  | { type: "set_attach_deal_id"; dealId: number; deal: {
+  | { type: "set_attach_deal_id"; dealId: string; deal: {
       name: string; gpSource: string;
       dealSizeMinUsd: number | null; dealSizeMaxUsd: number | null;
       sectorTags: string[];
     } }
+  | { type: "deal_created"; dealId: string }
   | { type: "reset" };
 
 export function initialWizardState(defaultFrameworks: string[]): WizardState {
@@ -62,6 +66,7 @@ export function initialWizardState(defaultFrameworks: string[]): WizardState {
     financialModelFile: null,
     materialsTicked: {},
     uploadTab: "files",
+    hasUploadedDocument: false,
 
     submitting: false,
     submitError: null,
@@ -115,6 +120,9 @@ export function newDealWizardReducer(state: WizardState, action: WizardAction): 
     case "set_upload_tab":
       return { ...state, uploadTab: action.tab };
 
+    case "document_uploaded":
+      return { ...state, hasUploadedDocument: true };
+
     case "submitting_start":
       return { ...state, submitting: true, submitError: null };
 
@@ -150,6 +158,13 @@ export function newDealWizardReducer(state: WizardState, action: WizardAction): 
         dealSizeMaxM: centsToM(action.deal.dealSizeMaxUsd),
         sectorTags: action.deal.sectorTags,
       };
+
+    // Deal was created in-session on the Step 1 → Step 2 transition. Unlike
+    // `set_attach_deal_id`, the Step 1 fields are already correct locally —
+    // don't overwrite them.
+    // Success terminator for the create (counterpart to `submitting_error`) — the wizard never remounts, so nothing else clears `submitting`.
+    case "deal_created":
+      return { ...state, attachDealId: action.dealId, submitting: false };
 
     case "reset":
       return initialWizardState(state.selectedFrameworks);

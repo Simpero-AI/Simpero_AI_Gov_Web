@@ -1,11 +1,14 @@
 import { AgentStatusStepList } from "./AgentStatusStepList";
 import type { PipelineStepWithStatus } from "@shared/pipelineSteps";
+import type { JobComment } from "@shared/dealsStatus";
 
 export interface AnalysisProgressViewProps {
   fileName: string;
   steps: PipelineStepWithStatus[];
   /** Live sub-progress for the current phase (currently: Pass 1 sections completed/total). */
   phaseProgress?: { completed: number; total: number } | null;
+  /** Frontend-facing findings summary, one entry per document. Only rendered when non-empty. */
+  jobComments?: JobComment[] | null;
 }
 
 const PHASE_LABELS: Record<string, string> = {
@@ -20,7 +23,7 @@ const PHASE_LABELS: Record<string, string> = {
   finalize: "Finalizing analysis...",
 };
 
-export function AnalysisProgressView({ fileName, steps, phaseProgress }: AnalysisProgressViewProps) {
+export function AnalysisProgressView({ fileName, steps, phaseProgress, jobComments }: AnalysisProgressViewProps) {
   const currentStep = steps.find((s) => s.status === "current");
   const currentPhaseLabel = currentStep
     ? (PHASE_LABELS[currentStep.phase] ?? currentStep.title)
@@ -40,6 +43,24 @@ export function AnalysisProgressView({ fileName, steps, phaseProgress }: Analysi
       <div className="mt-8">
         <AgentStatusStepList steps={steps} phaseProgress={phaseProgress} />
       </div>
+      {jobComments && jobComments.length > 0 && (
+        <div className="mt-8">
+          <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+            Findings
+          </p>
+          <ul className="mt-3 space-y-2">
+            {jobComments.map((jc) => (
+              <li key={jc.dataSourceId} className="rounded-lg border border-slate-200 bg-slate-50/30 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-slate-700">{jc.fileName ?? "Document"}</p>
+                  <span className="text-xs text-blue-600">{jc.status}</span>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500">{jc.comment}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

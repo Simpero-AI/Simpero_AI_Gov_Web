@@ -317,7 +317,7 @@ export default function History() {
                   <EmptyState
                     icon={HistoryIcon}
                     title="No memos yet"
-                    description="Once you complete an analysis on /upload, it appears here."
+                    description="Once you complete an analysis on /new-deal, it appears here."
                     action={{ label: "Start a review", href: ROUTES.upload }}
                   />
                 }

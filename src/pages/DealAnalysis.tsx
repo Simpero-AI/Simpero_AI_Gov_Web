@@ -1224,7 +1224,7 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
           </p>
         </div>
         <Button asChild>
-          <Link href={`/upload?dealId=${dealId}`}>Upload documents</Link>
+          <Link href={`/new-deal?dealId=${dealId}`}>Upload documents</Link>
         </Button>
       </div>
     );
@@ -1239,11 +1239,12 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
             fileName={latestMemoSession?.fileName ?? "Unknown"}
             steps={status.steps}
             phaseProgress={status.phaseProgress}
+            jobComments={status.jobComments}
           />
         </div>
         <div className="mt-6 text-center">
           <Button asChild>
-            <Link href={`/upload?dealId=${dealId}`}>Re-upload documents</Link>
+            <Link href={`/new-deal?dealId=${dealId}`}>Re-upload documents</Link>
           </Button>
         </div>
       </div>
@@ -1254,6 +1255,7 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
         fileName={latestMemoSession?.fileName ?? deal.name}
         steps={status.steps}
         phaseProgress={status.phaseProgress}
+        jobComments={status.jobComments}
       />
     );
   } else if (isWaitingForMemo) {

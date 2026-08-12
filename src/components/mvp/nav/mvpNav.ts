@@ -15,7 +15,7 @@ export const ROUTES = {
   mandateScorecard: "/mandate-scorecard",
   mandateScorecardFirm: "/mandate-scorecard/firm",
   setupInvestmentProfile: "/setup/investment-profile",
-  upload: "/upload",
+  upload: "/new-deal",
   analysis: "/analysis", // pattern; real navigations use /analysis/:dealId
   memo: "/memo",
   history: "/history",
