@@ -9,7 +9,15 @@ import * as documentsApi from "@/api/documents";
 vi.mock("@/api/documents", () => ({
   requestPresignedUpload: vi.fn(),
   completeUpload: vi.fn(),
-  DuplicateUploadError: class DuplicateUploadError extends Error {},
+  DuplicateUploadError: class DuplicateUploadError extends Error {
+    constructor(
+      message: string,
+      public readonly dataSourceId: string,
+      public readonly status: string
+    ) {
+      super(message);
+    }
+  },
 }));
 
 function makeFile(name: string, sizeBytes = 1024): File {
@@ -66,6 +74,20 @@ describe("runDocumentUpload", () => {
 
     expect(documentsApi.completeUpload).toHaveBeenCalledWith("u1", expect.objectContaining({ dealId: "deal1" }));
     expect(result).toEqual({ id: "doc1", status: "pending" });
+  });
+
+  it("resolves with the existing row on a duplicate, skipping PUT/complete entirely", async () => {
+    vi.mocked(documentsApi.requestPresignedUpload).mockRejectedValue(
+      new documentsApi.DuplicateUploadError("dup", "existing-doc-1", "verified")
+    );
+    const putFetch = vi.fn();
+    vi.stubGlobal("fetch", putFetch);
+
+    const result = await runDocumentUpload("deal1", makeFile("deck.pdf"));
+
+    expect(result).toEqual({ id: "existing-doc-1", status: "verified" });
+    expect(putFetch).not.toHaveBeenCalled();
+    expect(documentsApi.completeUpload).not.toHaveBeenCalled();
   });
 
   it("throws when the PUT to storage fails", async () => {

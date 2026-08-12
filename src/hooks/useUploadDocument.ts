@@ -1,11 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "@/components/mvp/primitives/sonner";
-import { DuplicateUploadError, type CompletedUpload } from "@/api/documents";
+import type { CompletedUpload } from "@/api/documents";
 import { runDocumentUpload } from "@/lib/documentUploadPipeline";
 
 const STATUS_MESSAGES: Record<string, string> = {
   ocr_needed: "Scanned document — text extraction needed before analysis",
   pending: "Document uploaded — verification pending",
+  verified: "Document already uploaded and verified for this deal",
 };
 
 function successMessage(status: string): string {
@@ -20,10 +21,6 @@ export function useUploadDocument(dealId: string, opts?: { maxBytes?: number }) 
       toast.success(successMessage(result.status));
     },
     onError: (error: Error) => {
-      if (error instanceof DuplicateUploadError) {
-        toast.error("Already uploaded for this deal");
-        return;
-      }
       toast.error(error.message);
     },
   });

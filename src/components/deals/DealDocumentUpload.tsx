@@ -20,6 +20,7 @@ const ACCEPT = {
 const STATUS_LABELS: Record<string, string> = {
   ocr_needed: "Scanned document — text extraction needed before analysis",
   pending: "Document uploaded — verification pending",
+  verified: "Document already uploaded and verified for this deal",
 };
 
 function statusLabel(status: string): string {

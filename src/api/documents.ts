@@ -30,8 +30,22 @@ export type CompletedUpload = {
   status: string;
 };
 
-/** Thrown on 409 from POST /api/uploads/presigned-url — this exact file (by hash) already uploaded for this deal. */
-export class DuplicateUploadError extends Error {}
+/**
+ * Thrown on 409 from POST /api/uploads/presigned-url — this exact file (by
+ * hash) already uploaded for this deal. Carries the existing row's real
+ * id/status (app/api/uploads.py's structured 409 detail) so callers can
+ * treat "already uploaded" as equivalent to a fresh successful upload
+ * instead of a dead end.
+ */
+export class DuplicateUploadError extends Error {
+  constructor(
+    message: string,
+    public readonly dataSourceId: string,
+    public readonly status: string
+  ) {
+    super(message);
+  }
+}
 
 /** POST /api/uploads/presigned-url */
 export async function requestPresignedUpload(body: PresignedUploadRequest): Promise<PresignedUploadResponse> {
@@ -41,7 +55,13 @@ export async function requestPresignedUpload(body: PresignedUploadRequest): Prom
     body: JSON.stringify(body),
   });
   if (res.status === 409) {
-    throw new DuplicateUploadError(await res.text());
+    const payload = await res.json().catch(() => null);
+    const detail = payload?.detail;
+    throw new DuplicateUploadError(
+      detail?.message ?? "A matching file has already been uploaded for this deal",
+      detail?.dataSourceId ?? "",
+      detail?.status ?? "pending"
+    );
   }
   if (!res.ok) {
     throw new Error(`POST /api/uploads/presigned-url failed: ${res.status} ${await res.text()}`);

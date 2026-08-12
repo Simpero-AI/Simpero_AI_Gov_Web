@@ -18,8 +18,12 @@ export interface DealStatusPayload {
   jobStatus: "queued" | "processing" | "complete" | "error" | "no_job";
   currentPhase: string | null; // narrowed to AnalysisJobPhase server-side
   steps: PipelineStepWithStatus[];
-  /** Fine-grained progress within currentPhase (currently: Pass 1 sections completed/total). */
-  phaseProgress?: { completed: number; total: number } | null;
+  /** The whole chain's start (the parsing run's own started_at), not just the latest run's. Null for the no_job shape. */
+  startedAt?: string | null;
+  /** The latest run's own ended_at -- null while it's still queued/running. Freeze the elapsed timer on this, don't keep ticking past it. */
+  endedAt?: string | null;
+  /** Real per-step wall time in seconds, keyed by phase ("parsing"/"verification") -- present only once that step's own run has ended. */
+  stepDurations?: Record<string, number>;
   /** Failure reason when jobStatus === "error" (e.g. page-count limit exceeded). */
   errorMessage?: string | null;
   /** Frontend-facing findings summary, one entry per document. Null until the run reaches a

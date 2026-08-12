@@ -1,7 +1,4 @@
-import type { MaterialKey } from "./deriveMaterialsAutoTick";
 import type { PersistedStep1 } from "./storage";
-
-export type UploadTab = "files" | "email" | "vdr";
 
 export type WizardState = {
   // Step 1 — persisted to localStorage (no files)
@@ -12,12 +9,8 @@ export type WizardState = {
   sectorTags: string[];
   selectedFrameworks: string[];
 
-  // Step 2 — in-memory only
-  primaryFile: File | null;
-  financialModelFile: File | null;
-  materialsTicked: Partial<Record<MaterialKey, boolean>>;
-  uploadTab: UploadTab;
-  /** Set once `DealDocumentUpload` reports at least one successful upload this session — gates the Step 3 guard (primaryFile is dead state, nothing sets it since Step2Materials was unmounted). */
+  // Step 2
+  /** Set once `DealDocumentUpload` reports at least one successful upload this session — gates the Step 3 guard. */
   hasUploadedDocument: boolean;
 
   // Step 3
@@ -35,10 +28,6 @@ export type WizardAction =
   | { type: "toggle_sector"; tag: string }
   | { type: "toggle_framework"; id: string }
   | { type: "apply_framework_preset"; ids: string[] }
-  | { type: "set_primary_file"; file: File | null }
-  | { type: "set_financial_model_file"; file: File | null }
-  | { type: "set_material_ticked"; key: MaterialKey; ticked: boolean }
-  | { type: "set_upload_tab"; tab: UploadTab }
   | { type: "document_uploaded" }
   | { type: "submitting_start" }
   | { type: "submitting_error"; message: string }
@@ -62,10 +51,6 @@ export function initialWizardState(defaultFrameworks: string[]): WizardState {
     sectorTags: [],
     selectedFrameworks: defaultFrameworks,
 
-    primaryFile: null,
-    financialModelFile: null,
-    materialsTicked: {},
-    uploadTab: "files",
     hasUploadedDocument: false,
 
     submitting: false,
@@ -107,18 +92,6 @@ export function newDealWizardReducer(state: WizardState, action: WizardAction): 
 
     case "apply_framework_preset":
       return { ...state, selectedFrameworks: action.ids };
-
-    case "set_primary_file":
-      return { ...state, primaryFile: action.file };
-
-    case "set_financial_model_file":
-      return { ...state, financialModelFile: action.file };
-
-    case "set_material_ticked":
-      return { ...state, materialsTicked: { ...state.materialsTicked, [action.key]: action.ticked } };
-
-    case "set_upload_tab":
-      return { ...state, uploadTab: action.tab };
 
     case "document_uploaded":
       return { ...state, hasUploadedDocument: true };
