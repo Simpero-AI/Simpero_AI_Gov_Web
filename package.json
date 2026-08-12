@@ -6,6 +6,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
+    "dev:staging": "vite --mode staging",
     "build": "vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit && vitest run",
