@@ -1,3 +1,7 @@
+// @vitest-environment node
+//
+// Exercises sha256Hex under the hood, which needs a real crypto.subtle — see
+// the same note in sha256.test.ts.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runDocumentUpload } from "./documentUploadPipeline";
 import * as documentsApi from "@/api/documents";
