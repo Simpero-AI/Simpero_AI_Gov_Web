@@ -2,7 +2,13 @@ import { useEffect, useMemo, useReducer, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
-import { AnalysisApiError, createDeal, dealQueryKey, fetchDeal, startDealAnalysis } from "@/api/deals";
+import {
+  AnalysisApiError,
+  createDeal,
+  dealQueryKey,
+  fetchDeal,
+  startDealAnalysis,
+} from "@/api/deals";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
 import { MvpSidebar } from "@/components/mvp/shell/MvpSidebar";
@@ -25,7 +31,6 @@ import {
   initialWizardState,
   type WizardState,
 } from "./newDealWizard/newDealWizardReducer";
-import { DEFAULT_FRAMEWORKS } from "@/components/mvp/wizard/FrameworkSelector";
 import { parseDealSizeM } from "./newDealWizard/parseDealSizeM";
 import {
   clearDraft,
@@ -56,7 +61,8 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     return step as StepName;
   }, [step]);
 
-  const currentStepIdx: 1 | 2 | 3 = stepName === "details" ? 1 : stepName === "upload-files" ? 2 : 3;
+  const currentStepIdx: 1 | 2 | 3 =
+    stepName === "details" ? 1 : stepName === "upload-files" ? 2 : 3;
 
   // Parse `?dealId=` for attach mode. dealId is an opaque UUID string
   // (Deal.id in the backend) — no numeric coercion, same idiom as DealAnalysis.tsx.
@@ -68,8 +74,7 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
 
   const [state, dispatch] = useReducer(
     newDealWizardReducer,
-    DEFAULT_FRAMEWORKS,
-    initialWizardState
+    initialWizardState()
   );
   // localStorage rehydrate on mount (skip in attach mode).
   const rehydratedRef = useRef(false);
@@ -99,7 +104,6 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
         dealSizeMinM: state.dealSizeMinM,
         dealSizeMaxM: state.dealSizeMaxM,
         sectorTags: state.sectorTags,
-        selectedFrameworks: state.selectedFrameworks,
       };
       saveDraft(authUser.id, draft);
     }, 300);
@@ -111,7 +115,6 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     state.dealSizeMinM,
     state.dealSizeMaxM,
     state.sectorTags,
-    state.selectedFrameworks,
     state.attachDealId,
   ]);
 
@@ -139,7 +142,7 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
         sectorTags: parseSectorTags(d.sectorTags),
       },
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dealQuery.data, attachDealIdFromUrl]);
 
   // Attach-mode error handling: invalid dealId → redirect to /new-deal (drop the query).
@@ -149,14 +152,23 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     if (attachDealIdFromUrl == null) return;
     if (dealQuery.isLoading) return;
     if (!dealQuery.isError && dealQuery.data !== null) return;
-    toast.error("Deal not found", { description: "The link may be stale or the deal was deleted." });
+    toast.error("Deal not found", {
+      description: "The link may be stale or the deal was deleted.",
+    });
     navigate("/new-deal");
-  }, [attachDealIdFromUrl, dealQuery.isError, dealQuery.isLoading, dealQuery.data, navigate]);
+  }, [
+    attachDealIdFromUrl,
+    dealQuery.isError,
+    dealQuery.isLoading,
+    dealQuery.data,
+    navigate,
+  ]);
 
   // Step guards. In URL-attach mode `attachDealId` (and the Step 1 fields) are
   // only populated once `dealQuery` resolves, so suppress the guards during
   // that in-flight window — dealQuery.isError above covers the genuine failure.
-  const attachPending = attachDealIdFromUrl != null && state.attachDealId == null;
+  const attachPending =
+    attachDealIdFromUrl != null && state.attachDealId == null;
   useEffect(() => {
     if (attachPending) return;
     if (stepName === "upload-files") {
@@ -177,7 +189,15 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
         navigate("/new-deal/upload-files");
       }
     }
-  }, [attachPending, stepName, state.dealName, state.gpSource, state.hasUploadedDocument, state.attachDealId, navigate]);
+  }, [
+    attachPending,
+    stepName,
+    state.dealName,
+    state.gpSource,
+    state.hasUploadedDocument,
+    state.attachDealId,
+    navigate,
+  ]);
 
   // Step 1 → Step 2: the deal is created here (not at final submit) so that
   // Step 2 has a real dealId to hang document uploads off.
@@ -193,7 +213,10 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     const minP = parseDealSizeM(state.dealSizeMinM);
     const maxP = parseDealSizeM(state.dealSizeMaxM);
     if (minP.kind === "error" || maxP.kind === "error") {
-      dispatch({ type: "submitting_error", message: "Fix Deal Size before submitting." });
+      dispatch({
+        type: "submitting_error",
+        message: "Fix Deal Size before submitting.",
+      });
       return;
     }
     const dealSizeMinUsd = minP.kind === "ok" ? minP.cents : null;
@@ -210,7 +233,8 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
       dispatch({ type: "deal_created", dealId: created.id });
       navigate("/new-deal/upload-files");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not create deal";
+      const message =
+        err instanceof Error ? err.message : "Could not create deal";
       dispatch({ type: "submitting_error", message });
       toast.error("Could not create deal", { description: message });
     }
@@ -224,7 +248,10 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     const minP = parseDealSizeM(state.dealSizeMinM);
     const maxP = parseDealSizeM(state.dealSizeMaxM);
     if (minP.kind === "error" || maxP.kind === "error") {
-      dispatch({ type: "submitting_error", message: "Fix Deal Size before submitting." });
+      dispatch({
+        type: "submitting_error",
+        message: "Fix Deal Size before submitting.",
+      });
       navigate("/new-deal");
       return;
     }
@@ -232,7 +259,10 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     // Auth check (mirrors Home.tsx behavior).
     const meResult = await refresh();
     if (!meResult.data) {
-      dispatch({ type: "submitting_error", message: "Session expired — redirecting to login…" });
+      dispatch({
+        type: "submitting_error",
+        message: "Session expired — redirecting to login…",
+      });
       toast.error("Session expired", { description: "Redirecting to login…" });
       window.location.href = getLoginUrl();
       return;
@@ -242,12 +272,15 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     // keeps this step unreachable without it.
     const dealId = state.attachDealId;
     if (dealId == null) {
-      dispatch({ type: "submitting_error", message: "Deal missing — start again from Step 1." });
+      dispatch({
+        type: "submitting_error",
+        message: "Deal missing — start again from Step 1.",
+      });
       return;
     }
 
     try {
-      await startDealAnalysis(dealId, { selectedFrameworks: state.selectedFrameworks });
+      await startDealAnalysis(dealId);
     } catch (err) {
       // Pragmatic string match against the backend doc's stated 409 "already
       // running" detail text — no real endpoint exists yet to verify the exact
@@ -258,7 +291,8 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
         err.status === 409 &&
         err.message.toLowerCase().includes("already running");
       if (!alreadyRunning) {
-        const message = err instanceof Error ? err.message : "Could not start analysis";
+        const message =
+          err instanceof Error ? err.message : "Could not start analysis";
         dispatch({ type: "submitting_error", message });
         toast.error("Could not start analysis", { description: message });
         return;
@@ -288,9 +322,24 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
           <MvpTopbar.QuickSearch aria-label="Open quick search" />
           <MvpTopbar.Notifications aria-label="Notifications" />
           <MvpTopbar.Avatar
-            initial={authUser?.name ? authUser.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase() : (authUser?.email?.[0]?.toUpperCase() ?? "S")}
+            initial={
+              authUser?.name
+                ? authUser.name
+                    .split(" ")
+                    .map((w: string) => w[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase()
+                : (authUser?.email?.[0]?.toUpperCase() ?? "S")
+            }
             name={authUser?.name ?? authUser?.email?.split("@")[0] ?? undefined}
-            role={authUser?.role === "admin" ? "Admin" : authUser?.role ? "Analyst" : undefined}
+            role={
+              authUser?.role === "admin"
+                ? "Admin"
+                : authUser?.role
+                  ? "Analyst"
+                  : undefined
+            }
             aria-label="Account menu"
           />
         </MvpTopbar>
@@ -323,7 +372,9 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
                   so this narrowing check covers the brief window before it fires. */}
               {state.attachDealId != null && (
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Upload Files</h2>
+                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
+                    Upload Files
+                  </h2>
                   <DealDocumentUpload
                     dealId={state.attachDealId}
                     onUploaded={() => dispatch({ type: "document_uploaded" })}
@@ -368,7 +419,7 @@ function parseSectorTags(json: string | null | undefined): string[] {
   if (!json) return [];
   try {
     const v = JSON.parse(json);
-    if (Array.isArray(v) && v.every((x) => typeof x === "string")) return v;
+    if (Array.isArray(v) && v.every(x => typeof x === "string")) return v;
     return [];
   } catch {
     return [];

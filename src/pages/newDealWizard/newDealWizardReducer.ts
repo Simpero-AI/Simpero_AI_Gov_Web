@@ -7,7 +7,6 @@ export type WizardState = {
   dealSizeMinM: string;
   dealSizeMaxM: string;
   sectorTags: string[];
-  selectedFrameworks: string[];
 
   // Step 2
   /** Set once `DealDocumentUpload` reports at least one successful upload this session — gates the Step 3 guard. */
@@ -24,32 +23,39 @@ export type WizardState = {
 };
 
 export type WizardAction =
-  | { type: "set_field"; key: "dealName" | "gpSource" | "dealSizeMinM" | "dealSizeMaxM"; value: string }
+  | {
+      type: "set_field";
+      key: "dealName" | "gpSource" | "dealSizeMinM" | "dealSizeMaxM";
+      value: string;
+    }
   | { type: "toggle_sector"; tag: string }
-  | { type: "toggle_framework"; id: string }
-  | { type: "apply_framework_preset"; ids: string[] }
   | { type: "document_uploaded" }
   | { type: "submitting_start" }
   | { type: "submitting_error"; message: string }
   | { type: "set_conference_mode"; enabled: boolean }
   | { type: "set_fixture_id"; id: string }
   | { type: "rehydrate"; partial: Partial<PersistedStep1> }
-  | { type: "set_attach_deal_id"; dealId: string; deal: {
-      name: string; gpSource: string;
-      dealSizeMinUsd: number | null; dealSizeMaxUsd: number | null;
-      sectorTags: string[];
-    } }
+  | {
+      type: "set_attach_deal_id";
+      dealId: string;
+      deal: {
+        name: string;
+        gpSource: string;
+        dealSizeMinUsd: number | null;
+        dealSizeMaxUsd: number | null;
+        sectorTags: string[];
+      };
+    }
   | { type: "deal_created"; dealId: string }
   | { type: "reset" };
 
-export function initialWizardState(defaultFrameworks: string[]): WizardState {
+export function initialWizardState(): WizardState {
   return {
     dealName: "",
     gpSource: "",
     dealSizeMinM: "",
     dealSizeMaxM: "",
     sectorTags: [],
-    selectedFrameworks: defaultFrameworks,
 
     hasUploadedDocument: false,
 
@@ -69,29 +75,20 @@ function centsToM(cents: number | null): string {
   return Number.isFinite(m) ? String(m) : "";
 }
 
-export function newDealWizardReducer(state: WizardState, action: WizardAction): WizardState {
+export function newDealWizardReducer(
+  state: WizardState,
+  action: WizardAction
+): WizardState {
   switch (action.type) {
     case "set_field":
       return { ...state, [action.key]: action.value } as WizardState;
 
     case "toggle_sector": {
       const tags = state.sectorTags.includes(action.tag)
-        ? state.sectorTags.filter((t) => t !== action.tag)
+        ? state.sectorTags.filter(t => t !== action.tag)
         : [...state.sectorTags, action.tag];
       return { ...state, sectorTags: tags };
     }
-
-    case "toggle_framework": {
-      const has = state.selectedFrameworks.includes(action.id);
-      if (has && state.selectedFrameworks.length <= 1) return state;
-      const next = has
-        ? state.selectedFrameworks.filter((id) => id !== action.id)
-        : [...state.selectedFrameworks, action.id];
-      return { ...state, selectedFrameworks: next };
-    }
-
-    case "apply_framework_preset":
-      return { ...state, selectedFrameworks: action.ids };
 
     case "document_uploaded":
       return { ...state, hasUploadedDocument: true };
@@ -117,7 +114,6 @@ export function newDealWizardReducer(state: WizardState, action: WizardAction): 
         ...(p.dealSizeMinM !== undefined && { dealSizeMinM: p.dealSizeMinM }),
         ...(p.dealSizeMaxM !== undefined && { dealSizeMaxM: p.dealSizeMaxM }),
         ...(p.sectorTags !== undefined && { sectorTags: p.sectorTags }),
-        ...(p.selectedFrameworks !== undefined && { selectedFrameworks: p.selectedFrameworks }),
       };
     }
 
@@ -140,6 +136,6 @@ export function newDealWizardReducer(state: WizardState, action: WizardAction): 
       return { ...state, attachDealId: action.dealId, submitting: false };
 
     case "reset":
-      return initialWizardState(state.selectedFrameworks);
+      return initialWizardState();
   }
 }

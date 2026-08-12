@@ -14,15 +14,18 @@ export type PersistedStep1 = {
   dealSizeMinM: string;
   dealSizeMaxM: string;
   sectorTags: string[];
-  selectedFrameworks: string[];
 };
 
-export function storageKey(userId: number | string | null | undefined): string | null {
+export function storageKey(
+  userId: number | string | null | undefined
+): string | null {
   if (userId == null) return null;
   return `simpero.newDealWizard.${userId}`;
 }
 
-export function loadDraft(userId: number | string | null | undefined): PersistedStep1 | null {
+export function loadDraft(
+  userId: number | string | null | undefined
+): PersistedStep1 | null {
   const key = storageKey(userId);
   if (key == null) return null;
   if (typeof window === "undefined") return null;
@@ -70,7 +73,7 @@ function isPersistedStep1(v: unknown): v is PersistedStep1 {
     typeof o.gpSource === "string" &&
     typeof o.dealSizeMinM === "string" &&
     typeof o.dealSizeMaxM === "string" &&
-    Array.isArray(o.sectorTags) && o.sectorTags.every((t) => typeof t === "string") &&
-    Array.isArray(o.selectedFrameworks) && o.selectedFrameworks.every((t) => typeof t === "string")
+    Array.isArray(o.sectorTags) &&
+    o.sectorTags.every(t => typeof t === "string")
   );
 }

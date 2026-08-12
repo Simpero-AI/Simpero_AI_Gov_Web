@@ -14,7 +14,11 @@ test.describe("G-31 New Deal wizard", () => {
     // Navigate to a benign URL first so window.localStorage is available, then clear.
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.evaluate(() => {
-      try { window.localStorage.clear(); } catch { /* ignore */ }
+      try {
+        window.localStorage.clear();
+      } catch {
+        /* ignore */
+      }
     });
   });
 
@@ -26,7 +30,9 @@ test.describe("G-31 New Deal wizard", () => {
     await expect(page.getByTestId("wizard-continue-step-1")).toBeDisabled();
   });
 
-  test("Continue enables once Name + GP/Source are filled", async ({ page }) => {
+  test("Continue enables once Name + GP/Source are filled", async ({
+    page,
+  }) => {
     await page.goto("/new-deal", { waitUntil: "domcontentloaded" });
     await page.getByTestId("wizard-deal-name").fill("E2E Deal");
     await page.getByTestId("wizard-gp-source").fill("E2E Source");
@@ -34,12 +40,16 @@ test.describe("G-31 New Deal wizard", () => {
   });
 
   test("guards block direct nav past Step 1", async ({ page }) => {
-    await page.goto("/new-deal/upload-files", { waitUntil: "domcontentloaded" });
+    await page.goto("/new-deal/upload-files", {
+      waitUntil: "domcontentloaded",
+    });
     // Guard redirects to /new-deal (Step 1).
     await expect(page).toHaveURL(/\/new-deal$/, { timeout: 5_000 });
 
     await page.goto("/new-deal/confirm", { waitUntil: "domcontentloaded" });
-    await expect(page).toHaveURL(/\/new-deal($|\/upload-files$)/, { timeout: 5_000 });
+    await expect(page).toHaveURL(/\/new-deal($|\/upload-files$)/, {
+      timeout: 5_000,
+    });
   });
 
   test("Step 1 fields persist across reload", async ({ page }) => {
@@ -49,12 +59,22 @@ test.describe("G-31 New Deal wizard", () => {
     // Wait past the 300ms debounce.
     await page.waitForTimeout(400);
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("wizard-deal-name")).toHaveValue("Persisted Deal");
-    await expect(page.getByTestId("wizard-gp-source")).toHaveValue("Persisted Source");
+    await expect(page.getByTestId("wizard-deal-name")).toHaveValue(
+      "Persisted Deal"
+    );
+    await expect(page.getByTestId("wizard-gp-source")).toHaveValue(
+      "Persisted Source"
+    );
   });
 
-  test("attach mode: /new-deal?dealId=<n> pre-fills Step 1 read-only", async ({ page, request }) => {
-    test.skip(!process.env.E2E_DATABASE_URL?.trim(), "requires E2E_DATABASE_URL (real DB)");
+  test("attach mode: /new-deal?dealId=<n> pre-fills Step 1 read-only", async ({
+    page,
+    request,
+  }) => {
+    test.skip(
+      !process.env.E2E_DATABASE_URL?.trim(),
+      "requires E2E_DATABASE_URL (real DB)"
+    );
 
     // Create a deal directly via the REST API — decoupled from the (currently
     // unreachable) wizard submit chain, and a better test regardless.
@@ -72,16 +92,25 @@ test.describe("G-31 New Deal wizard", () => {
     expect(dealId).toBeTruthy();
 
     // Now navigate to attach-mode URL.
-    await page.goto(`/new-deal?dealId=${dealId}`, { waitUntil: "domcontentloaded" });
+    await page.goto(`/new-deal?dealId=${dealId}`, {
+      waitUntil: "domcontentloaded",
+    });
 
     // Step 1 must show the attach banner and the deal name pre-filled + disabled.
     await expect(page.getByTestId("wizard-attach-banner")).toBeVisible();
-    await expect(page.getByTestId("wizard-deal-name")).toHaveValue("Attach Source");
+    await expect(page.getByTestId("wizard-deal-name")).toHaveValue(
+      "Attach Source"
+    );
     await expect(page.getByTestId("wizard-deal-name")).toBeDisabled();
   });
 
-  test("happy path: create deal, upload a document, reach Confirm, and fire the analysis request", async ({ page }) => {
-    test.skip(!process.env.E2E_DATABASE_URL?.trim(), "requires E2E_DATABASE_URL (real DB)");
+  test("happy path: create deal, upload a document, reach Confirm, and fire the analysis request", async ({
+    page,
+  }) => {
+    test.skip(
+      !process.env.E2E_DATABASE_URL?.trim(),
+      "requires E2E_DATABASE_URL (real DB)"
+    );
 
     await page.goto("/new-deal", { waitUntil: "domcontentloaded" });
 
@@ -99,7 +128,9 @@ test.describe("G-31 New Deal wizard", () => {
       mimeType: "application/pdf",
       buffer: TEXT_SAMPLE_PDF_BYTES,
     });
-    await expect(page.getByTestId("deal-document-upload-status")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("deal-document-upload-status")).toBeVisible({
+      timeout: 30_000,
+    });
 
     // Reaching /confirm is itself coverage of this session's bug fix — Step 3 used to be
     // permanently unreachable because `hasUploadedDocument` was never wired to this callback.
@@ -114,13 +145,11 @@ test.describe("G-31 New Deal wizard", () => {
     // handleSubmit catch block). Assert only that the request fires correctly, not on its
     // response or on navigation, so this test keeps passing once the backend lands.
     const requestPromise = page.waitForRequest(
-      (req) => req.method() === "POST" && req.url().includes("/analysis")
+      req => req.method() === "POST" && req.url().includes("/analysis")
     );
     await page.getByTestId("wizard-start-analysis").click();
     const analysisRequest = await requestPromise;
 
     expect(analysisRequest.url()).toMatch(/\/api\/deals\/.+\/analysis$/);
-    const body = analysisRequest.postDataJSON() as { selectedFrameworks: unknown };
-    expect(Array.isArray(body.selectedFrameworks)).toBe(true);
   });
 });
