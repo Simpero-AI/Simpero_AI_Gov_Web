@@ -50,12 +50,22 @@ describe("requestPresignedUpload", () => {
     expect(sentBody).not.toHaveProperty("declared_sha256");
   });
 
-  it("throws DuplicateUploadError on 409", async () => {
-    mockFetchOnce(409, { message: "duplicate" });
+  it("throws DuplicateUploadError on 409, carrying the existing row's real id/status", async () => {
+    // app/api/uploads.py's actual 409 shape: {"detail": {message, dataSourceId, status}}.
+    mockFetchOnce(409, {
+      detail: {
+        message: "A matching file has already been uploaded for this deal",
+        dataSourceId: "existing-doc-1",
+        status: "verified",
+      },
+    });
 
     await expect(
       requestPresignedUpload({ dealId: "d1", filename: "deck.pdf", size: 100, declaredSha256: "hash" })
-    ).rejects.toBeInstanceOf(DuplicateUploadError);
+    ).rejects.toMatchObject({
+      dataSourceId: "existing-doc-1",
+      status: "verified",
+    });
   });
 
   it("throws a plain Error on other 4xx, surfacing the server message", async () => {

@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
-import { FrameworkSelector } from "@/components/mvp/wizard/FrameworkSelector";
 import { SECTOR_TAGS } from "./sectorTags";
-import { parseDealSizeM } from "./parseDealSizeM";
 import type { WizardAction, WizardState } from "./newDealWizardReducer";
 
 interface Step1DetailsProps {
@@ -17,8 +15,6 @@ interface Step1DetailsProps {
 interface Errors {
   dealName?: string;
   gpSource?: string;
-  dealSizeMinM?: string;
-  dealSizeMaxM?: string;
 }
 
 export function Step1Details({ state, dispatch, onContinue, attached, attachedViaUrl }: Step1DetailsProps) {
@@ -36,14 +32,6 @@ export function Step1Details({ state, dispatch, onContinue, attached, attachedVi
     const e: Errors = {};
     if (state.dealName.trim() === "") e.dealName = "Deal name is required";
     if (state.gpSource.trim() === "") e.gpSource = "GP / Source is required";
-
-    const minP = parseDealSizeM(state.dealSizeMinM);
-    const maxP = parseDealSizeM(state.dealSizeMaxM);
-    if (minP.kind === "error") e.dealSizeMinM = minP.message;
-    if (maxP.kind === "error") e.dealSizeMaxM = maxP.message;
-    if (minP.kind === "ok" && maxP.kind === "ok" && maxP.cents < minP.cents) {
-      e.dealSizeMaxM = "Max must be ≥ Min";
-    }
     return e;
   }
 
@@ -114,44 +102,6 @@ export function Step1Details({ state, dispatch, onContinue, attached, attachedVi
               <p className="text-xs text-red-600 mt-1">{errors.gpSource}</p>
             )}
           </div>
-
-          <div>
-            <label className={lbl}>Deal Size</label>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <input
-                  data-testid="wizard-deal-size-min"
-                  type="text"
-                  inputMode="decimal"
-                  value={state.dealSizeMinM}
-                  onChange={(e) => dispatch({ type: "set_field", key: "dealSizeMinM", value: e.target.value })}
-                  placeholder="Min ($M)"
-                  className={inp}
-                  disabled={attached}
-                  aria-invalid={!!(showErrors && errors.dealSizeMinM)}
-                />
-                {showErrors && errors.dealSizeMinM && (
-                  <p className="text-xs text-red-600 mt-1">{errors.dealSizeMinM}</p>
-                )}
-              </div>
-              <div>
-                <input
-                  data-testid="wizard-deal-size-max"
-                  type="text"
-                  inputMode="decimal"
-                  value={state.dealSizeMaxM}
-                  onChange={(e) => dispatch({ type: "set_field", key: "dealSizeMaxM", value: e.target.value })}
-                  placeholder="Max ($M)"
-                  className={inp}
-                  disabled={attached}
-                  aria-invalid={!!(showErrors && errors.dealSizeMaxM)}
-                />
-                {showErrors && errors.dealSizeMaxM && (
-                  <p className="text-xs text-red-600 mt-1">{errors.dealSizeMaxM}</p>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -189,13 +139,6 @@ export function Step1Details({ state, dispatch, onContinue, attached, attachedVi
           })}
         </div>
       </div>
-
-      <FrameworkSelector
-        selected={state.selectedFrameworks}
-        onTogglePreset={(ids) => dispatch({ type: "apply_framework_preset", ids })}
-        onToggleFramework={(id) => dispatch({ type: "toggle_framework", id })}
-        readOnly={attached}
-      />
 
       {state.submitError && (
         <div

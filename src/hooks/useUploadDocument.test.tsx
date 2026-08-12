@@ -3,7 +3,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { useUploadDocument } from "./useUploadDocument";
-import { DuplicateUploadError } from "@/api/documents";
 import * as pipeline from "@/lib/documentUploadPipeline";
 
 vi.mock("@/lib/documentUploadPipeline", () => ({ runDocumentUpload: vi.fn() }));
@@ -56,14 +55,18 @@ describe("useUploadDocument", () => {
     expect(toastSuccess).toHaveBeenCalledWith("Document uploaded — status: some_future_status");
   });
 
-  it("shows a distinct toast for DuplicateUploadError", async () => {
-    vi.mocked(pipeline.runDocumentUpload).mockRejectedValue(new DuplicateUploadError("dup"));
+  it("toasts a distinct success message when the file was already uploaded and verified", async () => {
+    // documentUploadPipeline.runDocumentUpload resolves (not rejects) a
+    // DuplicateUploadError into the existing row's real id/status -- from
+    // this hook's perspective it's just another successful upload, with a
+    // status ("verified") that never comes from a genuinely fresh upload.
+    vi.mocked(pipeline.runDocumentUpload).mockResolvedValue({ id: "doc1", status: "verified" });
     const { result } = renderHook(() => useUploadDocument("deal1"), { wrapper });
 
     result.current.mutate(new File(["x"], "deck.pdf"));
 
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(toastError).toHaveBeenCalledWith("Already uploaded for this deal");
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(toastSuccess).toHaveBeenCalledWith("Document already uploaded and verified for this deal");
   });
 
   it("shows the raw error message for other failures", async () => {

@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CitationProvider, useCitationSafe, useCitation } from "@/contexts/CitationContext";
+import {
+  CitationProvider,
+  useCitationSafe,
+  useCitation,
+} from "@/contexts/CitationContext";
 import { CitationSidebar } from "@/components/mvp/primitives/CitationSidebar";
 import { Link, useSearch, useLocation } from "wouter";
 import { toast } from "@/components/mvp/primitives/sonner";
@@ -45,10 +49,20 @@ import { buildMvpNav } from "@/components/mvp/nav/mvpNav";
 import { usePageTitle } from "@/components/mvp/common/usePageTitle";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { dealQueryKey, dealStatusQueryKey, fetchDeal, fetchDealStatus } from "@/api/deals";
+import {
+  dealQueryKey,
+  dealStatusQueryKey,
+  fetchDeal,
+  fetchDealStatus,
+} from "@/api/deals";
 import { Button } from "@/components/mvp/primitives/button";
 import { Card, CardContent } from "@/components/mvp/primitives/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/mvp/primitives/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/mvp/primitives/tabs";
 import {
   Table,
   TableBody,
@@ -67,7 +81,12 @@ import { SourcedValue } from "@/components/mvp/primitives/SourcedValue";
 import { MissingDataPlaceholder } from "@/components/mvp/primitives/MissingDataPlaceholder";
 import { FinancialGridRenderer } from "@/components/mvp/icMemo/FinancialGridRenderer";
 import { TeamMemberCard } from "@/components/mvp/icMemo/TeamMemberCard";
-import { formatUsdShort, formatUsdLong, formatBpAsPct, formatRatio } from "@/lib/dealMetricsFormat";
+import {
+  formatUsdShort,
+  formatUsdLong,
+  formatBpAsPct,
+  formatRatio,
+} from "@/lib/dealMetricsFormat";
 import type { AlertRow } from "@shared/dealAnalysisShape";
 import type {
   Citation,
@@ -89,7 +108,10 @@ import { ParserVerificationTab } from "./dealAnalysis/ParserVerificationTab";
 import { ProseWithClaims } from "@/components/mvp/primitives/ClaimText";
 import { useUserDisplay } from "@/hooks/useUserDisplay";
 import { VALID_TABS, type TabKey } from "./dealAnalysis/dealAnalysisUtils";
-import { DealScorecardPanel, NotConfiguredScorecard } from "@/components/mvp/mandate/ScoreCardBlock";
+import {
+  DealScorecardPanel,
+  NotConfiguredScorecard,
+} from "@/components/mvp/mandate/ScoreCardBlock";
 import { LogsPanel } from "@/components/mvp/analysis/LogsPanel";
 import {
   Sheet,
@@ -141,12 +163,22 @@ const TRI_CFG: Record<
   },
 };
 
-function StatusPill({ status, onClick }: { status: TriStatus; onClick?: () => void }) {
+function StatusPill({
+  status,
+  onClick,
+}: {
+  status: TriStatus;
+  onClick?: () => void;
+}) {
   const { icon: Icon, pillBg, pillText, pillBorder, label } = TRI_CFG[status];
   const cls = `inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold ${pillBg} ${pillText} ${pillBorder}`;
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className={`${cls} cursor-pointer hover:opacity-80 transition-opacity`}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${cls} cursor-pointer hover:opacity-80 transition-opacity`}
+      >
         <Icon className="w-3 h-3 flex-shrink-0" />
         {label}
       </button>
@@ -216,7 +248,11 @@ function TriangulatedCard({
           const { rowBg } = TRI_CFG[row.status];
           // Always open the sidebar — pass null when no source citation exists (synthesized)
           const handleCitationClick = citationCtx
-            ? () => citationCtx.openCitation({ fieldLabel: row.field, citation: row.citation ?? null })
+            ? () =>
+                citationCtx.openCitation({
+                  fieldLabel: row.field,
+                  citation: row.citation ?? null,
+                })
             : undefined;
           return (
             <div
@@ -224,21 +260,30 @@ function TriangulatedCard({
               className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1.6fr)] items-start px-4 py-2.5 ${rowBg}`}
             >
               <span className="text-xs text-gray-500 pt-0.5">{row.field}</span>
-              <span className="text-xs font-medium text-gray-900 pr-2">{row.value}</span>
+              <span className="text-xs font-medium text-gray-900 pr-2">
+                {row.value}
+              </span>
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <StatusPill status={row.status} onClick={handleCitationClick} />
+                  <StatusPill
+                    status={row.status}
+                    onClick={handleCitationClick}
+                  />
                   <div className="flex items-center gap-1 flex-wrap">
                     {row.sources.map((s, j) => (
                       <span key={j} className="inline-flex items-center gap-1">
-                        {j > 0 && <span className="text-gray-300 text-xs">·</span>}
+                        {j > 0 && (
+                          <span className="text-gray-300 text-xs">·</span>
+                        )}
                         <SourceChip label={s.label} url={s.url} />
                       </span>
                     ))}
                   </div>
                 </div>
                 {row.note && (
-                  <span className="text-[10px] text-gray-400 italic">{row.note}</span>
+                  <span className="text-[10px] text-gray-400 italic">
+                    {row.note}
+                  </span>
                 )}
               </div>
             </div>
@@ -249,7 +294,9 @@ function TriangulatedCard({
   );
 }
 
-function severityTone(severity: AlertRow["severity"]): "destructive" | "warning" | "info" {
+function severityTone(
+  severity: AlertRow["severity"]
+): "destructive" | "warning" | "info" {
   switch (severity) {
     case "Critical":
     case "High":
@@ -274,16 +321,20 @@ function MetricsStrip({
 }) {
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      {items.map((item) => (
+      {items.map(item => (
         <Card key={item.label} className="overflow-hidden">
           <CardContent className="px-4 py-4">
             <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
               {item.label}
             </p>
             <div className="mt-2 flex items-end justify-between gap-3">
-              <span className="text-[24px] font-semibold leading-8 text-foreground">{item.value}</span>
+              <span className="text-[24px] font-semibold leading-8 text-foreground">
+                {item.value}
+              </span>
               {item.sublabel ? (
-                <span className="text-xs font-mono text-muted-foreground">{item.sublabel}</span>
+                <span className="text-xs font-mono text-muted-foreground">
+                  {item.sublabel}
+                </span>
               ) : null}
             </div>
           </CardContent>
@@ -301,8 +352,13 @@ function KeyValueGrid({
   return (
     <div className="grid gap-3 md:grid-cols-2">
       {rows.map(([label, value]) => (
-        <div key={label} className="rounded-md border border-border bg-card px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
+        <div
+          key={label}
+          className="rounded-md border border-border bg-card px-4 py-3"
+        >
+          <p className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+            {label}
+          </p>
           <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
         </div>
       ))}
@@ -344,7 +400,11 @@ interface StripRow {
 }
 
 const STRIP_ROWS: StripRow[] = [
-  { field: "revenueLatestUsd", label: "Revenue (latest)", format: formatUsdShort },
+  {
+    field: "revenueLatestUsd",
+    label: "Revenue (latest)",
+    format: formatUsdShort,
+  },
   { field: "revenueGrowthPct", label: "Revenue Growth", format: formatBpAsPct },
   { field: "ebitdaUsd", label: "EBITDA", format: formatUsdShort },
   { field: "ebitdaMarginPct", label: "EBITDA Margin", format: formatBpAsPct },
@@ -359,10 +419,10 @@ function DealMetricsStrip({
   discrepancies: MetricDiscrepancy[];
 }) {
   const citationCtx = useCitationSafe();
-  const visibleRows = STRIP_ROWS.filter((r) => metrics[r.field] !== undefined);
+  const visibleRows = STRIP_ROWS.filter(r => metrics[r.field] !== undefined);
   if (visibleRows.length === 0) return null;
 
-  const discrepancyByField = new Map(discrepancies.map((d) => [d.field, d]));
+  const discrepancyByField = new Map(discrepancies.map(d => [d.field, d]));
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4 mb-4">
@@ -370,7 +430,7 @@ function DealMetricsStrip({
         Extracted Financial Metrics
       </h3>
       <ul className="divide-y divide-slate-100">
-        {visibleRows.map((row) => {
+        {visibleRows.map(row => {
           const m = metrics[row.field] as MetricValue;
           const discrepancy = discrepancyByField.get(row.field);
           return (
@@ -390,14 +450,20 @@ function DealMetricsStrip({
                     section={m.citation.section ?? null}
                     verified={!!m.citation.verified}
                     onClick={() =>
-                      citationCtx?.openCitation({ fieldLabel: row.label, citation: m.citation! })
+                      citationCtx?.openCitation({
+                        fieldLabel: row.label,
+                        citation: m.citation!,
+                      })
                     }
                   />
                 ) : (
                   <ProvenanceBadge
                     provenance="synthesized"
                     onClick={() =>
-                      citationCtx?.openCitation({ fieldLabel: row.label, citation: null })
+                      citationCtx?.openCitation({
+                        fieldLabel: row.label,
+                        citation: null,
+                      })
                     }
                   />
                 )}
@@ -473,7 +539,7 @@ function AnalysisTabs({
   if (memoTyped && process.env.NODE_ENV === "development") {
     if (!memoTyped.sections && !memoTyped.deliverable) {
       console.warn(
-        "[DealAnalysis] memoData present but sections and deliverable both absent — possible schema mismatch",
+        "[DealAnalysis] memoData present but sections and deliverable both absent — possible schema mismatch"
       );
     }
   }
@@ -488,7 +554,8 @@ function AnalysisTabs({
     const seeded = buildE2eUxMemo();
     sessionStorage.setItem("simpero_memo", JSON.stringify(seeded));
     toast.info("Opened seeded memo", {
-      description: "No active memo was available, so a report-linked demo memo was loaded.",
+      description:
+        "No active memo was available, so a report-linked demo memo was loaded.",
     });
     window.location.href = `/memo/${seeded.sessionId}`;
   };
@@ -496,17 +563,19 @@ function AnalysisTabs({
   // Quick stat helpers
   const arrValue = (() => {
     const dm = memoTyped?.dealMetrics;
-    if (dm?.revenueLatestUsd?.value != null) return formatUsdShort(dm.revenueLatestUsd.value);
+    if (dm?.revenueLatestUsd?.value != null)
+      return formatUsdShort(dm.revenueLatestUsd.value);
     return "—";
   })();
 
   const grossMarginValue = (() => {
     const dm = memoTyped?.dealMetrics;
-    if (dm?.grossMarginPct?.value != null) return formatBpAsPct(dm.grossMarginPct.value);
+    if (dm?.grossMarginPct?.value != null)
+      return formatBpAsPct(dm.grossMarginPct.value);
     // Fallback: search unitEconomics for a gross margin entry
     const ue = memoTyped?.deliverable?.unitEconomics?.value;
     if (Array.isArray(ue)) {
-      const gm = ue.find((e) => /gross.?margin/i.test(e.metric));
+      const gm = ue.find(e => /gross.?margin/i.test(e.metric));
       if (gm?.value) return gm.value;
     }
     return "—";
@@ -527,34 +596,46 @@ function AnalysisTabs({
 
   const teamValue = (() => {
     const team = memoTyped?.deliverable?.managementTeam?.value;
-    if (Array.isArray(team) && team.length > 0) return `${team.length} executives`;
+    if (Array.isArray(team) && team.length > 0)
+      return `${team.length} executives`;
     return "—";
   })();
 
   // Subtitle helpers for Part 1
   const subtitleParts: string[] = [];
-  if (deal.sectorTags.length > 0) subtitleParts.push(deal.sectorTags.join(", "));
-  const investmentAmountUsd = memoTyped?.deliverable?.investmentStructure?.investmentAmountUsd?.value;
+  if (deal.sectorTags.length > 0)
+    subtitleParts.push(deal.sectorTags.join(", "));
+  const investmentAmountUsd =
+    memoTyped?.deliverable?.investmentStructure?.investmentAmountUsd?.value;
   if (investmentAmountUsd != null) {
     subtitleParts.push(formatUsdShort(investmentAmountUsd));
   }
   const docType = memoTyped?.documentType;
   if (docType) {
     const humanDocType =
-      docType === "PITCH" ? "Pitch" :
-      docType === "CIM" ? "CIM" :
-      docType === "SERIES_A" ? "Series A" :
-      docType === "SERIES_B" ? "Series B" :
-      docType === "SERIES_C" ? "Series C" :
-      docType;
+      docType === "PITCH"
+        ? "Pitch"
+        : docType === "CIM"
+          ? "CIM"
+          : docType === "SERIES_A"
+            ? "Series A"
+            : docType === "SERIES_B"
+              ? "Series B"
+              : docType === "SERIES_C"
+                ? "Series C"
+                : docType;
     subtitleParts.push(humanDocType);
   }
-  const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" · ") : deal.gpSource;
+  const subtitle =
+    subtitleParts.length > 0 ? subtitleParts.join(" · ") : deal.gpSource;
 
   return (
     <>
       <Sheet open={logsOpen} onOpenChange={setLogsOpen}>
-        <SheetContent side="right" className="w-[520px] sm:max-w-[520px] p-0 flex flex-col">
+        <SheetContent
+          side="right"
+          className="w-[520px] sm:max-w-[520px] p-0 flex flex-col"
+        >
           <SheetHeader className="px-5 py-4 border-b border-slate-100 flex-shrink-0">
             <SheetTitle>Logs — {deal.name}</SheetTitle>
           </SheetHeader>
@@ -567,7 +648,10 @@ function AnalysisTabs({
       <PageHeader
         eyebrow={
           <span className="inline-flex items-center gap-2">
-            <Link href="/" className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+            >
               <ArrowLeft className="w-3.5 h-3.5" />
             </Link>
             Deal Analysis
@@ -615,20 +699,53 @@ function AnalysisTabs({
       {/* Quick Stats */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { icon: Target, label: "Mandate Alignment", value: mandateAlignmentValue, sub: mandateAlignmentSub, color: "blue" },
-          { icon: DollarSign, label: "Total Revenue", value: arrValue, sub: "From pipeline", color: "emerald" },
-          { icon: BarChart3, label: "Gross Margin", value: grossMarginValue, sub: "From pipeline", color: "purple" },
-          { icon: Users, label: "Management Team", value: teamValue, sub: "From memo", color: "amber" },
+          {
+            icon: Target,
+            label: "Mandate Alignment",
+            value: mandateAlignmentValue,
+            sub: mandateAlignmentSub,
+            color: "blue",
+          },
+          {
+            icon: DollarSign,
+            label: "Total Revenue",
+            value: arrValue,
+            sub: "From pipeline",
+            color: "emerald",
+          },
+          {
+            icon: BarChart3,
+            label: "Gross Margin",
+            value: grossMarginValue,
+            sub: "From pipeline",
+            color: "purple",
+          },
+          {
+            icon: Users,
+            label: "Management Team",
+            value: teamValue,
+            sub: "From memo",
+            color: "amber",
+          },
         ].map((stat, i) => {
           const Icon = stat.icon;
           return (
-            <div key={i} className="bg-white rounded-xl p-5 border border-slate-200">
+            <div
+              key={i}
+              className="bg-white rounded-xl p-5 border border-slate-200"
+            >
               <div className="flex items-center justify-between mb-3">
                 <Icon className={`w-8 h-8 text-${stat.color}-600`} />
-                <span className="text-2xl font-bold text-slate-900">{stat.value}</span>
+                <span className="text-2xl font-bold text-slate-900">
+                  {stat.value}
+                </span>
               </div>
-              <div className="text-sm font-medium text-slate-700">{stat.label}</div>
-              <div className={`text-xs text-${stat.color}-600 mt-0.5`}>{stat.sub}</div>
+              <div className="text-sm font-medium text-slate-700">
+                {stat.label}
+              </div>
+              <div className={`text-xs text-${stat.color}-600 mt-0.5`}>
+                {stat.sub}
+              </div>
             </div>
           );
         })}
@@ -637,7 +754,9 @@ function AnalysisTabs({
       {/* Tab Bar */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="border-b border-slate-200 flex overflow-x-auto">
-          {ANALYSIS_TABS.filter((t) => t.id !== "parser-verification" || user?.role === "admin").map((t) => (
+          {ANALYSIS_TABS.filter(
+            t => t.id !== "parser-verification" || user?.role === "admin"
+          ).map(t => (
             <button
               key={t.id}
               onClick={() => !t.soon && setTab(t.id)}
@@ -661,19 +780,30 @@ function AnalysisTabs({
         </div>
 
         <div className="p-6">
-
           {/* SUMMARY */}
           {tab === "summary" && (
             <SummaryTab memoTyped={memoTyped} onSelectTab={setTab} />
-          )}          {/* SCORECARD */}
+          )}{" "}
+          {/* SCORECARD */}
           {tab === "scorecard" && (
-            <ScorecardTab memoTyped={memoTyped} sessionId={sessionId} dealId={dealId} />
-          )}          {/* COMPANY */}
+            <ScorecardTab
+              memoTyped={memoTyped}
+              sessionId={sessionId}
+              dealId={dealId}
+            />
+          )}{" "}
+          {/* COMPANY */}
           {tab === "company" && (
             <div className="space-y-5">
               <div className="flex items-center gap-3 px-1">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Triangulation key:</span>
-                {(["verified", "partial", "unverified"] as TriStatus[]).map((s) => <StatusPill key={s} status={s} />)}
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Triangulation key:
+                </span>
+                {(["verified", "partial", "unverified"] as TriStatus[]).map(
+                  s => (
+                    <StatusPill key={s} status={s} />
+                  )
+                )}
               </div>
 
               {(() => {
@@ -682,18 +812,83 @@ function AnalysisTabs({
                   return <MissingDataPlaceholder gapRef="G-42" />;
                 }
                 const v = co;
-                const getStatus = (provenance?: string, citation?: Citation): TriStatus => {
+                const getStatus = (
+                  provenance?: string,
+                  citation?: Citation
+                ): TriStatus => {
                   if (provenance === "missing") return "unverified";
-                  if (provenance === "extracted" && citation?.verified) return "verified";
+                  if (provenance === "extracted" && citation?.verified)
+                    return "verified";
                   if (provenance === "extracted") return "partial"; // extracted but TF-IDF unverified
                   return "partial";
                 };
                 const rows: DataRow[] = [
-                  { field: "Founded", value: v.foundedDate?.value != null ? String(v.foundedDate.value) : "—", status: getStatus(v.foundedDate?.provenance, v.foundedDate?.citation ?? undefined), sources: [{ label: v.foundedDate?.citation ? "Document" : "Source pending" }], citation: v.foundedDate?.citation ?? undefined },
-                  { field: "HQ Location", value: v.hqLocation?.value != null ? String(v.hqLocation.value) : "—", status: getStatus(v.hqLocation?.provenance, v.hqLocation?.citation ?? undefined), sources: [{ label: v.hqLocation?.citation ? "Document" : "Source pending" }], citation: v.hqLocation?.citation ?? undefined },
-                  { field: "Employees", value: v.employees?.value != null ? String(v.employees.value) : "—", status: getStatus(v.employees?.provenance, v.employees?.citation ?? undefined), sources: [{ label: v.employees?.citation ? "Document" : "Source pending" }], citation: v.employees?.citation ?? undefined },
+                  {
+                    field: "Founded",
+                    value:
+                      v.foundedDate?.value != null
+                        ? String(v.foundedDate.value)
+                        : "—",
+                    status: getStatus(
+                      v.foundedDate?.provenance,
+                      v.foundedDate?.citation ?? undefined
+                    ),
+                    sources: [
+                      {
+                        label: v.foundedDate?.citation
+                          ? "Document"
+                          : "Source pending",
+                      },
+                    ],
+                    citation: v.foundedDate?.citation ?? undefined,
+                  },
+                  {
+                    field: "HQ Location",
+                    value:
+                      v.hqLocation?.value != null
+                        ? String(v.hqLocation.value)
+                        : "—",
+                    status: getStatus(
+                      v.hqLocation?.provenance,
+                      v.hqLocation?.citation ?? undefined
+                    ),
+                    sources: [
+                      {
+                        label: v.hqLocation?.citation
+                          ? "Document"
+                          : "Source pending",
+                      },
+                    ],
+                    citation: v.hqLocation?.citation ?? undefined,
+                  },
+                  {
+                    field: "Employees",
+                    value:
+                      v.employees?.value != null
+                        ? String(v.employees.value)
+                        : "—",
+                    status: getStatus(
+                      v.employees?.provenance,
+                      v.employees?.citation ?? undefined
+                    ),
+                    sources: [
+                      {
+                        label: v.employees?.citation
+                          ? "Document"
+                          : "Source pending",
+                      },
+                    ],
+                    citation: v.employees?.citation ?? undefined,
+                  },
                 ];
-                return <TriangulatedCard icon={Building} iconColor="text-blue-600" title="Company Information" rows={rows} />;
+                return (
+                  <TriangulatedCard
+                    icon={Building}
+                    iconColor="text-blue-600"
+                    title="Company Information"
+                    rows={rows}
+                  />
+                );
               })()}
 
               {/* Products */}
@@ -704,23 +899,43 @@ function AnalysisTabs({
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
                     <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 bg-gray-50">
                       <Zap className="w-5 h-5 text-amber-600" />
-                      <span className="font-semibold text-gray-900 text-sm">Products</span>
+                      <span className="font-semibold text-gray-900 text-sm">
+                        Products
+                      </span>
                       {products && products.provenance !== "missing" && (
                         <ProvenanceBadge
                           provenance={products.provenance}
                           citationVerified={products.citation?.verified}
-                          onClick={() => citationCtx?.openCitation({ fieldLabel: "Products", citation: products.citation ?? null })}
+                          onClick={() =>
+                            citationCtx?.openCitation({
+                              fieldLabel: "Products",
+                              citation: products.citation ?? null,
+                            })
+                          }
                         />
                       )}
                     </div>
-                    {!products || products.provenance === "missing" || !products.value?.length ? (
-                      <div className="px-4 py-4"><MissingDataPlaceholder /></div>
+                    {!products ||
+                    products.provenance === "missing" ||
+                    !products.value?.length ? (
+                      <div className="px-4 py-4">
+                        <MissingDataPlaceholder />
+                      </div>
                     ) : (
                       <div className="divide-y divide-gray-100">
-                        {(products.value as Array<{ name: string; description: string }>).map((p, i) => (
+                        {(
+                          products.value as Array<{
+                            name: string;
+                            description: string;
+                          }>
+                        ).map((p, i) => (
                           <div key={i} className="px-4 py-3">
-                            <p className="text-sm font-semibold text-gray-900">{p.name}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{p.description}</p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {p.name}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {p.description}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -737,23 +952,43 @@ function AnalysisTabs({
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
                     <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 bg-gray-50">
                       <DollarSign className="w-5 h-5 text-emerald-600" />
-                      <span className="font-semibold text-gray-900 text-sm">Revenue Mix</span>
+                      <span className="font-semibold text-gray-900 text-sm">
+                        Revenue Mix
+                      </span>
                       {revMix && revMix.provenance !== "missing" && (
                         <ProvenanceBadge
                           provenance={revMix.provenance}
                           citationVerified={revMix.citation?.verified}
-                          onClick={() => citationCtx?.openCitation({ fieldLabel: "Revenue Mix", citation: revMix.citation ?? null })}
+                          onClick={() =>
+                            citationCtx?.openCitation({
+                              fieldLabel: "Revenue Mix",
+                              citation: revMix.citation ?? null,
+                            })
+                          }
                         />
                       )}
                     </div>
-                    {!revMix || revMix.provenance === "missing" || !revMix.value?.length ? (
-                      <div className="px-4 py-4"><MissingDataPlaceholder /></div>
+                    {!revMix ||
+                    revMix.provenance === "missing" ||
+                    !revMix.value?.length ? (
+                      <div className="px-4 py-4">
+                        <MissingDataPlaceholder />
+                      </div>
                     ) : (
                       <div className="divide-y divide-gray-100">
-                        {(revMix.value as Array<{ label: string; pct: number }>).map((r, i) => (
-                          <div key={i} className="flex items-center justify-between px-4 py-2.5">
-                            <span className="text-xs text-gray-700">{r.label}</span>
-                            <span className="text-xs font-semibold text-gray-900">{r.pct}%</span>
+                        {(
+                          revMix.value as Array<{ label: string; pct: number }>
+                        ).map((r, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between px-4 py-2.5"
+                          >
+                            <span className="text-xs text-gray-700">
+                              {r.label}
+                            </span>
+                            <span className="text-xs font-semibold text-gray-900">
+                              {r.pct}%
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -766,49 +1001,124 @@ function AnalysisTabs({
               {(() => {
                 const ofac = memoTyped?.ofac_screening;
                 if (!ofac) return null;
-                const overall = ofac.confirmedMatches > 0 ? "confirmed"
-                  : ofac.possibleMatches > 0 ? "possible"
-                  : ofac.screeningAvailable ? "clear"
-                  : "unavailable";
-                const hdrCfg = overall === "confirmed"
-                  ? { bg: "bg-red-50", border: "border-red-300", icon: AlertTriangle, iconCls: "text-red-600", title: "OFAC — Confirmed Match", titleCls: "text-red-800" }
-                  : overall === "possible"
-                  ? { bg: "bg-amber-50", border: "border-amber-300", icon: AlertTriangle, iconCls: "text-amber-600", title: "OFAC — Possible Match", titleCls: "text-amber-800" }
-                  : overall === "clear"
-                  ? { bg: "bg-emerald-50", border: "border-emerald-200", icon: ShieldCheck, iconCls: "text-emerald-600", title: "OFAC Screening — Clear", titleCls: "text-emerald-800" }
-                  : { bg: "bg-gray-50", border: "border-gray-200", icon: Shield, iconCls: "text-gray-500", title: "OFAC Screening — Unavailable", titleCls: "text-gray-700" };
+                const overall =
+                  ofac.confirmedMatches > 0
+                    ? "confirmed"
+                    : ofac.possibleMatches > 0
+                      ? "possible"
+                      : ofac.screeningAvailable
+                        ? "clear"
+                        : "unavailable";
+                const hdrCfg =
+                  overall === "confirmed"
+                    ? {
+                        bg: "bg-red-50",
+                        border: "border-red-300",
+                        icon: AlertTriangle,
+                        iconCls: "text-red-600",
+                        title: "OFAC — Confirmed Match",
+                        titleCls: "text-red-800",
+                      }
+                    : overall === "possible"
+                      ? {
+                          bg: "bg-amber-50",
+                          border: "border-amber-300",
+                          icon: AlertTriangle,
+                          iconCls: "text-amber-600",
+                          title: "OFAC — Possible Match",
+                          titleCls: "text-amber-800",
+                        }
+                      : overall === "clear"
+                        ? {
+                            bg: "bg-emerald-50",
+                            border: "border-emerald-200",
+                            icon: ShieldCheck,
+                            iconCls: "text-emerald-600",
+                            title: "OFAC Screening — Clear",
+                            titleCls: "text-emerald-800",
+                          }
+                        : {
+                            bg: "bg-gray-50",
+                            border: "border-gray-200",
+                            icon: Shield,
+                            iconCls: "text-gray-500",
+                            title: "OFAC Screening — Unavailable",
+                            titleCls: "text-gray-700",
+                          };
                 const HdrIcon = hdrCfg.icon;
                 return (
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                    <div className={`flex items-center gap-2.5 px-4 py-3 border-b ${hdrCfg.border} ${hdrCfg.bg}`}>
+                    <div
+                      className={`flex items-center gap-2.5 px-4 py-3 border-b ${hdrCfg.border} ${hdrCfg.bg}`}
+                    >
                       <HdrIcon className={`w-5 h-5 ${hdrCfg.iconCls}`} />
-                      <span className={`font-semibold text-sm ${hdrCfg.titleCls}`}>{hdrCfg.title}</span>
+                      <span
+                        className={`font-semibold text-sm ${hdrCfg.titleCls}`}
+                      >
+                        {hdrCfg.title}
+                      </span>
                       <span className="ml-auto text-[10px] text-gray-400">
-                        Screened {new Date(ofac.screenedAt).toLocaleDateString()} · {ofac.entitiesScreened} entit{ofac.entitiesScreened === 1 ? "y" : "ies"}
+                        Screened{" "}
+                        {new Date(ofac.screenedAt).toLocaleDateString()} ·{" "}
+                        {ofac.entitiesScreened} entit
+                        {ofac.entitiesScreened === 1 ? "y" : "ies"}
                       </span>
                     </div>
                     {ofac.results.length > 0 && (
                       <div className="divide-y divide-gray-100">
                         {(ofac.results as OFACEntityResult[]).map((r, i) => {
-                          const sCfg = r.status === "CONFIRMED_MATCH"
-                            ? { chip: "bg-red-100 text-red-700", dot: "bg-red-500" }
-                            : r.status === "POSSIBLE_MATCH"
-                            ? { chip: "bg-amber-100 text-amber-700", dot: "bg-amber-500" }
-                            : r.status === "CLEAR"
-                            ? { chip: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" }
-                            : { chip: "bg-gray-100 text-gray-600", dot: "bg-gray-400" };
+                          const sCfg =
+                            r.status === "CONFIRMED_MATCH"
+                              ? {
+                                  chip: "bg-red-100 text-red-700",
+                                  dot: "bg-red-500",
+                                }
+                              : r.status === "POSSIBLE_MATCH"
+                                ? {
+                                    chip: "bg-amber-100 text-amber-700",
+                                    dot: "bg-amber-500",
+                                  }
+                                : r.status === "CLEAR"
+                                  ? {
+                                      chip: "bg-emerald-100 text-emerald-700",
+                                      dot: "bg-emerald-500",
+                                    }
+                                  : {
+                                      chip: "bg-gray-100 text-gray-600",
+                                      dot: "bg-gray-400",
+                                    };
                           return (
-                            <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${sCfg.dot}`} />
+                            <div
+                              key={i}
+                              className="flex items-center gap-3 px-4 py-2.5"
+                            >
+                              <span
+                                className={`w-2 h-2 rounded-full shrink-0 ${sCfg.dot}`}
+                              />
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold text-gray-900 truncate">{r.entity}</p>
-                                {r.matchedName && r.matchedName !== r.entity && (
-                                  <p className="text-[10px] text-gray-500">Matched: {r.matchedName}</p>
-                                )}
+                                <p className="text-xs font-semibold text-gray-900 truncate">
+                                  {r.entity}
+                                </p>
+                                {r.matchedName &&
+                                  r.matchedName !== r.entity && (
+                                    <p className="text-[10px] text-gray-500">
+                                      Matched: {r.matchedName}
+                                    </p>
+                                  )}
                               </div>
-                              <span className="text-[10px] text-gray-400 capitalize shrink-0">{r.entityType}</span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide shrink-0 ${sCfg.chip}`}>
-                                {r.status === "CONFIRMED_MATCH" ? "Match" : r.status === "POSSIBLE_MATCH" ? "Possible" : r.status === "CLEAR" ? "Clear" : "N/A"}
+                              <span className="text-[10px] text-gray-400 capitalize shrink-0">
+                                {r.entityType}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide shrink-0 ${sCfg.chip}`}
+                              >
+                                {r.status === "CONFIRMED_MATCH"
+                                  ? "Match"
+                                  : r.status === "POSSIBLE_MATCH"
+                                    ? "Possible"
+                                    : r.status === "CLEAR"
+                                      ? "Clear"
+                                      : "N/A"}
                               </span>
                             </div>
                           );
@@ -816,27 +1126,38 @@ function AnalysisTabs({
                       </div>
                     )}
                     {!ofac.screeningAvailable && (
-                      <p className="px-4 py-3 text-xs text-gray-500">OFAC screening service unavailable at processing time.</p>
+                      <p className="px-4 py-3 text-xs text-gray-500">
+                        OFAC screening service unavailable at processing time.
+                      </p>
                     )}
                   </div>
                 );
               })()}
             </div>
           )}
-
           {/* FINANCIALS */}
           {tab === "financials" && (
-            <FinancialsTab memoTyped={memoTyped} dealMetrics={dealMetrics} dealMetricDiscrepancies={dealMetricDiscrepancies} />
-          )}          {/* FOUNDERS */}
+            <FinancialsTab
+              memoTyped={memoTyped}
+              dealMetrics={dealMetrics}
+              dealMetricDiscrepancies={dealMetricDiscrepancies}
+            />
+          )}{" "}
+          {/* FOUNDERS */}
           {tab === "founders" && (
             <div className="space-y-5">
-
               {(() => {
                 const team = memoTyped?.deliverable?.managementTeam;
-                if (!team || team.provenance === "missing" || !team.value?.length) {
+                if (
+                  !team ||
+                  team.provenance === "missing" ||
+                  !team.value?.length
+                ) {
                   return <MissingDataPlaceholder />;
                 }
-                const founderClaims = (memoTyped?.sections ?? []).flatMap(s => s.claims ?? []);
+                const founderClaims = (memoTyped?.sections ?? []).flatMap(
+                  s => s.claims ?? []
+                );
                 const avatarColors = [
                   { bg: "bg-blue-100", text: "text-blue-600" },
                   { bg: "bg-purple-100", text: "text-purple-600" },
@@ -848,49 +1169,92 @@ function AnalysisTabs({
                     {/* Section header with citation badge */}
                     <div className="flex items-center gap-2 px-1">
                       <GraduationCap className="w-4 h-4 text-gray-500" />
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Management Team</span>
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Management Team
+                      </span>
                       <ProvenanceBadge
                         provenance={team.provenance}
                         citationVerified={team.citation?.verified}
-                        onClick={() => citationCtx?.openCitation({ fieldLabel: "Management Team", citation: team.citation ?? null })}
+                        onClick={() =>
+                          citationCtx?.openCitation({
+                            fieldLabel: "Management Team",
+                            citation: team.citation ?? null,
+                          })
+                        }
                       />
                     </div>
-                    {(team.value as Array<{ name: string; title: string; background: string | import("@shared/simperoTypes").SourcedSentence[]; keyAchievement?: string | import("@shared/simperoTypes").SourcedSentence[] }>).map((member, fi) => {
+                    {(
+                      team.value as Array<{
+                        name: string;
+                        title: string;
+                        background:
+                          | string
+                          | import("@shared/simperoTypes").SourcedSentence[];
+                        keyAchievement?:
+                          | string
+                          | import("@shared/simperoTypes").SourcedSentence[];
+                      }>
+                    ).map((member, fi) => {
                       const ac = avatarColors[fi % avatarColors.length];
                       return (
-                        <div key={fi} className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                        <div
+                          key={fi}
+                          className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm"
+                        >
                           <div className="flex items-start justify-between p-5 border-b border-gray-100 bg-gradient-to-br from-white to-gray-50">
                             <div className="flex items-start gap-4">
-                              <div className={`w-14 h-14 ${ac.bg} rounded-full flex items-center justify-center flex-shrink-0`}>
+                              <div
+                                className={`w-14 h-14 ${ac.bg} rounded-full flex items-center justify-center flex-shrink-0`}
+                              >
                                 <Users className={`w-7 h-7 ${ac.text}`} />
                               </div>
                               <div>
-                                <h4 className="text-lg font-bold text-gray-900">{member.name}</h4>
-                                <p className="text-sm text-gray-600">{member.title}</p>
+                                <h4 className="text-lg font-bold text-gray-900">
+                                  {member.name}
+                                </h4>
+                                <p className="text-sm text-gray-600">
+                                  {member.title}
+                                </p>
                               </div>
                             </div>
                           </div>
                           <div className="p-5 space-y-4">
                             <div>
-                              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">Background</p>
+                              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">
+                                Background
+                              </p>
                               <p className="text-sm text-gray-700 leading-relaxed">
-                                {member.background
-                                  ? <ProseWithClaims content={member.background} claims={founderClaims} />
-                                  : "—"}
+                                {member.background ? (
+                                  <ProseWithClaims
+                                    content={member.background}
+                                    claims={founderClaims}
+                                  />
+                                ) : (
+                                  "—"
+                                )}
                               </p>
                             </div>
                             {member.keyAchievement && (
                               <div className="border-l-4 border-emerald-500 pl-4 py-0.5">
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Key Achievement</p>
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">
+                                  Key Achievement
+                                </p>
                                 <p className="text-sm font-medium text-gray-800">
-                                  <ProseWithClaims content={member.keyAchievement} claims={founderClaims} />
+                                  <ProseWithClaims
+                                    content={member.keyAchievement}
+                                    claims={founderClaims}
+                                  />
                                 </p>
                               </div>
                             )}
                             <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-                              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">Background Checks</p>
+                              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">
+                                Background Checks
+                              </p>
                               <p className="text-xs text-gray-400 italic">
-                                Background check data coming soon — identity, employment history, education verification, and criminal record checks will appear here.
+                                Background check data coming soon — identity,
+                                employment history, education verification, and
+                                criminal record checks will appear here.
                               </p>
                             </div>
                           </div>
@@ -904,23 +1268,44 @@ function AnalysisTabs({
               {/* Board */}
               {(() => {
                 const board = memoTyped?.deliverable?.board;
-                if (!board || board.provenance === "missing" || !board.value?.length) return null;
+                if (
+                  !board ||
+                  board.provenance === "missing" ||
+                  !board.value?.length
+                )
+                  return null;
                 return (
                   <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
                     <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 bg-gray-50">
                       <Briefcase className="w-5 h-5 text-blue-600" />
-                      <span className="font-semibold text-gray-900 text-sm">Board Members</span>
+                      <span className="font-semibold text-gray-900 text-sm">
+                        Board Members
+                      </span>
                       <ProvenanceBadge
                         provenance={board.provenance}
                         citationVerified={board.citation?.verified}
-                        onClick={() => citationCtx?.openCitation({ fieldLabel: "Board Members", citation: board.citation ?? null })}
+                        onClick={() =>
+                          citationCtx?.openCitation({
+                            fieldLabel: "Board Members",
+                            citation: board.citation ?? null,
+                          })
+                        }
                       />
                     </div>
                     <div className="divide-y divide-gray-100">
-                      {(board.value as Array<{ name: string; role: string }>).map((b, i) => (
-                        <div key={i} className="flex items-center justify-between px-4 py-3">
-                          <span className="text-sm font-semibold text-gray-900">{b.name}</span>
-                          <span className="text-xs text-gray-500">{b.role}</span>
+                      {(
+                        board.value as Array<{ name: string; role: string }>
+                      ).map((b, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between px-4 py-3"
+                        >
+                          <span className="text-sm font-semibold text-gray-900">
+                            {b.name}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {b.role}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -929,15 +1314,18 @@ function AnalysisTabs({
               })()}
             </div>
           )}
-
           {/* CAP TABLE */}
           {tab === "cap-table" && (
             <div className="flex flex-col items-center py-16 gap-3 text-center">
-              <p className="text-sm font-medium text-slate-600">Cap Table coming soon</p>
-              <p className="text-xs text-slate-400">Fully diluted ownership breakdown will appear here once the pipeline extracts it.</p>
+              <p className="text-sm font-medium text-slate-600">
+                Cap Table coming soon
+              </p>
+              <p className="text-xs text-slate-400">
+                Fully diluted ownership breakdown will appear here once the
+                pipeline extracts it.
+              </p>
             </div>
           )}
-
           {/* MARKET */}
           {tab === "market" && (
             <div className="space-y-6">
@@ -951,110 +1339,177 @@ function AnalysisTabs({
                   <>
                     <div className="grid grid-cols-3 gap-4">
                       {[
-                        { label: "TAM", desc: "Total Addressable Market", sourced: v.tamUsd },
-                        { label: "SAM", desc: "Serviceable Addressable Market", sourced: v.samUsd },
-                        { label: "SOM", desc: "Serviceable Obtainable Market", sourced: v.somUsd },
+                        {
+                          label: "TAM",
+                          desc: "Total Addressable Market",
+                          sourced: v.tamUsd,
+                        },
+                        {
+                          label: "SAM",
+                          desc: "Serviceable Addressable Market",
+                          sourced: v.samUsd,
+                        },
+                        {
+                          label: "SOM",
+                          desc: "Serviceable Obtainable Market",
+                          sourced: v.somUsd,
+                        },
                       ].map((m, i) => {
                         return (
-                          <div key={i} className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                            <div className="text-sm text-blue-700 font-semibold">{m.label}</div>
+                          <div
+                            key={i}
+                            className="bg-blue-50 p-4 rounded-lg border border-blue-200"
+                          >
+                            <div className="text-sm text-blue-700 font-semibold">
+                              {m.label}
+                            </div>
                             <div className="text-3xl text-blue-900 my-1">
                               {m.sourced ? (
                                 <SourcedValue
                                   sourced={m.sourced}
-                                  format={(val) => val != null ? formatUsdShort(val as number) : "—"}
+                                  format={val =>
+                                    val != null
+                                      ? formatUsdShort(val as number)
+                                      : "—"
+                                  }
                                   fieldLabel={`${m.label} — ${m.desc}`}
                                 />
-                              ) : "—"}
+                              ) : (
+                                "—"
+                              )}
                             </div>
-                            <div className="text-xs text-blue-600 mb-2">{m.desc}</div>
+                            <div className="text-xs text-blue-600 mb-2">
+                              {m.desc}
+                            </div>
                           </div>
                         );
                       })}
                     </div>
 
-                    {v.growthCagrPct && v.growthCagrPct.provenance !== "missing" && (
-                      <div className="border border-slate-200 rounded-lg px-5 py-3 bg-slate-50 flex items-center justify-between">
-                        <span className="text-sm font-medium text-slate-700">Market Growth CAGR</span>
-                        <span className="text-lg font-bold text-slate-900">
-                          <SourcedValue sourced={v.growthCagrPct} format={(val) => val != null ? formatBpAsPct(val as number) : "—"} />
-                        </span>
-                      </div>
-                    )}
+                    {v.growthCagrPct &&
+                      v.growthCagrPct.provenance !== "missing" && (
+                        <div className="border border-slate-200 rounded-lg px-5 py-3 bg-slate-50 flex items-center justify-between">
+                          <span className="text-sm font-medium text-slate-700">
+                            Market Growth CAGR
+                          </span>
+                          <span className="text-lg font-bold text-slate-900">
+                            <SourcedValue
+                              sourced={v.growthCagrPct}
+                              format={val =>
+                                val != null ? formatBpAsPct(val as number) : "—"
+                              }
+                            />
+                          </span>
+                        </div>
+                      )}
 
                     {/* Market Dynamics placeholder */}
                     <div className="border-t pt-6">
                       <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-emerald-600" />Market Dynamics
+                        <TrendingUp className="w-5 h-5 text-emerald-600" />
+                        Market Dynamics
                       </h3>
                       <div className="border border-slate-200 rounded-lg px-5 py-6 bg-slate-50 flex flex-col items-center text-center gap-2">
                         <Info className="w-6 h-6 text-slate-400" />
-                        <p className="text-sm font-medium text-slate-600">AI-driven market dynamics insights coming soon</p>
-                        <p className="text-xs text-slate-400">Growth drivers, market risks, and competitive dynamics will be auto-generated here.</p>
+                        <p className="text-sm font-medium text-slate-600">
+                          AI-driven market dynamics insights coming soon
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          Growth drivers, market risks, and competitive dynamics
+                          will be auto-generated here.
+                        </p>
                       </div>
                     </div>
 
                     {/* Competitive Landscape */}
                     <div className="border-t pt-6">
                       <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                        <Globe className="w-5 h-5 text-blue-600" />Competitive Landscape
-                        {v.competitors && v.competitors.provenance !== "missing" && (
-                          <ProvenanceBadge
-                            provenance={v.competitors.provenance}
-                            citationVerified={v.competitors.citation?.verified}
-                            onClick={() => citationCtx?.openCitation({ fieldLabel: "Competitive Landscape", citation: v.competitors.citation ?? null })}
-                          />
-                        )}
+                        <Globe className="w-5 h-5 text-blue-600" />
+                        Competitive Landscape
+                        {v.competitors &&
+                          v.competitors.provenance !== "missing" && (
+                            <ProvenanceBadge
+                              provenance={v.competitors.provenance}
+                              citationVerified={
+                                v.competitors.citation?.verified
+                              }
+                              onClick={() =>
+                                citationCtx?.openCitation({
+                                  fieldLabel: "Competitive Landscape",
+                                  citation: v.competitors.citation ?? null,
+                                })
+                              }
+                            />
+                          )}
                       </h3>
-                      {!v.competitors || v.competitors?.provenance === "missing" || !v.competitors?.value?.length ? (
+                      {!v.competitors ||
+                      v.competitors?.provenance === "missing" ||
+                      !v.competitors?.value?.length ? (
                         <MissingDataPlaceholder />
                       ) : (
                         <div className="space-y-3">
-                          {(v.competitors.value as Array<{ name: string; weakness?: string; winRatePct?: number }>).map((c, i) => (
-                            <div key={i} className="border rounded-lg p-4 bg-white">
+                          {(
+                            v.competitors.value as Array<{
+                              name: string;
+                              weakness?: string;
+                              winRatePct?: number;
+                            }>
+                          ).map((c, i) => (
+                            <div
+                              key={i}
+                              className="border rounded-lg p-4 bg-white"
+                            >
                               <div className="flex justify-between items-start mb-1">
-                                <span className="font-medium text-gray-900">{c.name}</span>
+                                <span className="font-medium text-gray-900">
+                                  {c.name}
+                                </span>
                                 {c.winRatePct !== undefined && (
-                                  <span className="text-xs font-semibold text-emerald-700">Win rate: {formatBpAsPct(c.winRatePct)}</span>
+                                  <span className="text-xs font-semibold text-emerald-700">
+                                    Win rate: {formatBpAsPct(c.winRatePct)}
+                                  </span>
                                 )}
                               </div>
-                              {c.weakness && <p className="text-xs text-gray-500">{c.weakness}</p>}
+                              {c.weakness && (
+                                <p className="text-xs text-gray-500">
+                                  {c.weakness}
+                                </p>
+                              )}
                             </div>
                           ))}
                         </div>
                       )}
 
-                      {v.competitiveAdvantage && v.competitiveAdvantage.provenance !== "missing" && (
-                        <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                          <strong>Competitive Advantage:</strong>{" "}
-                          <SourcedValue sourced={v.competitiveAdvantage} />
-                        </div>
-                      )}
+                      {v.competitiveAdvantage &&
+                        v.competitiveAdvantage.provenance !== "missing" && (
+                          <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                            <strong>Competitive Advantage:</strong>{" "}
+                            <SourcedValue sourced={v.competitiveAdvantage} />
+                          </div>
+                        )}
                     </div>
                   </>
                 );
               })()}
             </div>
           )}
-
           {/* RISKS */}
-          {tab === "risks" && (
-            <RisksTab memoTyped={memoTyped} />
-          )}
-
+          {tab === "risks" && <RisksTab memoTyped={memoTyped} />}
           {/* VALUATION (SOON) */}
           {tab === "valuation" && (
             <div className="flex flex-col items-center py-16 gap-3 text-center">
-              <p className="text-sm font-medium text-slate-600">Valuation analysis coming soon</p>
-              <p className="text-xs text-slate-400">Industry comparables, precedent transactions, and portfolio benchmarks will appear here.</p>
+              <p className="text-sm font-medium text-slate-600">
+                Valuation analysis coming soon
+              </p>
+              <p className="text-xs text-slate-400">
+                Industry comparables, precedent transactions, and portfolio
+                benchmarks will appear here.
+              </p>
             </div>
           )}
-
           {/* PARSER VERIFICATION */}
           {tab === "parser-verification" && user?.role === "admin" && (
             <ParserVerificationTab sessionId={sessionId} />
           )}
-
         </div>
       </div>
 
@@ -1123,14 +1578,23 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
   const nav = buildMvpNav({ id: user?.id ?? "anon", role });
   const { userInitial, userName, userRoleLabel } = useUserDisplay();
 
-  const dealQuery = useQuery({ queryKey: dealQueryKey(dealId), queryFn: () => fetchDeal(dealId) });
+  const dealQuery = useQuery({
+    queryKey: dealQueryKey(dealId),
+    queryFn: () => fetchDeal(dealId),
+  });
   const statusQuery = useQuery({
     queryKey: dealStatusQueryKey(dealId),
     queryFn: () => fetchDealStatus(dealId),
-    refetchInterval: (q) => {
-      const s = q.state.data?.jobStatus;
-      // Stop immediately on any terminal state — do not wait for next cycle
+    refetchInterval: q => {
+      const data = q.state.data;
+      const s = data?.jobStatus;
+      // Stop immediately on any terminal state — do not wait for next cycle.
+      // currentPhase === "governance" is also terminal-for-now even though
+      // jobStatus stays "processing": verification succeeded and nothing
+      // past governance has a job behind it yet, so nothing will ever move
+      // this further -- polling forever here would just waste requests.
       if (s === "complete" || s === "error" || s === "no_job") return false;
+      if (data?.currentPhase === "governance") return false;
       return s === "processing" || s === "queued" ? 2000 : false;
     },
   });
@@ -1146,7 +1610,10 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
   useEffect(() => {
     const prev = prevJobStatusRef.current;
     prevJobStatusRef.current = jobStatus;
-    if ((prev === "processing" || prev === "queued") && jobStatus === "complete") {
+    if (
+      (prev === "processing" || prev === "queued") &&
+      jobStatus === "complete"
+    ) {
       void queryClient.invalidateQueries({ queryKey: dealQueryKey(dealId) });
     }
   }, [jobStatus, dealId, queryClient]);
@@ -1193,7 +1660,8 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
   useEffect(() => {
     const memoTypedForName = memoData as Partial<ICMemoResult> | null;
     const extractedName = memoTypedForName?.entityName ?? deal?.name;
-    if (extractedName && citationCtxOuter) citationCtxOuter.setCompanyName(extractedName);
+    if (extractedName && citationCtxOuter)
+      citationCtxOuter.setCompanyName(extractedName);
   }, [deal?.name, memoData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 4-mode body
@@ -1218,7 +1686,9 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
           <FileText className="w-8 h-8 text-slate-400" />
         </div>
         <div>
-          <p className="text-base font-semibold text-slate-700">No documents uploaded yet</p>
+          <p className="text-base font-semibold text-slate-700">
+            No documents uploaded yet
+          </p>
           <p className="text-sm text-slate-500 mt-1">
             Upload your deal materials to start the analysis pipeline.
           </p>
@@ -1232,13 +1702,16 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
     body = (
       <div className="mx-auto max-w-2xl px-6 py-8">
         <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {status.errorMessage ?? "The analysis pipeline failed. Re-upload to retry."}
+          {status.errorMessage ??
+            "The analysis pipeline failed. Re-upload to retry."}
         </div>
         <div className="mt-6">
           <AnalysisProgressView
             fileName={latestMemoSession?.fileName ?? "Unknown"}
             steps={status.steps}
-            phaseProgress={status.phaseProgress}
+            startedAt={status.startedAt}
+            endedAt={status.endedAt}
+            stepDurations={status.stepDurations}
             jobComments={status.jobComments}
           />
         </div>
@@ -1249,12 +1722,17 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
         </div>
       </div>
     );
-  } else if (status?.jobStatus === "queued" || status?.jobStatus === "processing") {
+  } else if (
+    status?.jobStatus === "queued" ||
+    status?.jobStatus === "processing"
+  ) {
     body = (
       <AnalysisProgressView
         fileName={latestMemoSession?.fileName ?? deal.name}
         steps={status.steps}
-        phaseProgress={status.phaseProgress}
+        startedAt={status.startedAt}
+        endedAt={status.endedAt}
+        stepDurations={status.stepDurations}
         jobComments={status.jobComments}
       />
     );
@@ -1262,8 +1740,12 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
     body = (
       <div className="flex flex-col items-center gap-3 py-16 text-center">
         <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
-        <p className="text-sm font-semibold text-slate-700">Still loading results…</p>
-        <p className="text-xs text-slate-500">The analysis finished — retrieving your memo. This may take a moment.</p>
+        <p className="text-sm font-semibold text-slate-700">
+          Still loading results…
+        </p>
+        <p className="text-xs text-slate-500">
+          The analysis finished — retrieving your memo. This may take a moment.
+        </p>
       </div>
     );
   } else {
@@ -1276,16 +1758,18 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
     const hasRealShape =
       Array.isArray(pluck(memoData, "sections")) &&
       (pluck(memoData, "sections") as unknown[]).length > 0;
-    const dealMetrics = (memoData as { dealMetrics?: Record<string, unknown> } | null)?.dealMetrics;
-    const hasStructuredMetrics = dealMetrics != null && Object.keys(dealMetrics).length > 0;
-    const showPass3FailedBanner = latestMemoSession != null && !!memoTypedOuter?.pass3Failed;
+    const dealMetrics = (
+      memoData as { dealMetrics?: Record<string, unknown> } | null
+    )?.dealMetrics;
+    const hasStructuredMetrics =
+      dealMetrics != null && Object.keys(dealMetrics).length > 0;
+    const showPass3FailedBanner =
+      latestMemoSession != null && !!memoTypedOuter?.pass3Failed;
     const showSchemaMismatchBanner =
       latestMemoSession != null &&
       memoTypedOuter != null &&
-      (
-        (hasRealShape && !hasStructuredMetrics) ||
-        (!memoTypedOuter.deliverable && !memoTypedOuter.pass3Failed)
-      );
+      ((hasRealShape && !hasStructuredMetrics) ||
+        (!memoTypedOuter.deliverable && !memoTypedOuter.pass3Failed));
     body = (
       <>
         {showPass3FailedBanner && (
@@ -1293,9 +1777,12 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
             className="mx-6 mt-6 mb-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
             data-testid="analysis-pass3-failed-banner"
           >
-            <div className="font-medium mb-1">Analysis composition incomplete</div>
+            <div className="font-medium mb-1">
+              Analysis composition incomplete
+            </div>
             <div className="text-xs text-amber-800/80">
-              The final memo could not be assembled from the extracted evidence. Try regenerating or contact support if this persists.
+              The final memo could not be assembled from the extracted evidence.
+              Try regenerating or contact support if this persists.
             </div>
           </div>
         )}
@@ -1304,12 +1791,25 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
             className="mx-6 mt-6 mb-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
             data-testid="analysis-preview-banner"
           >
-            <div className="font-medium mb-1">Preview view — the polished IC Memo layout is shipping next.</div>
+            <div className="font-medium mb-1">
+              Preview view — the polished IC Memo layout is shipping next.
+            </div>
             <div className="text-xs text-amber-800/80">
-              The deal-analysis tabs below are a preview while the polished IC memo deliverable view lands.
-              The pipeline produced{" "}
-              <strong>{(pluck(memoData, "scorecard.claimsExtracted") as number | undefined) ?? "—"}</strong> claims,{" "}
-              <strong>{(pluck(memoData, "scorecard.matchRate") as number | undefined) ?? "—"}%</strong> verification rate.
+              The deal-analysis tabs below are a preview while the polished IC
+              memo deliverable view lands. The pipeline produced{" "}
+              <strong>
+                {(pluck(memoData, "scorecard.claimsExtracted") as
+                  | number
+                  | undefined) ?? "—"}
+              </strong>{" "}
+              claims,{" "}
+              <strong>
+                {(pluck(memoData, "scorecard.matchRate") as
+                  | number
+                  | undefined) ?? "—"}
+                %
+              </strong>{" "}
+              verification rate.
             </div>
             <Link
               href={`/memo/${latestMemoSession.sessionId}/ledger`}
@@ -1326,7 +1826,11 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
             name: deal.name,
             gpSource: deal.gpSource,
             sectorTags: (() => {
-              try { return JSON.parse(deal.sectorTags) as string[]; } catch { return []; }
+              try {
+                return JSON.parse(deal.sectorTags) as string[];
+              } catch {
+                return [];
+              }
             })(),
             dealSizeMinUsd: deal.dealSizeMinUsd ?? null,
             dealSizeMaxUsd: deal.dealSizeMaxUsd ?? null,
@@ -1340,53 +1844,59 @@ function DealAnalysisInner({ dealId }: DealAnalysisProps) {
 
   return (
     <>
-    <MvpAppShell>
-      <MvpAppShell.Sidebar>
-        <MvpSidebar aria-label="Primary navigation">
-          <MvpFundSelector aria-label="Workspace selector" />
-          <MvpNavRenderer nav={nav} />
-        </MvpSidebar>
-      </MvpAppShell.Sidebar>
+      <MvpAppShell>
+        <MvpAppShell.Sidebar>
+          <MvpSidebar aria-label="Primary navigation">
+            <MvpFundSelector aria-label="Workspace selector" />
+            <MvpNavRenderer nav={nav} />
+          </MvpSidebar>
+        </MvpAppShell.Sidebar>
 
-      <MvpAppShell.Topbar>
-        <MvpTopbar>
-          <MvpTopbar.Breadcrumb segments={["Deal Flow", "Deal Analysis"]} />
-          <MvpTopbar.QuickSearch aria-label="Open quick search" />
-          <MvpTopbar.Notifications aria-label="Notifications" />
-          <MvpTopbar.Avatar initial={userInitial} name={userName} role={userRoleLabel} aria-label="Account menu" />
-        </MvpTopbar>
-      </MvpAppShell.Topbar>
+        <MvpAppShell.Topbar>
+          <MvpTopbar>
+            <MvpTopbar.Breadcrumb segments={["Deal Flow", "Deal Analysis"]} />
+            <MvpTopbar.QuickSearch aria-label="Open quick search" />
+            <MvpTopbar.Notifications aria-label="Notifications" />
+            <MvpTopbar.Avatar
+              initial={userInitial}
+              name={userName}
+              role={userRoleLabel}
+              aria-label="Account menu"
+            />
+          </MvpTopbar>
+        </MvpAppShell.Topbar>
 
-      <MvpAppShell.Main>
-        <PageContainer>
-          <div className="space-y-6">
-            {/* When in complete mode the PageHeader is rendered inside AnalysisTabs
+        <MvpAppShell.Main>
+          <PageContainer>
+            <div className="space-y-6">
+              {/* When in complete mode the PageHeader is rendered inside AnalysisTabs
                 so it has access to the action buttons. For no_job mode we
                 render a minimal header without the deal name to avoid giving the
                 impression that analysis is ready. For all other modes we render
                 a standard header. */}
-            {status?.jobStatus !== "complete" && status?.jobStatus !== "no_job" && (
-              <PageHeader
-                eyebrow="Deal Flow / Deal Analysis"
-                title={deal?.name ?? "Loading…"}
-                description={deal?.gpSource ?? ""}
-                className="mb-6"
-              />
-            )}
-            {status?.jobStatus === "no_job" && (
-              <PageHeader
-                eyebrow="Deal Flow / Deal Analysis"
-                title="New Deal"
-                description="Start by uploading your deal documents."
-                className="mb-6"
-              />
-            )}
-            {body}
-          </div>
-        </PageContainer>
-      </MvpAppShell.Main>
-    </MvpAppShell>
-    <DealAnalysisCitationSidebar />
+              {status?.jobStatus !== "complete" &&
+                status?.jobStatus !== "no_job" && (
+                  <PageHeader
+                    eyebrow="Deal Flow / Deal Analysis"
+                    title={deal?.name ?? "Loading…"}
+                    description={deal?.gpSource ?? ""}
+                    className="mb-6"
+                  />
+                )}
+              {status?.jobStatus === "no_job" && (
+                <PageHeader
+                  eyebrow="Deal Flow / Deal Analysis"
+                  title="New Deal"
+                  description="Start by uploading your deal documents."
+                  className="mb-6"
+                />
+              )}
+              {body}
+            </div>
+          </PageContainer>
+        </MvpAppShell.Main>
+      </MvpAppShell>
+      <DealAnalysisCitationSidebar />
     </>
   );
 }

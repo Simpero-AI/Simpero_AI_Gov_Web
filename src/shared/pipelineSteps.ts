@@ -1,19 +1,19 @@
 /**
- * Vendored from simpero_GOV_AI `server/analysisJobStore.ts` (the backend's
- * job phase union) — the wire values of `analysis_jobs.phase` the progress
- * API reports. Must stay in sync with the backend's phase names.
+ * Vendored from Simpero_AI_Gov_Alpha's `app/services/pipeline_steps.py` —
+ * must stay in sync with that file's PIPELINE_STEPS list.
+ *
+ * Reduced (2026-08-12) to the two phases `currentPhase` can actually ever
+ * report — "parsing" (start_deal_analysis) and "verification" (parsing
+ * successful / start_deal_verification running). The previous 9-entry list
+ * included phases no job has ever set, so a step between two real
+ * checkpoints (e.g. "classify" between "parsing" and "pass1") got marked
+ * "done" purely because it sat earlier in the list — never because
+ * anything actually ran it. "governance" (verification successful) is a
+ * real wire value but deliberately NOT a step of its own here — nothing is
+ * actively running once it's reached, so `computeStepStatuses` treats it
+ * as past the tracked list: every step "done", none "current".
  */
-export type AnalysisJobPhase =
-  | "queued"
-  | "parsing"
-  | "classify"
-  | "pass1"
-  | "pass2"
-  | "governance"
-  | "ofac"
-  | "pass3_compose"
-  | "pass4_score"
-  | "finalize";
+export type AnalysisJobPhase = "queued" | "parsing" | "verification" | "governance";
 
 export interface PipelineStep {
   phase: AnalysisJobPhase;
@@ -28,20 +28,12 @@ export interface PipelineStepWithStatus extends PipelineStep {
 }
 
 /**
- * Canonical user-facing step list. Mirrors the shipped pipeline phases (β
- * approach — list evolves with the pipeline). `queued` is intentionally
- * omitted; queued jobs render all steps as `pending`.
+ * Canonical user-facing step list. `queued` is intentionally omitted;
+ * queued jobs render all steps as `pending`.
  */
 export const PIPELINE_STEPS: readonly PipelineStep[] = [
-  { phase: "parsing",    title: "Parsing document",        detail: "Reading structure and extracting text" },
-  { phase: "classify",   title: "Classifying document",    detail: "Identifying document type and sections" },
-  { phase: "pass1",      title: "Verifying claims",        detail: "Extracting and verifying claims against the source" },
-  { phase: "pass2",      title: "Cross-checking sources",  detail: "Deeper source verification for unresolved claims" },
-  { phase: "governance", title: "Governance review",       detail: "Checking compliance flags and policy signals" },
-  { phase: "ofac",       title: "OFAC screening",          detail: "Sanctions and watchlist checks" },
-  { phase: "pass3_compose", title: "Drafting analysis",    detail: "Composing memo sections from verified evidence" },
-  { phase: "pass4_score",   title: "Scoring deal",          detail: "Running mandate fit and investment scoring" },
-  { phase: "finalize",   title: "Finalising",              detail: "Saving the analysis and memo" },
+  { phase: "parsing", title: "Parsing & extracting", detail: "Reading the document and extracting claims" },
+  { phase: "verification", title: "Verifying claims", detail: "Cross-checking and reconciling extracted claims against the source" },
 ] as const;
 
 /**
@@ -49,8 +41,10 @@ export const PIPELINE_STEPS: readonly PipelineStep[] = [
  * mark the current phase as `failed` instead of `current` (used when the
  * job ended in error).
  *
- * Returns one entry per `PIPELINE_STEPS`; if `currentPhase` is null,
- * every step is `pending`.
+ * Returns one entry per `PIPELINE_STEPS`; if `currentPhase` is null, every
+ * step is `pending`. A phase past the tracked list (currently just
+ * "governance") means nothing is actively running anymore — every step
+ * reports "done", not "unknown"/pending.
  */
 export function computeStepStatuses(
   currentPhase: AnalysisJobPhase | null,
@@ -62,9 +56,9 @@ export function computeStepStatuses(
 
   const idx = PIPELINE_STEPS.findIndex((s) => s.phase === currentPhase);
 
-  // Unknown phase (e.g., "queued"): everything pending.
+  // Past the tracked list (e.g. "governance"): everything already ran.
   if (idx === -1) {
-    return PIPELINE_STEPS.map((s) => ({ ...s, status: "pending" }));
+    return PIPELINE_STEPS.map((s) => ({ ...s, status: "done" }));
   }
 
   return PIPELINE_STEPS.map((s, i) => {

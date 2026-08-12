@@ -8,18 +8,13 @@ import type { PersistedStep1 } from "./storage";
 
 const DEFAULT_FRAMEWORKS = ["finra_3110", "sec_206_4_7", "osfi_e23", "eu_ai_act"];
 
-function mkFile(name: string): File {
-  return new File(["x"], name, { type: "application/pdf" });
-}
-
 describe("newDealWizardReducer", () => {
   it("initialWizardState defaults", () => {
     const s = initialWizardState(DEFAULT_FRAMEWORKS);
     expect(s.dealName).toBe("");
     expect(s.gpSource).toBe("");
     expect(s.selectedFrameworks).toEqual(DEFAULT_FRAMEWORKS);
-    expect(s.primaryFile).toBeNull();
-    expect(s.financialModelFile).toBeNull();
+    expect(s.hasUploadedDocument).toBe(false);
     expect(s.submitting).toBe(false);
     expect(s.attachDealId).toBeNull();
   });
@@ -53,30 +48,6 @@ describe("newDealWizardReducer", () => {
       type: "apply_framework_preset", ids: ["sec_206_4_7"],
     });
     expect(s1.selectedFrameworks).toEqual(["sec_206_4_7"]);
-  });
-
-  it("set_primary_file accepts a PDF", () => {
-    const s0 = initialWizardState(DEFAULT_FRAMEWORKS);
-    const file = mkFile("cim.pdf");
-    const s1 = newDealWizardReducer(s0, { type: "set_primary_file", file });
-    expect(s1.primaryFile).toBe(file);
-  });
-
-  it("set_financial_model_file accepts an XLSX", () => {
-    const s0 = initialWizardState(DEFAULT_FRAMEWORKS);
-    const file = new File(["x"], "model.xlsx", {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    const s1 = newDealWizardReducer(s0, { type: "set_financial_model_file", file });
-    expect(s1.financialModelFile).toBe(file);
-  });
-
-  it("set_material_ticked records a manual override", () => {
-    const s0 = initialWizardState(DEFAULT_FRAMEWORKS);
-    const s1 = newDealWizardReducer(s0, {
-      type: "set_material_ticked", key: "cim", ticked: true,
-    });
-    expect(s1.materialsTicked.cim).toBe(true);
   });
 
   it("rehydrate merges a partial state", () => {
