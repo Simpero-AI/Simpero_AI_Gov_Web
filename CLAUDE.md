@@ -48,6 +48,15 @@ backend, and what needs a human decision.
   flow (`src/pages/NewDealWizard.tsx`, `src/pages/newDealWizard/**`, route
   `/new-deal/:step?`), which keeps its pixel-identical obligation even while
   the redesign landed around it — the one carve-out inside the carve-out.
+- **Redesigned pages must never fabricate data to match the mockup.** Where
+  a mockup section has no backing field on `simperoTypes.ts`, render it as a
+  real-shaped `UnbackedSection`/empty state instead of inventing content;
+  where a mockup action has no backend endpoint, render it as a real,
+  `disabled` control with an explanatory note ("visible, disabled,
+  explained"), not a fake success path or a bare "coming soon". Design
+  compliance also means matching mockup **structure** (section presence,
+  order, composition), not just colors/tokens — verify against actual DOM,
+  not just CSS.
 
 ## Commands
 
@@ -168,6 +177,15 @@ change here clearly requires a paired backend change. Instead:
 - Number conventions from the monorepo hold everywhere: USD = integer **cents**,
   percents = integer **basis points**, ratios = plain decimals. Formatters:
   `src/lib/dealMetricsFormat.ts`.
+- `src/index.css` has a deliberately **unlayered** `a { color: inherit }`
+  reset (kept unlayered on purpose, to out-priority a third-party Carbon
+  stylesheet's own unlayered `a` selector — see the comment above that rule
+  in that file). It beats layered Tailwind utilities, so any button/link
+  styling meant to always apply on an `<a>` (e.g. `Button` rendered via
+  `asChild` + `href`, as in `EmptyState`'s `action.href`) needs the Tailwind
+  v4 `!` important-prefix, or the reset silently wins and text goes
+  invisible against a colored background. See `src/components/ui/button.tsx`'s
+  `default`/`destructive` variants for the fixed pattern.
 
 ## E2E state (Playwright)
 

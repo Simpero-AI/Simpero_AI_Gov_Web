@@ -1,5 +1,10 @@
 # Web Design Revamp — Implementation Summary (2026-08-12 → 2026-08-13)
 
+**Status: committed.** Both this session's Phase 0–9 build and the follow-up
+correction pass in §6 below are on `feat/frontend-revamp` (`9f85625` and
+earlier). §5's "entirely uncommitted" note below is stale — left in place for
+history, superseded by §6.
+
 Session record of implementing Phases 0–9 of the frontend visual/IA redesign
 end-to-end, orchestrated as architect (planning) → a sequence of
 implementer/tester subagent tasks per phase, each reviewed against the real
@@ -360,3 +365,92 @@ Data Consolidation — entirely new domain, recommended as a separate epic.
   (every decision recorded, §4c corrected as gaps were found) — it should
   **not** be stale relative to this doc, unlike the Admin Portal plan/impl
   pair. If a future session finds them disagreeing anyway, trust this doc.
+
+---
+
+## 6. Follow-up correction pass — structural audit against the mockup
+
+A later session re-audited every non-frozen page (Mandate & Scorecard, Deals,
+Deal Detail/Screening/Analysis/Workspace, Institutional Memory,
+Anti-Portfolio) against the mockup, this time comparing DOM/component
+**structure** (section presence, order, composition), not just CSS
+tokens — the Phase 7 Mandate bug below is what motivated the stricter
+check. New Deal creation stayed untouched throughout, per its standing
+carve-out.
+
+**Bugs found and fixed:**
+
+1. **Mandate & Scorecard** — a structural mismatch against the mockup
+   (caught first, live-verified via browser screenshot after the fix).
+2. **`DealDetail.tsx`'s `AnalysisTabs`** — had a duplicated `PageHeader`/
+   metadata-strip/quick-stats block and a boxed tab bar left over from
+   before Phase 4's rewrite. Replaced with a single title row (serif "Deal
+   Analysis" + Logs/Export PDF/Generate IC Memo actions, now plain `Button`
+   variants instead of hardcoded `slate-*` classes) and an underline-style
+   tab bar matching `DealDetailTabSwitcher`'s convention. `MetadataStrip`
+   kept, relocated under the new title row. A second, duplicate "Generate IC
+   Memo" button in the bottom actions bar had the same hardcoded-class fix
+   applied.
+3. **`CompanyTab.tsx`** — top section was a symmetric 2-column grid; mockup
+   uses an asymmetric `1.6fr/1fr` split with "Business Overview" and "Key
+   Business Risks" on the left. Neither field exists on
+   `companyOverview` in `simperoTypes.ts`, so both render as
+   `UnbackedSection` placeholders rather than fabricated content; Company
+   Facts / Co-Investors moved into the new right column unchanged.
+4. **`SummaryTab.tsx`** — removed two sections that were verbatim
+   duplicates of content already owned by other tabs: "Proposed Deal Terms"
+   (same `investmentStructure` data as `CapTableTab`'s "Key Deal Terms") and
+   "Valuation & Multiples Analysis" (same `dealMetrics` fields as
+   `FinancialsTab`'s "Headline Metrics"). "Return Targets" and "Exit
+   Strategy" were **kept** — real data, no duplicate home, but also no
+   mockup match anywhere; flagged inline with comments rather than deleted,
+   pending a product call (see open items below).
+5. **`FinancialsTab.tsx`** — added a "3-Year Financial Trend" card (mockup
+   has one; no historical-years field exists on the type, so it's an honest
+   `UnbackedSection`) and renamed "Valuation Methodology & Comparable
+   Transactions" → "Valuation & Deal Structure" to match the mockup's actual
+   title. The implementer's first pass reused `investmentStructure` for
+   this card's figures grid (per the task prompt's own hint), then caught
+   mid-task via mockup fixture-data inspection that the mockup's real fields
+   (Enterprise Value, EV/EBITDA, Proposed Structure, Fund Allocation, Target
+   Close) don't exist on `DealMetrics`/`ICMemoDeliverable` at all — reverted
+   itself and left the grid unbacked rather than recreate the same
+   duplication this fix was meant to remove.
+6. **`DraftMemoPane.tsx`** — `SEVERITY_CHIP` used hardcoded Tailwind
+   (`bg-red-50`/etc.) instead of the `--rev-*` token set every other severity
+   indicator in the redesign uses; switched to match
+   `OverviewPane.tsx`'s `SEVERITY_BAR_COLOR` convention.
+7. **`ComingSoonPage.tsx`** — hardcoded `text-slate-300` plus a few generic
+   shadcn tokens (`text-foreground`, `border-border`, etc.) replaced with
+   `--rev-*` equivalents; shared by both Anti-Portfolio's and Institutional
+   Memory's gated-placeholder states, so one fix covered both.
+8. **`EditableMandateBlock.test.tsx`** — a stale assertion expected
+   `"$10000K–$50000K"`; actual `MANDATE_DEFAULTS` (`checkMinK: 10`,
+   `checkMaxK: 100`) render `"$10K–$100K"`. Fixed the assertion, not the
+   defaults — the defaults were already correct.
+
+Audited and confirmed already matching the mockup, no changes needed:
+`MarketTab.tsx`, `FoundersTab.tsx`, `CapTableTab.tsx`, `FindingsTab.tsx`,
+`WorkspaceTab.tsx` and its other panes (`OverviewPane`/`DataRoomPane`/
+`ChecklistPane`/`ActivityPane`/`NotesTranscriptsPane`), all of Institutional
+Memory's other panes, `AntiPortfolio.tsx`/`DeclineCard.tsx`,
+`dealDetail/ScreeningTab.tsx`.
+
+Full suite verified clean after all fixes: `pnpm check` (361/361 — one
+`OrgDetail.test.tsx` timeout under full-suite load, confirmed non-regression
+by rerunning it in isolation at 784ms) and `pnpm lint`.
+
+**Open items — real data with no mockup home, deliberately left in place
+pending a product decision, not auto-resolved:**
+
+1. `EditableMandateBlock`'s `holdPeriod`/`targetReturn` placement (stay in
+   Financial Thresholds vs. move to Firm Profile) and the ESG & Values
+   Criteria / Special Considerations cards' fate.
+2. `ScorecardTab.tsx`'s "Compliance Summary" section (FINRA 3110 status,
+   claim-verification stats, Framework Results) — real, no mockup
+   equivalent.
+3. `SummaryTab.tsx`'s "Return Targets" and "Exit Strategy" sections (§6.4
+   above) — confirmed zero mockup matches, currently kept with inline flag
+   comments.
+4. `PlaybooksPane.tsx`'s extra toolbar row — deliberate, already
+   documented in-code, lowest priority of the four.
