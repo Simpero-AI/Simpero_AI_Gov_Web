@@ -23,13 +23,22 @@ export interface InvestmentProfile {
 }
 
 export const MANDATE_DEFAULTS = {
-  checkSize: "$10M – $50M",
-  revenueBand: "$10M – $100M ARR",
-  ebitda: "Rule of 40 ≥ 30%",
-  grossMargin: "≥ 70%",
+  // $K units, matching the mockup's Check Size Range inputs — 10000K/50000K == $10M/$50M.
+  checkMinK: 10,
+  checkMaxK: 100,
+  // Financial Thresholds — mockup's 5 numeric fields (mtBuilder block), replacing
+  // the old free-text Revenue Band/EBITDA/Gross Margin/Ownership/Max Entry
+  // Valuation fields (still expressed elsewhere; see holdPeriod/targetReturn below).
+  minMrr: 500, // $K
+  minMomGrowth: 8, // %MoM
+  maxBurnMultiple: 2, // ×
+  minRunway: 12, // months
+  maxValMultiple: 8, // ×ARR
+  // holdPeriod/targetReturn aren't in the mockup's Financial Thresholds card, but
+  // are read by FirmProfileBlock's Firm Summary card, Deals.tsx, and
+  // MandateBanner.tsx — kept as real editable fields (see EditableMandateBlock).
   holdPeriod: "4–6 years",
   targetReturn: "3–5× MoIC / 25%+ IRR",
-  ownership: "Minority (10–25%)",
   mandateSectorLabels: ["B2B SaaS", "FinTech Infra", "HealthTech SaaS"],
   mandateGeoLabels: ["United States", "Canada"],
   mustHaves: [
@@ -51,7 +60,6 @@ export const MANDATE_DEFAULTS = {
     "Founder unwilling to accept minority structured capital terms",
   ],
   investmentStages: ["Growth Stage", "Series C+", "Pre-IPO", "Founder-Led"],
-  maxValuation: "$500M",
   esgCriteria: [
     "Data privacy & SOC 2 Type II (or roadmap within 12 months)",
     "Diverse hiring practices and reporting",
@@ -60,6 +68,44 @@ export const MANDATE_DEFAULTS = {
   ],
   specialNotes: "Vistara focus: capital-efficient B2B SaaS with a clear path to profitability. Prefer companies where Vistara growth credit + equity structure is the primary capital raise.",
 } as const;
+
+/** Preset option lists for the mandate builder's chip-adding dropdowns
+ * (TagField in EditableMandateBlock.tsx) — sourced verbatim from the source
+ * mockup's STAGE_PRESETS / GEOGRAPHY_PRESETS / SECTOR_PRESETS. */
+export const STAGE_PRESETS = [
+  "Pre-Seed", "Seed", "Series A", "Series B", "Series C+", "Venture Growth",
+  "Growth Equity", "Buyout", "Leveraged Buyout", "Founder-Led / Family Business",
+  "Succession Transition", "Direct Co-Investment", "Recapitalization",
+  "Turnaround / Special Situations",
+] as const;
+
+export const GEOGRAPHY_PRESETS = [
+  "United States", "Canada", "United Kingdom", "Ireland", "Germany", "France",
+  "Switzerland", "Netherlands", "Nordics", "DACH", "Western Europe",
+  "Eastern Europe", "Australia", "New Zealand", "Singapore", "Japan", "India",
+  "Latin America", "Middle East", "Global / No Preference",
+] as const;
+
+export const SECTOR_PRESETS = [
+  "B2B Software / SaaS", "Consumer Internet", "Healthcare Services & MedTech",
+  "Financial Services Tech", "Specialty Manufacturing", "Real Asset Technology",
+  "Professional Services", "Industrials", "Energy & Infrastructure",
+  "Consumer & Retail", "Education", "Media & Entertainment",
+  "Logistics & Supply Chain", "Business Services",
+] as const;
+
+export const DEALTYPE_PRESETS = [
+  "Minority Preferred Equity", "Majority Buyout", "Growth Equity",
+  "Structured Credit", "Mezzanine Debt", "Senior Debt", "Co-investment",
+  "Succession Buy-out", "Recapitalization", "Carve-out", "PIPE",
+  "Secondary Purchase",
+] as const;
+
+export const ASSETCLASS_PRESETS = [
+  "Direct Private Equity", "Venture Capital", "Growth Capital", "Real Estate",
+  "Real Assets / Infrastructure", "Co-Investment / Club Deals",
+  "Private Credit", "Fund Commitments", "Secondaries",
+] as const;
 
 export const FRAMEWORK_DEFAULTS: FrameworkCategory[] = [
   {

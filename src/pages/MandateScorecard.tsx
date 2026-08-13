@@ -1,7 +1,7 @@
-import React, { useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useUserDisplay } from "@/hooks/useUserDisplay";
-import { Link, Redirect } from "wouter";
-import { CheckCircle, Layers, ListChecks, RotateCcw, Save, ShieldAlert, SlidersHorizontal, Target, Users } from "lucide-react";
+import { Link, Redirect, useLocation, useSearch } from "wouter";
+import { RotateCcw } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -13,42 +13,33 @@ import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
 import { MvpSidebar } from "@/components/mvp/shell/MvpSidebar";
 import { MvpNavRenderer } from "@/components/mvp/shell/MvpNavRenderer";
 import { MvpFundSelector } from "@/components/mvp/shell/MvpFundSelector";
-import { MvpTopbar } from "@/components/mvp/shell/MvpTopbar";
+import { MvpTopbar, type MandateSaveState } from "@/components/mvp/shell/MvpTopbar";
 import { PageContainer } from "@/components/mvp/common/PageContainer";
-import { MandateBand } from "@/components/mvp/tiles/MandateBand";
-import { StatTile } from "@/components/mvp/tiles/StatTile";
 import { FirmProfileBlock } from "@/components/mvp/mandate/FirmProfileBlock";
 import { EditableMandateBlock } from "@/components/mvp/mandate/EditableMandateBlock";
 import { EditableFrameworkBlock } from "@/components/mvp/mandate/EditableFrameworkBlock";
+import { DealScorecardTab } from "@/components/mvp/mandate/DealScorecardTab";
+import { MandateHistoryDrawer } from "@/components/mvp/mandate/MandateHistoryDrawer";
 import { buildMvpNav, ROUTES } from "@/components/mvp/nav/mvpNav";
 import { usePageTitle } from "@/components/mvp/common/usePageTitle";
 import { cn } from "@/lib/utils";
 import { MANDATE_DEFAULTS, FRAMEWORK_DEFAULTS } from "@/data/mandateDefaults";
 
-function getFrameworkStats(profile: { mandate: Record<string, unknown>; weights: Record<string, unknown> } | null) {
-  const mandate = profile?.mandate ?? {};
-  const mustHaves = Array.isArray(mandate.mustHaves) ? mandate.mustHaves.length : 0;
-  const dealBreakers = Array.isArray(mandate.dealBreakers) ? mandate.dealBreakers.length : 0;
-  const esgCriteria = Array.isArray(mandate.esgCriteria) ? mandate.esgCriteria.length : 0;
-  const fw = profile?.weights?.["framework"] as { categories?: Array<{ criteria: unknown[] }> } | undefined;
-  const categories = fw?.categories?.length ?? 0;
-  const totalCriteria = fw?.categories?.reduce((s, c) => s + (c.criteria?.length ?? 0), 0) ?? 0;
-  return { mustHaves, dealBreakers, esgCriteria, categories, totalCriteria };
-}
+type Section = "firm" | "mandate" | "framework" | "scorecard";
+const VALID_SECTIONS: Section[] = ["firm", "mandate", "framework", "scorecard"];
+const TAB_SECTIONS: Section[] = ["firm", "mandate", "framework", "scorecard"];
+const SECTION_LABELS: Record<Section, { short: string; long: string }> = {
+  firm: { short: "Firm Profile", long: "Firm Profile" },
+  mandate: { short: "Mandate", long: "Mandate Builder" },
+  framework: { short: "Framework", long: "Scoring Framework" },
+  scorecard: { short: "Deal Scorecard", long: "Deal Scorecard" },
+};
 
-type Section = "firm" | "mandate" | "framework";
-const VALID_SECTIONS: Section[] = ["firm", "mandate", "framework"];
-const NAV_SECTIONS: Section[] = ["firm", "mandate", "framework"];
-const SECTION_LABELS: Record<Section, { short: string; long: string; desc: string }> = {
-  firm: { short: "Firm Profile", long: "Firm Profile", desc: "Who you are" },
-  mandate: { short: "Mandate", long: "Mandate Builder", desc: "Investment parameters" },
-  framework: { short: "Framework", long: "Scoring Framework", desc: "Criteria & weights" },
-};
-const SECTION_ICONS: Record<Section, React.ElementType> = {
-  firm: Users,
-  mandate: Target,
-  framework: SlidersHorizontal,
-};
+interface DirtyState {
+  dirty: boolean;
+  saving: boolean;
+}
+const IDLE_STATE: DirtyState = { dirty: false, saving: false };
 
 interface Props { section: string | undefined }
 
@@ -56,9 +47,16 @@ export default function MandateScorecard({ section }: Props) {
   usePageTitle("Mandate & Scorecard");
   const { user, loading: authLoading } = useAuth();
   const [showResetModal, setShowResetModal] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const frameworkSaveRef = useRef<(() => void) | null>(null);
   const mandateSaveRef = useRef<(() => void) | null>(null);
   const firmSaveRef = useRef<(() => void) | null>(null);
+
+  // Real dirty/saving state lifted from the three editable blocks — drives
+  // the topbar's save-status indicator. Never fabricated (plan Phase 7 §3).
+  const [firmState, setFirmState] = useState<DirtyState>(IDLE_STATE);
+  const [mandateState, setMandateState] = useState<DirtyState>(IDLE_STATE);
+  const [frameworkState, setFrameworkState] = useState<DirtyState>(IDLE_STATE);
 
   // All hooks — must be called unconditionally before any early returns.
   // upsert is still tRPC (Phase 2 write path); its cache lives separately from
@@ -86,42 +84,36 @@ export default function MandateScorecard({ section }: Props) {
   });
   const { userInitial, userName, userRoleLabel } = useUserDisplay();
 
+  // Deal Scorecard tab's dealId — kept in the URL query string (like
+  // DealDetail's ?tab=) so a link into this tab (ScorecardTab.tsx's "Edit
+  // scores") can pass which deal to preview, and the selection is
+  // shareable/bookmarkable rather than living only in local state.
+  const search = useSearch();
+  const [location, navigate] = useLocation();
+  const dealId = new URLSearchParams(search).get("dealId");
+  const setDealId = (id: string | null) => {
+    const params = new URLSearchParams(search);
+    if (id) params.set("dealId", id);
+    else params.delete("dealId");
+    const path = location.split("?")[0];
+    const qs = params.toString();
+    navigate(qs ? `${path}?${qs}` : path, { replace: true });
+  };
+
   if (!section || !VALID_SECTIONS.includes(section as Section)) {
     return <Redirect to={ROUTES.mandateScorecardFirm} />;
   }
   const active = section as Section;
 
   const role: "user" | "admin" = (user?.role ?? "user") as "user" | "admin";
-  const nav = buildMvpNav({ id: user?.id ?? "anon", role });
+  const nav = buildMvpNav({ id: user?.id ?? "anon", role, isPlatformAdmin: Boolean(user?.is_platform_admin) });
   const profile = profileQuery.data ?? null;
 
   const mandate = profile?.mandate ?? {};
-  const bandItems = [
-    {
-      label: "Check Size",
-      value: (typeof mandate.checkSize === "string" && mandate.checkSize) ? mandate.checkSize : "—",
-    },
-    {
-      label: "Target Return",
-      value: (typeof mandate.targetReturn === "string" && mandate.targetReturn) ? mandate.targetReturn : "—",
-    },
-    {
-      label: "Hold Period",
-      value: (typeof mandate.holdPeriod === "string" && mandate.holdPeriod) ? mandate.holdPeriod : "—",
-    },
-    {
-      label: "Focus Sectors",
-      value: (() => {
-        const labels = mandate.mandateSectorLabels;
-        if (Array.isArray(labels) && labels.length > 0) {
-          return (labels as string[]).slice(0, 3).join(" · ");
-        }
-        return "Not configured";
-      })(),
-    },
-  ];
-
-  const stats = getFrameworkStats(profile);
+  const aum = typeof mandate.aum === "string" && mandate.aum ? mandate.aum : undefined;
+  const saving = firmState.saving || mandateState.saving || frameworkState.saving;
+  const dirty = firmState.dirty || mandateState.dirty || frameworkState.dirty;
+  const saveState: MandateSaveState = saving ? "saving" : dirty ? "unsaved" : "saved";
 
   const handleSaveConfiguration = () => {
     // All three sections are always mounted — save all so switching tabs between
@@ -135,14 +127,15 @@ export default function MandateScorecard({ section }: Props) {
   const handleResetToDefaults = () => {
     resetMutation.mutate({
       mandate: {
-        checkSize: MANDATE_DEFAULTS.checkSize,
-        revenueBand: MANDATE_DEFAULTS.revenueBand,
-        ebitda: MANDATE_DEFAULTS.ebitda,
-        grossMargin: MANDATE_DEFAULTS.grossMargin,
+        checkMin: MANDATE_DEFAULTS.checkMinK,
+        checkMax: MANDATE_DEFAULTS.checkMaxK,
+        minMrr: MANDATE_DEFAULTS.minMrr,
+        minMomGrowth: MANDATE_DEFAULTS.minMomGrowth,
+        maxBurnMultiple: MANDATE_DEFAULTS.maxBurnMultiple,
+        minRunway: MANDATE_DEFAULTS.minRunway,
+        maxValMultiple: MANDATE_DEFAULTS.maxValMultiple,
         holdPeriod: MANDATE_DEFAULTS.holdPeriod,
         targetReturn: MANDATE_DEFAULTS.targetReturn,
-        ownership: MANDATE_DEFAULTS.ownership,
-        maxValuation: MANDATE_DEFAULTS.maxValuation,
         specialNotes: MANDATE_DEFAULTS.specialNotes,
         mandateSectorLabels: [...MANDATE_DEFAULTS.mandateSectorLabels],
         mandateGeoLabels: [...MANDATE_DEFAULTS.mandateGeoLabels],
@@ -160,6 +153,7 @@ export default function MandateScorecard({ section }: Props) {
   };
 
   return (
+    <>
     <MvpAppShell>
       <MvpAppShell.Sidebar>
         <MvpSidebar aria-label="Primary navigation">
@@ -170,9 +164,16 @@ export default function MandateScorecard({ section }: Props) {
 
       <MvpAppShell.Topbar>
         <MvpTopbar>
-          <MvpTopbar.Breadcrumb segments={["Overview", "Mandate & Scorecard"]} />
+          <MvpTopbar.Breadcrumb segments={["Deal Flow", "Mandate & Scorecard"]} />
           <MvpTopbar.Subtitle>{SECTION_LABELS[active].short}</MvpTopbar.Subtitle>
-          <MvpTopbar.QuickSearch aria-label="Open quick search" />
+          <MvpTopbar.MandateMeta
+            saveState={saveState}
+            onOpenHistory={() => setHistoryOpen(true)}
+            onSave={handleSaveConfiguration}
+            onReset={() => setShowResetModal(true)}
+            firm={profile?.firmName ?? undefined}
+            aum={aum}
+          />
           <MvpTopbar.Notifications aria-label="Notifications" />
           <MvpTopbar.Avatar initial={userInitial} name={userName} role={userRoleLabel} aria-label="Account menu" />
         </MvpTopbar>
@@ -180,143 +181,84 @@ export default function MandateScorecard({ section }: Props) {
 
       <MvpAppShell.Main>
         <PageContainer>
-          {/* Page header with action buttons */}
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Home / Mandate &amp; Scorecard Builder</p>
-              <h1 className="text-3xl font-bold tracking-tight">Mandate &amp; Scorecard</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Configure your firm profile, investment mandate, and scoring framework. Changes apply to future analyses.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0 pt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowResetModal(true)}
-                className="flex items-center gap-1.5"
+          {/* No page header/banner/KPI tiles here — the mockup's Mandate &
+              Scorecard view goes straight from the topbar into the tab bar
+              on every tab (docs/... mockup lines 4085-4123). Save/Reset now
+              live in MvpTopbar.MandateMeta instead of a page-header button row. */}
+
+          {/* Top tabs — restyled from the old left-side vertical nav; same
+              path-based Link navigation (not local tab state), so each
+              section is directly linkable/bookmarkable as before. */}
+          <div
+            role="tablist"
+            aria-label="Mandate sections"
+            className="mb-6 flex items-center gap-1 border-b border-[color:var(--rev-border-strong)]"
+          >
+            {TAB_SECTIONS.map((s) => (
+              <Link
+                key={s}
+                href={`${ROUTES.mandateScorecard}/${s}`}
+                role="tab"
+                aria-selected={active === s}
+                className={cn(
+                  "-mb-px border-b-2 px-4 py-2.5 text-[13.5px] font-medium transition-colors",
+                  active === s
+                    ? "border-[color:var(--rev-primary)] text-[color:var(--rev-primary)]"
+                    : "border-transparent text-[color:var(--rev-text-5)] hover:text-[color:var(--rev-text-2)]"
+                )}
               >
-                <RotateCcw className="w-3.5 h-3.5" />Reset to Defaults
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleSaveConfiguration}
-                className="flex items-center gap-1.5"
-              >
-                <Save className="w-3.5 h-3.5" />Save Configuration
-              </Button>
-            </div>
+                {SECTION_LABELS[s].long}
+              </Link>
+            ))}
           </div>
 
-          <MandateBand
-            title="Investment Mandate Summary"
-            items={bandItems}
-            className="mb-5"
-          />
-
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-6">
-            <StatTile label="Must-Haves" value={stats.mustHaves} icon={CheckCircle} iconBg="bg-emerald-100" iconColor="text-emerald-700" />
-            <StatTile label="Deal-Breakers" value={stats.dealBreakers} icon={ShieldAlert} iconBg="bg-red-100" iconColor="text-red-700" />
-            <StatTile label="Scoring Categories" value={stats.categories} icon={Layers} iconBg="bg-blue-100" iconColor="text-blue-700" />
-            <StatTile label="Total Criteria" value={stats.totalCriteria} icon={ListChecks} iconBg="bg-violet-100" iconColor="text-violet-700" />
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-            {/* Left nav + framework stats */}
-            <div>
-              <nav
-                aria-label="Mandate sections"
-                role="tablist"
-                aria-orientation="vertical"
-                className="bg-white rounded-xl border border-gray-200 overflow-hidden"
-              >
-                {NAV_SECTIONS.map((s, idx) => {
-                  const Icon = SECTION_ICONS[s];
-                  return (
-                    <Link
-                      key={s}
-                      href={`${ROUTES.mandateScorecard}/${s}`}
-                      role="tab"
-                      aria-selected={active === s}
-                      className={cn(
-                        "w-full text-left px-4 py-3.5 flex items-center gap-3 transition relative block",
-                        idx < NAV_SECTIONS.length - 1 ? "border-b border-gray-100" : "",
-                        active === s ? "bg-blue-50" : "hover:bg-gray-50"
-                      )}
-                    >
-                      {active === s && (
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-r" />
-                      )}
-                      <Icon className={cn("w-4 h-4 flex-shrink-0", active === s ? "text-blue-500" : "text-gray-400")} />
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className={cn("text-sm font-medium", active === s ? "text-blue-700" : "text-gray-800")}>
-                          {SECTION_LABELS[s].long}
-                        </span>
-                        <span className="text-[10px] text-gray-400">{SECTION_LABELS[s].desc}</span>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </nav>
-
-              {/* Framework Stats panel */}
-              <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
-                <div className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-3">
-                  Framework Stats
-                </div>
-                {[
-                  { label: "Categories", value: stats.categories },
-                  { label: "Criteria", value: stats.totalCriteria },
-                  { label: "Must-haves", value: stats.mustHaves },
-                  { label: "Deal-breakers", value: stats.dealBreakers },
-                  { label: "ESG items", value: stats.esgCriteria },
-                ].map((item) => (
-                  <div
-                    key={item.label}
-                    className="flex justify-between items-center py-1.5 border-b border-gray-100 last:border-0"
-                  >
-                    <span className="text-xs text-gray-500">{item.label}</span>
-                    <span className="text-xs font-semibold text-gray-900">{item.value}</span>
-                  </div>
-                ))}
+          {/* Content area */}
+          <div className="min-w-0">
+            {authLoading ? (
+              <p className="text-sm text-muted-foreground">Loading session…</p>
+            ) : !user ? (
+              <div className="max-w-2xl">
+                <p className="text-sm text-muted-foreground mb-4">
+                  Sign in to configure firm context, mandate, and scoring weights. This metadata snapshots on analyse for audit trails.
+                </p>
+                <Button asChild>
+                  <a href={getLoginUrl()}>Sign in</a>
+                </Button>
               </div>
-            </div>
-
-            {/* Content area */}
-            <div className="min-w-0">
-              {authLoading ? (
-                <p className="text-sm text-muted-foreground">Loading session…</p>
-              ) : !user ? (
-                <div className="max-w-2xl">
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Sign in to configure firm context, mandate, and scoring weights. This metadata snapshots on analyse for audit trails.
-                  </p>
-                  <Button asChild>
-                    <a href={getLoginUrl()}>Sign in</a>
-                  </Button>
+            ) : (
+              // Keep the 3 editable sections mounted simultaneously using CSS
+              // visibility to prevent losing unsaved edits when the user
+              // switches tabs. The Deal Scorecard tab has no save state of
+              // its own (nothing persists), so it's fine to mount it only
+              // when active.
+              <>
+                <div style={{ display: active === "firm" ? undefined : "none" }}>
+                  <FirmProfileBlock profile={profile} saveRef={firmSaveRef} onStateChange={setFirmState} />
                 </div>
-              ) : (
-                // Keep all three sections mounted simultaneously using CSS visibility
-                // to prevent losing unsaved edits when the user switches tabs.
-                <>
-                  <div style={{ display: active === "firm" ? undefined : "none" }}>
-                    <FirmProfileBlock profile={profile} saveRef={firmSaveRef} />
-                  </div>
-                  <div style={{ display: active === "mandate" ? undefined : "none" }}>
-                    <EditableMandateBlock profile={profile} saveRef={mandateSaveRef} />
-                  </div>
-                  <div style={{ display: active === "framework" ? undefined : "none" }}>
-                    <EditableFrameworkBlock profile={profile} saveRef={frameworkSaveRef} />
-                  </div>
-                </>
-              )}
-            </div>
+                <div style={{ display: active === "mandate" ? undefined : "none" }}>
+                  <EditableMandateBlock profile={profile} saveRef={mandateSaveRef} onStateChange={setMandateState} />
+                </div>
+                <div style={{ display: active === "framework" ? undefined : "none" }}>
+                  <EditableFrameworkBlock profile={profile} saveRef={frameworkSaveRef} onStateChange={setFrameworkState} />
+                </div>
+                {active === "scorecard" && (
+                  <DealScorecardTab profile={profile} dealId={dealId} onDealIdChange={setDealId} />
+                )}
+              </>
+            )}
           </div>
         </PageContainer>
       </MvpAppShell.Main>
+    </MvpAppShell>
 
-      {/* Reset to Defaults confirmation modal */}
-      {showResetModal && (
+    {/* Siblings of MvpAppShell, not children — MvpAppShell only ever
+        renders its Sidebar/Topbar/Main slots, so anything meant to overlay
+        the whole viewport (drawer, modal) must live outside its closing tag,
+        same pattern as DealDetail.tsx's DealDetailCitationSidebar. */}
+    <MandateHistoryDrawer open={historyOpen} onOpenChange={setHistoryOpen} firmName={profile?.firmName ?? undefined} />
+
+    {/* Reset to Defaults confirmation modal */}
+    {showResetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white border border-gray-200 rounded-2xl p-6 w-[400px] shadow-xl">
             <div className="flex items-center gap-3 mb-3">
@@ -346,6 +288,6 @@ export default function MandateScorecard({ section }: Props) {
           </div>
         </div>
       )}
-    </MvpAppShell>
+    </>
   );
 }

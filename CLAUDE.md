@@ -36,6 +36,27 @@ backend, and what needs a human decision.
   that alter rendering.
 - The monorepo's `client/` is production and gets bugfixes only; every such fix must
   be dual-applied here (playbook FE-8 — log not yet created).
+- **Exception (2026-08-12):** a deliberate, explicit, user-approved visual/IA
+  redesign, covering `src/components/**` and `src/pages/**` — plan:
+  `docs/plans/2026-08-12-web-design-revamp.md` (full scope, phasing, every
+  open decision); what actually shipped:
+  `docs/implementations/2026-08-13-web-design-revamp.md` (Phases 0–9 done as
+  of that date; Phase 10, Data Consolidation, deliberately cut, recommended
+  as a separate future epic — trust the implementation doc over the plan if
+  they ever disagree). This does **not** relax the rule above for
+  `src/shared/` (still the faithful rendering contract) or for the New Deal
+  flow (`src/pages/NewDealWizard.tsx`, `src/pages/newDealWizard/**`, route
+  `/new-deal/:step?`), which keeps its pixel-identical obligation even while
+  the redesign landed around it — the one carve-out inside the carve-out.
+- **Redesigned pages must never fabricate data to match the mockup.** Where
+  a mockup section has no backing field on `simperoTypes.ts`, render it as a
+  real-shaped `UnbackedSection`/empty state instead of inventing content;
+  where a mockup action has no backend endpoint, render it as a real,
+  `disabled` control with an explanatory note ("visible, disabled,
+  explained"), not a fake success path or a bare "coming soon". Design
+  compliance also means matching mockup **structure** (section presence,
+  order, composition), not just colors/tokens — verify against actual DOM,
+  not just CSS.
 
 ## Commands
 
@@ -117,6 +138,15 @@ product portal) are **independent surfaces and must stay that way**:
   product's `useAuth()`/logout flow — do not reuse or bridge them.
   `getAdminContext`/`clerk_admin_users` never creates a product `users` row.
   Route guards (`AdminGuard` vs whatever gates the product) stay independent.
+  **One narrow, intentional exception**: the product's own `GET /auth/me`
+  exposes a read-only `is_platform_admin` boolean (`useAuth.ts`'s `AuthUser`,
+  threaded into `MvpUser.isPlatformAdmin` in `mvpNav.ts`), computed
+  server-side from `clerk_admin_users`, used only to gate visibility of a
+  few still-unscoped product nav items (Institutional Memory, Anti-Portfolio
+  — see `docs/implementations/2026-08-13-web-design-revamp.md`). This is a
+  data flag on the product's existing auth response, not an admin auth
+  bridge — it doesn't create an admin session, doesn't import admin code,
+  and isn't license for further product/admin coupling.
 - If a task seems to need admin code to call into product code (or the
   reverse) to avoid duplicating a few lines, duplicate the few lines instead
   — that's the correct trade, not a shortcut.
@@ -147,6 +177,15 @@ change here clearly requires a paired backend change. Instead:
 - Number conventions from the monorepo hold everywhere: USD = integer **cents**,
   percents = integer **basis points**, ratios = plain decimals. Formatters:
   `src/lib/dealMetricsFormat.ts`.
+- `src/index.css` has a deliberately **unlayered** `a { color: inherit }`
+  reset (kept unlayered on purpose, to out-priority a third-party Carbon
+  stylesheet's own unlayered `a` selector — see the comment above that rule
+  in that file). It beats layered Tailwind utilities, so any button/link
+  styling meant to always apply on an `<a>` (e.g. `Button` rendered via
+  `asChild` + `href`, as in `EmptyState`'s `action.href`) needs the Tailwind
+  v4 `!` important-prefix, or the reset silently wins and text goes
+  invisible against a colored background. See `src/components/ui/button.tsx`'s
+  `default`/`destructive` variants for the fixed pattern.
 
 ## E2E state (Playwright)
 

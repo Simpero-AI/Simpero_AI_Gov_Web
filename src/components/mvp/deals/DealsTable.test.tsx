@@ -1,0 +1,113 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { DealsTable } from "./DealsTable";
+import type { LivePipelineRow } from "@shared/dealsListPipeline";
+
+function makeRow(over: Partial<LivePipelineRow> = {}): LivePipelineRow {
+  return {
+    dealId: "1",
+    name: "Acme",
+    gpSource: "GP",
+    sectorTags: [],
+    state: "sourcing",
+    createdAt: new Date().toISOString(),
+    valuationUsd: null,
+    evRevenue: null,
+    aiScore: null,
+    mandateFitPct: null,
+    irrPct: null,
+    actionPill: null,
+    agentStatus: { jobStatus: "complete", currentPhase: null, steps: [] },
+    ...over,
+  };
+}
+
+afterEach(cleanup);
+
+describe("DealsTable", () => {
+  it("defaults to the Active tab and excludes declined deals", () => {
+    render(
+      <DealsTable
+        rows={[
+          makeRow({ dealId: "1", name: "Acme", state: "draft" }),
+          makeRow({ dealId: "2", name: "Rejected Co", state: "declined" }),
+        ]}
+      />
+    );
+    expect(screen.getByText("Acme")).toBeInTheDocument();
+    expect(screen.queryByText("Rejected Co")).not.toBeInTheDocument();
+  });
+
+  it("switches to the Rejected tab to show only declined deals", () => {
+    render(
+      <DealsTable
+        rows={[
+          makeRow({ dealId: "1", name: "Acme", state: "draft" }),
+          makeRow({ dealId: "2", name: "Rejected Co", state: "declined" }),
+        ]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Rejected/ }));
+    expect(screen.queryByText("Acme")).not.toBeInTheDocument();
+    expect(screen.getByText("Rejected Co")).toBeInTheDocument();
+  });
+
+  it("filters by sector chip", () => {
+    render(
+      <DealsTable
+        rows={[
+          makeRow({ dealId: "1", name: "Acme", sectorTags: ["SaaS"] }),
+          makeRow({ dealId: "2", name: "MedCorp", sectorTags: ["Healthcare"] }),
+        ]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Healthcare" }));
+    expect(screen.queryByText("Acme")).not.toBeInTheDocument();
+    expect(screen.getByText("MedCorp")).toBeInTheDocument();
+  });
+
+  it("filters by name search", () => {
+    render(
+      <DealsTable
+        rows={[makeRow({ dealId: "1", name: "Acme" }), makeRow({ dealId: "2", name: "MedCorp" })]}
+        nameQuery="med"
+      />
+    );
+    expect(screen.queryByText("Acme")).not.toBeInTheDocument();
+    expect(screen.getByText("MedCorp")).toBeInTheDocument();
+  });
+
+  it("sorts by Findings count", () => {
+    render(
+      <DealsTable
+        rows={[
+          makeRow({ dealId: "1", name: "LowFindings", metricDiscrepancyFields: [] }),
+          makeRow({ dealId: "2", name: "HighFindings", metricDiscrepancyFields: ["valuationPostUsd", "irrPct"] }),
+        ]}
+      />
+    );
+    const rowNames = () => screen.getAllByRole("row").slice(1).map((r) => within(r).queryByRole("link")?.textContent);
+
+    fireEvent.click(screen.getByRole("button", { name: /Findings/ })); // desc first
+    expect(rowNames()[0]).toContain("HighFindings");
+
+    fireEvent.click(screen.getByRole("button", { name: /Findings/ })); // asc
+    expect(rowNames()[0]).toContain("LowFindings");
+  });
+
+  it("renders the confidential lock glyph only when the (backend-pending) confidential field is set", () => {
+    const confidentialRow = { ...makeRow({ dealId: "1", name: "Acme" }), confidential: true } as LivePipelineRow;
+    render(<DealsTable rows={[confidentialRow, makeRow({ dealId: "2", name: "Open Deal" })]} />);
+    expect(screen.getByLabelText("Confidential deal — limited team visibility")).toBeInTheDocument();
+  });
+
+  it("defaults to not-confidential when the field is absent", () => {
+    render(<DealsTable rows={[makeRow({ dealId: "1", name: "Acme" })]} />);
+    expect(screen.queryByLabelText("Confidential deal — limited team visibility")).not.toBeInTheDocument();
+  });
+
+  it("shows an empty-state row when no deals match the current filters", () => {
+    render(<DealsTable rows={[makeRow({ dealId: "1", name: "Acme", state: "declined" })]} />);
+    expect(screen.getByText("No deals match the current filters.")).toBeInTheDocument();
+  });
+});

@@ -17,6 +17,13 @@ export type AuthUser = {
   email: string | null;
   role: string;
   login_method: string;
+  /**
+   * Platform-admin flag (Simpero internal staff, computed server-side from
+   * clerk_admin_users) — optional because the backend may not have deployed
+   * this field yet; treat absent/undefined as "not a platform admin"
+   * (docs/plans/2026-08-12-web-design-revamp.md §5 Q9).
+   */
+  is_platform_admin?: boolean;
 };
 
 export const AUTH_ME_QUERY_KEY = ["auth", "me"] as const;

@@ -19,6 +19,24 @@ export async function fetchDealsPipeline(): Promise<LivePipelineRow[]> {
   return (await res.json()) as LivePipelineRow[];
 }
 
+/**
+ * Picks "the" deal for a deal-scoped nav item with no active-deal context
+ * (e.g. "Deal Analysis"/"Initial Screening" in the sidebar) — the most
+ * recently created deal with a completed analysis run. Shared by
+ * `AnalysisRedirect` and `ScreeningRedirect` so both nav items pick the same
+ * deal via one rule, not two.
+ */
+export function pickMostRecentCompleteDeal(rows: LivePipelineRow[]): LivePipelineRow | null {
+  const completed = rows
+    .filter((r) => r.agentStatus.jobStatus === "complete")
+    .sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return tb - ta;
+    });
+  return completed[0] ?? null;
+}
+
 /** Shape of GET /deals/dashboard-stats (matches the frozen deals.dashboardStats output). */
 export type DashboardStatsPayload = {
   window: "week" | "month" | "quarter";

@@ -1,5 +1,5 @@
 import { useEffect, type FC, type ReactNode } from "react";
-import { Bell, Search } from "lucide-react";
+import { Bell, History, RotateCcw, Save, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { findSlot, type SlotComponent } from "./slot";
 import { Breadcrumb as CommonBreadcrumb } from "@/components/mvp/common/Breadcrumb";
@@ -25,6 +25,19 @@ const BreadcrumbSlot: SlotComponent<BreadcrumbSlotProps> = ({ segments }) => {
   );
 };
 BreadcrumbSlot.displayName = "MvpTopbar.Breadcrumb";
+
+/**
+ * The mockup's "Deals" topbar variant has no two-line breadcrumb+title —
+ * just a single mono uppercase eyebrow (e.g. "Portfolio · Q2 2026"). Use
+ * this instead of `Breadcrumb` for that variant; other variants keep using
+ * `Breadcrumb`/`Subtitle` until their own phase restyles them.
+ */
+const Eyebrow: SlotComponent<SlotProps> = ({ children }) => (
+  <p className="font-mono text-[11px] uppercase tracking-wider text-[color:var(--rev-text-6)] leading-none">
+    {children}
+  </p>
+);
+Eyebrow.displayName = "MvpTopbar.Eyebrow";
 
 const Subtitle: SlotComponent<SlotProps> = ({ children }) => (
   <>
@@ -60,6 +73,111 @@ const QuickSearch: SlotComponent<QuickSearchProps> = ({ onOpen, ...rest }) => (
   </button>
 );
 QuickSearch.displayName = "MvpTopbar.QuickSearch";
+
+interface SearchInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  "aria-label": string;
+}
+/**
+ * A real search field — the mockup's "Deals" topbar variant (search input,
+ * not a "Quick search ⌘K" trigger). Prepared for the near-future Deals-page
+ * rewrite (plan Phase 3); not wired into any page in this task.
+ */
+const SearchInput: SlotComponent<SearchInputProps> = ({ value, onChange, placeholder, ...rest }) => (
+  <div className="relative flex items-center">
+    <Search className="pointer-events-none absolute left-[11px] h-3.5 w-3.5 text-[#9AA1AC]" aria-hidden="true" />
+    <input
+      type="search"
+      aria-label={rest["aria-label"]}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-[260px] rounded-lg border border-[#E1E4E9] bg-[#F7F8FA] py-2 pl-[33px] pr-3 text-[13px] text-[color:var(--rev-text-2)] placeholder:text-[color:var(--rev-text-7)]"
+    />
+  </div>
+);
+SearchInput.displayName = "MvpTopbar.SearchInput";
+
+export type MandateSaveState = "saved" | "saving" | "unsaved";
+
+const SAVE_STATE_CONFIG: Record<MandateSaveState, { dot: string; label: string }> = {
+  saved: { dot: "var(--rev-success)", label: "Saved" },
+  saving: { dot: "var(--rev-warning)", label: "Saving…" },
+  unsaved: { dot: "var(--rev-text-7)", label: "Unsaved changes" },
+};
+
+interface MandateMetaProps {
+  /** Real dirty/saving state lifted from the three mandate blocks — never fabricated. */
+  saveState: MandateSaveState;
+  onOpenHistory: () => void;
+  /** Real save-all/reset-to-defaults actions — the mockup's topbar has no
+   * explicit control for these (only the passive status dot), but ripping
+   * out the manual-save/reset behavior entirely would be a bigger behavior
+   * change than "restyle to match", so they're relocated here as compact
+   * icon buttons instead of the old page-header buttons. */
+  onSave: () => void;
+  onReset: () => void;
+  firm?: string;
+  aum?: string;
+}
+/**
+ * The mockup's "Mandate" topbar variant: save-status dot+label, a History
+ * drawer trigger, and firm/AUM context — all in the left title cluster,
+ * mirroring the mockup's single-row layout (docs/plans/2026-08-12-web-
+ * design-revamp.md Phase 7).
+ */
+const MandateMeta: SlotComponent<MandateMetaProps> = ({ saveState, onOpenHistory, onSave, onReset, firm, aum }) => {
+  const cfg = SAVE_STATE_CONFIG[saveState];
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="flex items-center gap-1.5 font-mono text-[11px]" style={{ color: cfg.dot }}>
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: cfg.dot }} aria-hidden="true" />
+        {cfg.label}
+      </span>
+      <span className="text-[color:var(--rev-border-strong)]" aria-hidden="true">·</span>
+      <button
+        type="button"
+        onClick={onOpenHistory}
+        className="flex items-center gap-1 font-mono text-[11px] text-[color:var(--rev-text-5)] hover:text-[color:var(--rev-text-2)]"
+      >
+        <History className="h-3 w-3" aria-hidden="true" />
+        History
+      </button>
+      <span className="text-[color:var(--rev-border-strong)]" aria-hidden="true">·</span>
+      <button
+        type="button"
+        onClick={onReset}
+        aria-label="Reset to defaults"
+        title="Reset to defaults"
+        className="flex items-center rounded-md p-1 text-[color:var(--rev-text-5)] hover:bg-[color:var(--rev-tint-neutral)] hover:text-[color:var(--rev-text-2)]"
+      >
+        <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        onClick={onSave}
+        aria-label="Save configuration"
+        title="Save configuration"
+        disabled={saveState === "saving"}
+        className="flex items-center gap-1 rounded-md bg-[color:var(--rev-primary)] px-2 py-1 font-mono text-[11px] font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+      >
+        <Save className="h-3 w-3" aria-hidden="true" />
+        Save
+      </button>
+      {firm || aum ? (
+        <>
+          <span className="text-[color:var(--rev-border-strong)]" aria-hidden="true">·</span>
+          <span className="hidden font-mono text-[11px] text-[color:var(--rev-text-6)] sm:inline">
+            {[firm, aum].filter(Boolean).join(" · ")}
+          </span>
+        </>
+      ) : null}
+    </div>
+  );
+};
+MandateMeta.displayName = "MvpTopbar.MandateMeta";
 
 interface NotificationsProps {
   count?: number;
@@ -116,18 +234,24 @@ export interface MvpTopbarProps {
 
 export const MvpTopbar: FC<MvpTopbarProps> & {
   Breadcrumb: typeof BreadcrumbSlot;
+  Eyebrow: typeof Eyebrow;
   Subtitle: typeof Subtitle;
   Actions: typeof Actions;
   QuickSearch: typeof QuickSearch;
+  SearchInput: typeof SearchInput;
   Notifications: typeof Notifications;
   Avatar: typeof AvatarSlot;
+  MandateMeta: typeof MandateMeta;
 } = ({ children, className }) => {
   const breadcrumb = findSlot(children, "MvpTopbar.Breadcrumb");
+  const eyebrow = findSlot(children, "MvpTopbar.Eyebrow");
   const subtitle = findSlot(children, "MvpTopbar.Subtitle");
   const actions = findSlot(children, "MvpTopbar.Actions");
   const quickSearch = findSlot(children, "MvpTopbar.QuickSearch");
+  const searchInput = findSlot(children, "MvpTopbar.SearchInput");
   const notifications = findSlot(children, "MvpTopbar.Notifications");
   const avatar = findSlot(children, "MvpTopbar.Avatar");
+  const mandateMeta = findSlot(children, "MvpTopbar.MandateMeta");
 
   // dev-only warning for Subtitle without Breadcrumb
   useEffect(() => {
@@ -137,14 +261,22 @@ export const MvpTopbar: FC<MvpTopbarProps> & {
   }, [breadcrumb, subtitle]);
 
   return (
-    <div className={cn("h-14 flex items-center justify-between px-6 bg-white border-b border-gray-200 shadow-sm", className)}>
+    <div
+      className={cn(
+        "h-[62px] flex items-center justify-between gap-4 px-[26px] bg-[color:var(--rev-surface)] border-b border-[color:var(--rev-border-strong)]",
+        className
+      )}
+    >
       <div className="min-w-0 flex items-center gap-2.5">
         {breadcrumb}
+        {eyebrow}
         {subtitle}
       </div>
       <div className="flex items-center gap-2">
         {actions}
+        {searchInput}
         {quickSearch}
+        {mandateMeta}
         {notifications}
         {avatar ? (
           <>
@@ -158,8 +290,11 @@ export const MvpTopbar: FC<MvpTopbarProps> & {
 };
 
 MvpTopbar.Breadcrumb = BreadcrumbSlot;
+MvpTopbar.Eyebrow = Eyebrow;
 MvpTopbar.Subtitle = Subtitle;
 MvpTopbar.Actions = Actions;
 MvpTopbar.QuickSearch = QuickSearch;
+MvpTopbar.SearchInput = SearchInput;
 MvpTopbar.Notifications = Notifications;
 MvpTopbar.Avatar = AvatarSlot;
+MvpTopbar.MandateMeta = MandateMeta;
