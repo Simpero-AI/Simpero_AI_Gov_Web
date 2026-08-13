@@ -248,7 +248,7 @@ export default function MemoViewer() {
   const [regeneratingSections, setRegeneratingSections] = useState<Set<string>>(new Set());
   const { user } = useAuth();
   const role: "user" | "admin" = (user?.role ?? "user") as "user" | "admin";
-  const nav = buildMvpNav({ id: user?.id ?? "anon", role });
+  const nav = buildMvpNav({ id: user?.id ?? "anon", role, isPlatformAdmin: Boolean(user?.is_platform_admin) });
 
   const pageTitle = useMemo(() => (memo?.fileName ? `Memo · ${memo.fileName}` : "Loading memo…"), [memo?.fileName]);
   usePageTitle(pageTitle);

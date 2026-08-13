@@ -5,38 +5,35 @@ export type TabKey =
   | "summary"
   | "scorecard"
   | "company"
+  | "market"
   | "financials"
   | "founders"
   | "cap-table"
-  | "market"
-  | "risks"
-  | "valuation"
-  | "parser-verification";
+  | "findings"
+  | "workspace";
 
 export const VALID_TABS = new Set<TabKey>([
   "summary",
   "scorecard",
   "company",
+  "market",
   "financials",
   "founders",
   "cap-table",
-  "market",
-  "risks",
-  "valuation",
-  "parser-verification",
+  "findings",
+  "workspace",
 ]);
 
 export const ANALYSIS_TABS: Array<{ id: TabKey; label: string; soon?: boolean }> = [
   { id: "summary", label: "Summary" },
   { id: "scorecard", label: "Scorecard" },
   { id: "company", label: "Company" },
+  { id: "market", label: "Market" },
   { id: "financials", label: "Financials" },
   { id: "founders", label: "Founders" },
   { id: "cap-table", label: "Cap Table" },
-  { id: "market", label: "Market" },
-  { id: "risks", label: "Risks" },
-  { id: "valuation", label: "Valuation", soon: true },
-  { id: "parser-verification", label: "Parser Verification" },
+  { id: "findings", label: "Findings" },
+  { id: "workspace", label: "Diligence Workspace" },
 ];
 
 export function safeParseMemoJson(raw: string): unknown {

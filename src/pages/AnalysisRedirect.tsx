@@ -2,7 +2,7 @@
 import { Redirect } from "wouter";
 import { Loader2, BarChart2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { DEALS_PIPELINE_QUERY_KEY, fetchDealsPipeline } from "@/api/deals";
+import { DEALS_PIPELINE_QUERY_KEY, fetchDealsPipeline, pickMostRecentCompleteDeal } from "@/api/deals";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
 import { MvpSidebar } from "@/components/mvp/shell/MvpSidebar";
@@ -19,7 +19,7 @@ export default function AnalysisRedirect() {
   usePageTitle("Deal Analysis");
   const { user, loading: authLoading } = useAuth();
   const role: "user" | "admin" = (user?.role ?? "user") as "user" | "admin";
-  const nav = buildMvpNav({ id: user?.id ?? "anon", role });
+  const nav = buildMvpNav({ id: user?.id ?? "anon", role, isPlatformAdmin: Boolean(user?.is_platform_admin) });
   const query = useQuery({ queryKey: DEALS_PIPELINE_QUERY_KEY, queryFn: fetchDealsPipeline, enabled: Boolean(user) });
 
   if (authLoading || query.isLoading) {
@@ -34,16 +34,10 @@ export default function AnalysisRedirect() {
     return <Redirect to="/" />;
   }
 
-  const completed = query.data
-    .filter((r) => r.agentStatus.jobStatus === "complete")
-    .sort((a, b) => {
-      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return tb - ta;
-    });
+  const mostRecent = pickMostRecentCompleteDeal(query.data);
 
-  if (completed.length > 0) {
-    return <Redirect to={`/analysis/${completed[0].dealId}`} />;
+  if (mostRecent) {
+    return <Redirect to={`/deals/${mostRecent.dealId}/analysis`} />;
   }
 
   const userName = user.name ?? user.email ?? "User";

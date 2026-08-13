@@ -15,6 +15,9 @@ import { cn } from "@/lib/utils";
 interface Props {
   profile: InvestmentProfile | null;
   saveRef?: React.MutableRefObject<(() => void) | null>;
+  /** Fires whenever local dirty/saving state changes — lets the page-level
+   * topbar show a real save-status indicator instead of a fabricated one. */
+  onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
 }
 
 function getString(mandate: Record<string, unknown>, key: string, fallback: string): string {
@@ -28,7 +31,7 @@ function getStringArray(mandate: Record<string, unknown>, key: string, fallback:
   return [...fallback];
 }
 
-export function EditableMandateBlock({ profile, saveRef }: Props) {
+export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props) {
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
   const upsertMutation = trpc.investmentProfile.upsert.useMutation({
@@ -145,6 +148,10 @@ export function EditableMandateBlock({ profile, saveRef }: Props) {
   useEffect(() => {
     if (saveRef) saveRef.current = doSave;
   }, [saveRef, doSave]);
+
+  useEffect(() => {
+    onStateChange?.({ dirty: isDirty, saving: upsertMutation.isPending });
+  }, [isDirty, upsertMutation.isPending, onStateChange]);
 
   // Show native browser "leave page?" dialog when user has unsaved changes.
   useEffect(() => {

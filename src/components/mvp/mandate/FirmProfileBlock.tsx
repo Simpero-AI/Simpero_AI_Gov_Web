@@ -11,6 +11,9 @@ import { MANDATE_DEFAULTS, type InvestmentProfile } from "@/data/mandateDefaults
 interface Props {
   profile: InvestmentProfile | null;
   saveRef?: React.MutableRefObject<(() => void) | null>;
+  /** Fires whenever local dirty/saving state changes — lets the page-level
+   * topbar show a real save-status indicator instead of a fabricated one. */
+  onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
 }
 
 function getStr(obj: Record<string, unknown>, key: string, fallback = ""): string {
@@ -22,9 +25,10 @@ const inp =
   "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300 bg-white";
 const lbl = "block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5";
 
-export function FirmProfileBlock({ profile, saveRef }: Props) {
+export function FirmProfileBlock({ profile, saveRef, onStateChange }: Props) {
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
+  const [isDirty, setIsDirty] = useState(false);
   const upsertMutation = trpc.investmentProfile.upsert.useMutation({
     onSuccess: async () => {
       // Invalidate both caches: the trpc-backed write still lives here, but
@@ -33,6 +37,7 @@ export function FirmProfileBlock({ profile, saveRef }: Props) {
         utils.investmentProfile.get.invalidate(),
         queryClient.invalidateQueries({ queryKey: INVESTMENT_PROFILE_QUERY_KEY }),
       ]);
+      setIsDirty(false);
       toast.success("Firm profile saved.");
     },
     onError: (err) => toast.error(err.message),
@@ -58,6 +63,7 @@ export function FirmProfileBlock({ profile, saveRef }: Props) {
     setFundVintage(getStr(m, "fundVintage"));
     setHqLocation(getStr(m, "hqLocation"));
     setInvestmentThesis(getStr(m, "investmentThesis"));
+    setIsDirty(false);
   }, [profile]);
 
   const doSave = useCallback(() => {
@@ -70,6 +76,10 @@ export function FirmProfileBlock({ profile, saveRef }: Props) {
   useEffect(() => {
     if (saveRef) saveRef.current = doSave;
   }, [saveRef, doSave]);
+
+  useEffect(() => {
+    onStateChange?.({ dirty: isDirty, saving: upsertMutation.isPending });
+  }, [isDirty, upsertMutation.isPending, onStateChange]);
 
   const m = profile?.mandate ?? {};
   const checkSize = getStr(m, "checkSize", MANDATE_DEFAULTS.checkSize);
@@ -87,29 +97,29 @@ export function FirmProfileBlock({ profile, saveRef }: Props) {
         <div className="grid grid-cols-2 gap-x-5 gap-y-4">
           <div>
             <label className={lbl}>Firm Name</label>
-            <input className={inp} value={firmName} onChange={(e) => setFirmName(e.target.value)} placeholder="e.g. Vistara Growth Partners" />
+            <input className={inp} value={firmName} onChange={(e) => { setFirmName(e.target.value); setIsDirty(true); }} placeholder="e.g. Vistara Growth Partners" />
           </div>
           <div>
             <label className={lbl}>Firm Type</label>
-            <input className={inp} value={firmType} onChange={(e) => setFirmType(e.target.value)} placeholder="e.g. Growth Equity & Structured Capital" />
+            <input className={inp} value={firmType} onChange={(e) => { setFirmType(e.target.value); setIsDirty(true); }} placeholder="e.g. Growth Equity & Structured Capital" />
           </div>
           <div>
             <label className={lbl}>AUM</label>
-            <input className={inp} value={aum} onChange={(e) => setAum(e.target.value)} placeholder="e.g. $700M+" />
+            <input className={inp} value={aum} onChange={(e) => { setAum(e.target.value); setIsDirty(true); }} placeholder="e.g. $700M+" />
           </div>
           <div>
             <label className={lbl}>Fund Vintage</label>
-            <input className={inp} value={fundVintage} onChange={(e) => setFundVintage(e.target.value)} placeholder="e.g. Fund V (2023)" />
+            <input className={inp} value={fundVintage} onChange={(e) => { setFundVintage(e.target.value); setIsDirty(true); }} placeholder="e.g. Fund V (2023)" />
           </div>
           <div className="col-span-2">
             <label className={lbl}>HQ Location</label>
-            <input className={inp} value={hqLocation} onChange={(e) => setHqLocation(e.target.value)} placeholder="e.g. Vancouver, BC · Palo Alto, CA" />
+            <input className={inp} value={hqLocation} onChange={(e) => { setHqLocation(e.target.value); setIsDirty(true); }} placeholder="e.g. Vancouver, BC · Palo Alto, CA" />
           </div>
           <div className="col-span-2">
             <label className={lbl}>Investment Thesis & Description</label>
             <Textarea
               value={investmentThesis}
-              onChange={(e) => setInvestmentThesis(e.target.value)}
+              onChange={(e) => { setInvestmentThesis(e.target.value); setIsDirty(true); }}
               rows={4}
               className="resize-none text-sm"
               placeholder="Describe your firm's investment thesis and approach…"

@@ -9,7 +9,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Dashboard from "./pages/Dashboard";
+import Deals from "./pages/Deals";
 import StealthLanding from "./pages/StealthLanding";
 import History from "./pages/History";
 import MemoViewer from "./pages/MemoViewer";
@@ -20,12 +20,12 @@ import VerifyOutput from "./pages/VerifyOutput";
 import SharedMemo from "./pages/SharedMemo";
 import MethodologyDashboard from "./pages/MethodologyDashboard";
 import ProductUsage from "./pages/ProductUsage";
-import DealAnalysis from "./pages/DealAnalysis";
+import DealDetail from "./pages/DealDetail";
 import AnalysisRedirect from "./pages/AnalysisRedirect";
+import ScreeningRedirect from "./pages/ScreeningRedirect";
 import MandateScorecard from "./pages/MandateScorecard";
-import DecisionFeedPage from "./pages/intelligence/DecisionFeed";
-import AskMePage from "./pages/intelligence/AskMe";
 import InstitutionalMemoryPage from "./pages/intelligence/InstitutionalMemory";
+import AntiPortfolio from "./pages/AntiPortfolio";
 import NewDealWizard from "@/pages/NewDealWizard";
 
 // Admin Portal — lazy so its code never enters the main product bundle
@@ -51,19 +51,35 @@ function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
+      <Route path="/" component={Deals} />
       <Route path="/mandate-scorecard/:section">{(params) => <MandateScorecard section={params.section} />}</Route>
       <Route path="/mandate-scorecard"><Redirect to="/mandate-scorecard/firm" /></Route>
       <Route path="/setup/investment-profile"><Redirect to="/mandate-scorecard/firm" /></Route>
       <Route path="/new-deal/:step?">
         {(params) => <NewDealWizard step={params.step} />}
       </Route>
-      <Route path="/analysis" component={AnalysisRedirect} />
-      <Route path="/analysis/:dealId">
+      <Route path="/screening" component={ScreeningRedirect} />
+      <Route path="/deals/:dealId/screening">
         {(params) => {
           // dealId is an opaque UUID string now — no numeric coercion.
           if (!params.dealId) return <NotFound />;
-          return <DealAnalysis dealId={params.dealId} />;
+          return <DealDetail dealId={params.dealId} tab="screening" />;
+        }}
+      </Route>
+      <Route path="/deals/:dealId/analysis/:sub?">
+        {(params) => {
+          if (!params.dealId) return <NotFound />;
+          return <DealDetail dealId={params.dealId} tab="analysis" />;
+        }}
+      </Route>
+      <Route path="/analysis" component={AnalysisRedirect} />
+      {/* Permanent redirect for the pre-Phase-4 route — NewDealWizard still
+          navigates here unconditionally on submit (frozen, not touched by
+          this redesign) and old bookmarked/shared links must keep working. */}
+      <Route path="/analysis/:dealId">
+        {(params) => {
+          if (!params.dealId) return <NotFound />;
+          return <Redirect to={`/deals/${params.dealId}/analysis`} />;
         }}
       </Route>
       <Route path="/history" component={History} />
@@ -72,9 +88,13 @@ function Router() {
       <Route path="/verify" component={VerifyOutput} />
       <Route path="/methodology" component={MethodologyDashboard} />
       <Route path="/product-usage" component={ProductUsage} />
-      <Route path="/intelligence/decision-feed" component={DecisionFeedPage} />
-      <Route path="/intelligence/ask-me" component={AskMePage} />
-      <Route path="/intelligence/institutional-memory" component={InstitutionalMemoryPage} />
+      {/* Permanent redirects for the pre-Phase-8 routes (plan §2) — old
+          bookmarked/shared links must keep working. */}
+      <Route path="/intelligence/decision-feed"><Redirect to="/intelligence/memory/decision-log" /></Route>
+      <Route path="/intelligence/ask-me"><Redirect to="/intelligence/memory/memory-search" /></Route>
+      <Route path="/intelligence/institutional-memory"><Redirect to="/intelligence/memory/memory-search" /></Route>
+      <Route path="/intelligence/memory/:sub?">{(params) => <InstitutionalMemoryPage sub={params.sub} />}</Route>
+      <Route path="/anti-portfolio" component={AntiPortfolio} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

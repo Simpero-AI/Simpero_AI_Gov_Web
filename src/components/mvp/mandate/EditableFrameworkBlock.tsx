@@ -10,9 +10,15 @@ import { FRAMEWORK_DEFAULTS, type FrameworkCategory, type FrameworkCriterion, ty
 interface Props {
   profile: InvestmentProfile | null;
   saveRef?: React.MutableRefObject<(() => void) | null>;
+  /** Fires whenever local dirty/saving state changes — lets the page-level
+   * topbar show a real save-status indicator instead of a fabricated one. */
+  onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
 }
 
-function loadCategories(profile: InvestmentProfile | null): FrameworkCategory[] {
+/** Exported for DealScorecardTab, which reads the same live framework
+ * categories to render its (disabled) manual-scoring criteria list — the
+ * criteria list itself is real, only the score inputs are inert. */
+export function loadCategories(profile: InvestmentProfile | null): FrameworkCategory[] {
   const fw = profile?.weights?.["framework"];
   if (
     fw &&
@@ -41,9 +47,10 @@ function loadCategories(profile: InvestmentProfile | null): FrameworkCategory[] 
 
 const inp = "bg-transparent focus:outline-none border-0 border-b border-transparent focus:border-gray-300 text-sm text-gray-900";
 
-export function EditableFrameworkBlock({ profile, saveRef }: Props) {
+export function EditableFrameworkBlock({ profile, saveRef, onStateChange }: Props) {
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
+  const [isDirty, setIsDirty] = useState(false);
   const upsertMutation = trpc.investmentProfile.upsert.useMutation({
     onSuccess: async () => {
       // Invalidate both caches: the trpc-backed write still lives here, but
@@ -52,12 +59,20 @@ export function EditableFrameworkBlock({ profile, saveRef }: Props) {
         utils.investmentProfile.get.invalidate(),
         queryClient.invalidateQueries({ queryKey: INVESTMENT_PROFILE_QUERY_KEY }),
       ]);
+      setIsDirty(false);
       toast.success("Framework saved.");
     },
     onError: (err) => toast.error(err.message),
   });
 
-  const [categories, setCategories] = useState<FrameworkCategory[]>(() => loadCategories(profile));
+  const [categories, setCategoriesRaw] = useState<FrameworkCategory[]>(() => loadCategories(profile));
+  // Every local edit to `categories` (add/remove/rename category or
+  // criterion, weight change) goes through this wrapper so `isDirty` can't
+  // drift out of sync with a raw setCategories call.
+  const setCategories: typeof setCategoriesRaw = (update) => {
+    setIsDirty(true);
+    setCategoriesRaw(update);
+  };
   const [openCats, setOpenCats] = useState<Set<string>>(new Set());
   const hydratedForProfileRef = useRef<string | null>(null);
 
@@ -65,8 +80,13 @@ export function EditableFrameworkBlock({ profile, saveRef }: Props) {
     const key = profile ? String(profile.updatedAt) : "null";
     if (hydratedForProfileRef.current === key) return;
     hydratedForProfileRef.current = key;
-    setCategories(loadCategories(profile));
+    setCategoriesRaw(loadCategories(profile));
+    setIsDirty(false);
   }, [profile]);
+
+  useEffect(() => {
+    onStateChange?.({ dirty: isDirty, saving: upsertMutation.isPending });
+  }, [isDirty, upsertMutation.isPending, onStateChange]);
 
   const weightTotal = categories.reduce((sum, c) => sum + c.weight, 0);
   const totalCriteria = categories.reduce((s, c) => s + c.criteria.length, 0);
@@ -121,7 +141,10 @@ export function EditableFrameworkBlock({ profile, saveRef }: Props) {
       )
     );
 
-  const onCancel = () => setCategories(loadCategories(profile));
+  const onCancel = () => {
+    setCategoriesRaw(loadCategories(profile));
+    setIsDirty(false);
+  };
 
   const doSave = useCallback(() => {
     upsertMutation.mutate({ weights: { framework: { categories } } });

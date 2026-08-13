@@ -27,7 +27,7 @@ export function ComingSoonPage({
   usePageTitle(pageTitle);
   const { user } = useAuth();
   const role: "user" | "admin" = (user?.role ?? "user") as "user" | "admin";
-  const nav = buildMvpNav({ id: user?.id ?? "anon", role });
+  const nav = buildMvpNav({ id: user?.id ?? "anon", role, isPlatformAdmin: Boolean(user?.is_platform_admin) });
   const userInitial = user?.name ? user.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase() : (user?.email?.[0]?.toUpperCase() ?? "S");
   const userName = user?.name ?? user?.email?.split("@")[0] ?? undefined;
   const userRoleLabel = user?.role === "admin" ? "Admin" : user?.role ? "Analyst" : undefined;

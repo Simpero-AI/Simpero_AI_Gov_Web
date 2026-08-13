@@ -1,19 +1,33 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/mvp/primitives";
 import { useMvpSidebarCollapsed } from "./MvpAppShell";
-import type { LucideIcon } from "lucide-react";
+import type { MvpNavIcon } from "@/components/mvp/nav/mvpNav";
 
 export interface MvpSidebarItemProps {
   href: string;
   label: string;
-  icon: LucideIcon;
+  icon: MvpNavIcon;
   meta?: string;
   badge?: string;
+  count?: number;
   disabled?: boolean;
+  /** Tooltip text shown when `disabled` (e.g. "Coming soon"). */
+  disabledReason?: string;
   "aria-label"?: string;
 }
 
-export function MvpSidebarItem({ href, label, icon: Icon, meta, badge, disabled, ...rest }: MvpSidebarItemProps) {
+export function MvpSidebarItem({
+  href,
+  label,
+  icon: Icon,
+  meta,
+  badge,
+  count,
+  disabled,
+  disabledReason,
+  ...rest
+}: MvpSidebarItemProps) {
   const [location] = useLocation();
   const collapsed = useMvpSidebarCollapsed();
   const isActive =
@@ -24,15 +38,23 @@ export function MvpSidebarItem({ href, label, icon: Icon, meta, badge, disabled,
       {isActive ? (
         <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 bg-[color:var(--mvp-sidebar-active-tint)] rounded-r" />
       ) : null}
-      <Icon className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", isActive && "text-[color:var(--mvp-sidebar-active-tint)]")} />
+      <Icon
+        className={cn(
+          "mt-0.5 h-4 w-4 shrink-0",
+          isActive && "text-[color:var(--mvp-sidebar-active-tint)]"
+        )}
+      />
       {!collapsed ? (
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 text-xs font-medium">
+          <div className="flex items-center gap-1.5 text-[13.5px] font-medium">
             <span className="truncate">{label}</span>
             {badge ? (
               <span className="shrink-0 rounded px-1 py-0.5 text-[10px] font-semibold leading-none bg-amber-500/20 text-amber-300">
                 {badge}
               </span>
+            ) : null}
+            {typeof count === "number" ? (
+              <span className="ml-auto shrink-0 font-mono text-[11px] opacity-70">{count}</span>
             ) : null}
           </div>
           {/* meta subtitle intentionally not rendered — kept for compat */}
@@ -48,20 +70,22 @@ export function MvpSidebarItem({ href, label, icon: Icon, meta, badge, disabled,
     isActive
       ? "bg-[color:color-mix(in_srgb,var(--mvp-sidebar-active-tint)_12%,transparent)] text-white"
       : disabled
-        ? "cursor-default text-slate-500"
-        : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+        ? "cursor-default text-[color:var(--mvp-sidebar-muted)]"
+        : "text-[color:var(--mvp-sidebar-fg)] hover:bg-white/5 hover:text-white"
   );
 
   if (disabled) {
-    return (
-      <div
-        role="menuitem"
-        aria-disabled="true"
-        aria-label={rest["aria-label"] ?? label}
-        className={sharedClass}
-      >
+    const row = (
+      <div role="menuitem" aria-disabled="true" aria-label={rest["aria-label"] ?? label} className={sharedClass}>
         {content}
       </div>
+    );
+    if (!disabledReason) return row;
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{row}</TooltipTrigger>
+        <TooltipContent side="right">{disabledReason}</TooltipContent>
+      </Tooltip>
     );
   }
 

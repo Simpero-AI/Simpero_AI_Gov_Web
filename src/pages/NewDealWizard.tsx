@@ -50,6 +50,11 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
   usePageTitle("New Deal");
   const { user: authUser, refresh } = useAuth();
   const role: "user" | "admin" = (authUser?.role ?? "user") as "user" | "admin";
+  // Frozen New Deal flow (CLAUDE.md) — deliberately NOT passing isPlatformAdmin
+  // here like every other buildMvpNav call site. Accepted consequence: a
+  // platform admin won't see Institutional Memory unlocked in the sidebar
+  // while inside the wizard specifically (docs/plans/2026-08-12-web-design-
+  // revamp.md Phase 8 task) — a minor, known inconsistency, not a bug to fix.
   const nav = buildMvpNav({ id: authUser?.id ?? "anon", role });
   const [, navigate] = useLocation();
   const search = useSearch();

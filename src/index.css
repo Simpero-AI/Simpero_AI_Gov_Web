@@ -45,6 +45,16 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* 2026-08-12 redesign — three-font-role typography (docs/plans/2026-08-12-web-design-revamp.md).
+     Wires Tailwind's built-in font-sans/font-serif/font-mono utilities to IBM Plex
+     (loaded in index.html) rather than inventing bespoke class names. Additive: the
+     app shell's `body` still sets its own font-family directly, so existing
+     Inter-rendered surfaces (including the frozen New Deal wizard's own markup)
+     are unaffected until a component opts in with these utilities. */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "IBM Plex Serif", ui-serif, Georgia, serif;
+  --font-mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
 }
 
 :root {
@@ -113,11 +123,15 @@
   --shadow-panel: 0 4px 12px rgba(16, 24, 40, 0.08);
 
   /* --- MVP design tokens (Phase 1 → Phase 2 Carbon swap site) --- */
-  --mvp-sidebar-bg: #0f1623;
-  --mvp-sidebar-fg: #ffffff;
-  --mvp-sidebar-muted: #94a3b8;       /* slate-400 */
-  --mvp-sidebar-active-tint: #3b82f6; /* blue-500, 10% opacity in nav rules */
-  --mvp-sidebar-border: rgba(148, 163, 184, 0.16);
+  /* Updated 2026-08-12 to the design-revamp mockup's dark sidebar palette
+     (docs/plans/2026-08-12-web-design-revamp.md). Shared by the product
+     sidebar, the admin portal's sign-in/sign-up chrome, and MandateBand —
+     all deliberately reuse this token rather than each hardcoding a navy. */
+  --mvp-sidebar-bg: #101a2e;
+  --mvp-sidebar-fg: #c6cdd6;
+  --mvp-sidebar-muted: #5f6b78;       /* section labels + secondary sidebar text */
+  --mvp-sidebar-active-tint: #3b6ff5; /* mockup's accent blue */
+  --mvp-sidebar-border: rgba(255, 255, 255, 0.07);
   --mvp-topbar-height: 56px;
   --mvp-sector-aiml: #8b5cf6;     /* violet-500 */
   --mvp-sector-health: #f43f5e;   /* rose-500 */
@@ -128,6 +142,40 @@
   --mvp-score-mid: #2563eb;       /* blue-600 */
   --mvp-score-low: #dc2626;       /* red-600 */
   --mvp-score-empty: #94a3b8;     /* slate-400 */
+
+  /* --- 2026-08-12 design revamp — light-chrome palette (mockup) ---
+     Namespaced `--rev-*` rather than repointing the generic tokens above
+     (`--surface`, `--text-primary`, `--border`, etc.): those are still the
+     live theme for every not-yet-redesigned page, including the frozen New
+     Deal wizard, and must not shift underneath them. `--rev-*` is additive —
+     safe for restyled chrome (topbar) now, and for redesigned page content
+     in later phases, with zero risk of bleeding into unconverted surfaces. */
+  --rev-canvas: #f4f5f7;
+  --rev-surface: #ffffff;
+  --rev-border: #e9ecef;
+  --rev-border-strong: #e5e8ec;
+  --rev-border-subtle: #f2f4f6;
+  --rev-text-1: #161c24; /* headings */
+  --rev-text-2: #1b222b; /* primary body */
+  --rev-text-3: #3a424c; /* secondary body */
+  --rev-text-4: #5b636e; /* tertiary / labels */
+  --rev-text-5: #6b727c; /* muted descriptions */
+  --rev-text-6: #8a919b; /* faint / mono eyebrows */
+  --rev-text-7: #9aa1ac; /* faintest captions */
+  --rev-primary: #2f5fea;
+  --rev-primary-hover: #2547c7;
+  --rev-accent: #3b6ff5;
+  --rev-success: #2e7a57;
+  --rev-warning: #b5791c;
+  --rev-danger: #b4322a;
+  --rev-info: #5b3e86;
+  --rev-tint-success: #e7f2ec;
+  --rev-tint-warning: #fbf3e4;
+  --rev-tint-danger: #fbebe9;
+  --rev-tint-primary: #e8eefd;
+  --rev-tint-neutral: #f4f6f8;
+  --rev-tint-neutral-subtle: #fafbfc;
+  --rev-mandate-gradient: linear-gradient(160deg, #16213b, #0b1220);
 }
 
 @layer base {

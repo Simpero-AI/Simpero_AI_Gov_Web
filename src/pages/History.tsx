@@ -62,7 +62,7 @@ export default function History() {
   const { user, loading: authLoading } = useAuth();
 
   const role: "user" | "admin" = (user?.role ?? "user") as "user" | "admin";
-  const nav = buildMvpNav({ id: user?.id ?? "anon", role });
+  const nav = buildMvpNav({ id: user?.id ?? "anon", role, isPlatformAdmin: Boolean(user?.is_platform_admin) });
 
   const list = useQuery({ queryKey: HISTORY_LIST_QUERY_KEY, queryFn: fetchHistoryList, enabled: Boolean(user) });
   const rows: MemoRow[] = list.data ?? [];

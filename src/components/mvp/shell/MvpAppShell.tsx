@@ -68,7 +68,8 @@ export const MvpAppShell: FC<MvpAppShellProps> & {
     if (!main) console.error("[MvpAppShell] missing <MvpAppShell.Main> slot");
   }
 
-  const sidebarWidth = collapsed ? "52px" : "224px";
+  // 238px matches the design-revamp mockup's sidebar width exactly.
+  const sidebarWidth = collapsed ? "52px" : "238px";
 
   return (
     <SidebarCollapsedContext.Provider value={collapsed}>
