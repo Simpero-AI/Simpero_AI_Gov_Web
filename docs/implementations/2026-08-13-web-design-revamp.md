@@ -296,6 +296,23 @@ worth a consolidated list for anyone auditing later:
    Intelligence divider, and — per explicit direction — the Admin divider,
    now additionally requiring `isPlatformAdmin`) from the nav tree entirely
    for non-platform-admins. See `mvpNav.ts`/`mvpNav.test.ts`.
+9. **Post-ship correction, caught via a live-testing screenshot**: the
+   shared `Button` component's `default`/`destructive` variants' text color
+   (`text-primary-foreground`/`text-destructive-foreground`) was silently
+   losing to `src/index.css`'s deliberately-unlayered `a { color: inherit }`
+   reset (kept unlayered on purpose to out-priority a third-party Carbon
+   stylesheet's own unlayered `a` selector, per the comment above that rule)
+   whenever the button rendered as an `<a>` — i.e. every `EmptyState` with
+   `action.href` set, used throughout this redesign's backend-gated empty
+   states. Result: near-invisible dark-on-dark-green text on any such
+   button. Fixed by forcing `!text-primary-foreground`/
+   `!text-destructive-foreground` (Tailwind v4 `!important` syntax) on those
+   two variants in `src/components/ui/button.tsx`, rather than touching the
+   global `a` reset (which exists for a real, separate reason — see its own
+   comment). Audited every other hardcoded `bg-[color:var(--rev-primary)]`/
+   `bg-[color:var(--brand-primary)]` usage across the redesign; all others
+   already set `text-white` explicitly and render as real `<button>`
+   elements, not anchors, so they were never affected.
 
 ---
 

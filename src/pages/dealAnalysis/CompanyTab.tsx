@@ -318,27 +318,54 @@ export function CompanyTab({ memoTyped }: CompanyTabProps) {
 
   return (
     <div className="space-y-5">
-      {/* Company Facts + Co-Investors */}
-      <div className="grid grid-cols-2 gap-5">
-        <SectionCard eyebrow="Company Facts" icon={<Building2 className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          {factsItems.length === 0 ? (
+      {/*
+        Business Overview + Key Business Risks (left) / Company Facts + Co-Investors
+        (right) — mirrors the mockup's asymmetric 2-column top-of-tab grid. Business
+        Overview and Key Business Risks have no backing field on companyOverview
+        (no `description`, no `risks` — see simperoTypes.ts), so both render as
+        UnbackedSection placeholders rather than fabricated content, same convention
+        as Co-Investors/Key Customers/Funding History below.
+      */}
+      <div className="grid grid-cols-[1.6fr_1fr] gap-5">
+        <div className="flex flex-col gap-5">
+          <SectionCard eyebrow="Business Overview" icon={<Building2 className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
             <UnbackedSection
               icon={Building2}
-              title="Company facts not yet extracted"
-              description="Founded date, HQ location, and headcount will appear here once the source document is processed."
+              title="Business overview not yet extracted"
+              description="A narrative company description and key customer tags aren't extracted by the current pipeline."
             />
-          ) : (
-            <FieldValueList items={factsItems} />
-          )}
-        </SectionCard>
+          </SectionCard>
 
-        <SectionCard eyebrow="Co-Investors" icon={<Handshake className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection
-            icon={Handshake}
-            title="Co-investor data coming soon"
-            description="Syndicate participants, their role in the round, and commitment size aren't extracted by the current pipeline."
-          />
-        </SectionCard>
+          <SectionCard eyebrow="Key Business Risks" icon={<ShieldCheck className="h-4 w-4 text-[color:var(--rev-danger)]" />}>
+            <UnbackedSection
+              icon={ShieldCheck}
+              title="Business risks not yet extracted"
+              description="Key business risks aren't extracted by the current pipeline."
+            />
+          </SectionCard>
+        </div>
+
+        <div className="flex flex-col gap-5">
+          <SectionCard eyebrow="Company Facts" icon={<Building2 className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
+            {factsItems.length === 0 ? (
+              <UnbackedSection
+                icon={Building2}
+                title="Company facts not yet extracted"
+                description="Founded date, HQ location, and headcount will appear here once the source document is processed."
+              />
+            ) : (
+              <FieldValueList items={factsItems} />
+            )}
+          </SectionCard>
+
+          <SectionCard eyebrow="Co-Investors" icon={<Handshake className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
+            <UnbackedSection
+              icon={Handshake}
+              title="Co-investor data coming soon"
+              description="Syndicate participants, their role in the round, and commitment size aren't extracted by the current pipeline."
+            />
+          </SectionCard>
+        </div>
       </div>
 
       {/* Business Model */}

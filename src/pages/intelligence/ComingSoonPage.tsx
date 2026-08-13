@@ -60,19 +60,19 @@ export function ComingSoonPage({
           />
           <div className="mx-auto max-w-2xl px-6 py-12">
             <div className="text-center">
-              <Icon className="mx-auto h-12 w-12 text-slate-300" aria-hidden />
-              <h2 className="mt-4 text-lg font-semibold text-foreground">{headline}</h2>
-              <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+              <Icon className="mx-auto h-12 w-12 text-[color:var(--rev-text-7)]" aria-hidden />
+              <h2 className="mt-4 text-lg font-semibold text-[color:var(--rev-text-1)]">{headline}</h2>
+              <p className="mt-2 text-sm text-[color:var(--rev-text-5)]">{description}</p>
             </div>
             {subTopics ? (
               <ul className="mt-6 space-y-3" role="presentation">
                 {subTopics.map((t) => (
                   <li
                     key={t.title}
-                    className="rounded-md border border-border bg-muted/40 px-4 py-3"
+                    className="rounded-md border border-[color:var(--rev-border)] bg-[color:var(--rev-tint-neutral)] px-4 py-3"
                   >
-                    <p className="text-sm font-medium text-foreground">{t.title}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{t.desc}</p>
+                    <p className="text-sm font-medium text-[color:var(--rev-text-1)]">{t.title}</p>
+                    <p className="mt-0.5 text-xs text-[color:var(--rev-text-5)]">{t.desc}</p>
                   </li>
                 ))}
               </ul>

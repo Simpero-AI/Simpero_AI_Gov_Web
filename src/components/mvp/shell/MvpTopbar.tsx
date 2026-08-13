@@ -1,5 +1,5 @@
 import { useEffect, type FC, type ReactNode } from "react";
-import { Bell, History, Search } from "lucide-react";
+import { Bell, History, RotateCcw, Save, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { findSlot, type SlotComponent } from "./slot";
 import { Breadcrumb as CommonBreadcrumb } from "@/components/mvp/common/Breadcrumb";
@@ -112,6 +112,13 @@ interface MandateMetaProps {
   /** Real dirty/saving state lifted from the three mandate blocks — never fabricated. */
   saveState: MandateSaveState;
   onOpenHistory: () => void;
+  /** Real save-all/reset-to-defaults actions — the mockup's topbar has no
+   * explicit control for these (only the passive status dot), but ripping
+   * out the manual-save/reset behavior entirely would be a bigger behavior
+   * change than "restyle to match", so they're relocated here as compact
+   * icon buttons instead of the old page-header buttons. */
+  onSave: () => void;
+  onReset: () => void;
   firm?: string;
   aum?: string;
 }
@@ -121,7 +128,7 @@ interface MandateMetaProps {
  * mirroring the mockup's single-row layout (docs/plans/2026-08-12-web-
  * design-revamp.md Phase 7).
  */
-const MandateMeta: SlotComponent<MandateMetaProps> = ({ saveState, onOpenHistory, firm, aum }) => {
+const MandateMeta: SlotComponent<MandateMetaProps> = ({ saveState, onOpenHistory, onSave, onReset, firm, aum }) => {
   const cfg = SAVE_STATE_CONFIG[saveState];
   return (
     <div className="flex items-center gap-2.5">
@@ -137,6 +144,27 @@ const MandateMeta: SlotComponent<MandateMetaProps> = ({ saveState, onOpenHistory
       >
         <History className="h-3 w-3" aria-hidden="true" />
         History
+      </button>
+      <span className="text-[color:var(--rev-border-strong)]" aria-hidden="true">·</span>
+      <button
+        type="button"
+        onClick={onReset}
+        aria-label="Reset to defaults"
+        title="Reset to defaults"
+        className="flex items-center rounded-md p-1 text-[color:var(--rev-text-5)] hover:bg-[color:var(--rev-tint-neutral)] hover:text-[color:var(--rev-text-2)]"
+      >
+        <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        onClick={onSave}
+        aria-label="Save configuration"
+        title="Save configuration"
+        disabled={saveState === "saving"}
+        className="flex items-center gap-1 rounded-md bg-[color:var(--rev-primary)] px-2 py-1 font-mono text-[11px] font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+      >
+        <Save className="h-3 w-3" aria-hidden="true" />
+        Save
       </button>
       {firm || aum ? (
         <>

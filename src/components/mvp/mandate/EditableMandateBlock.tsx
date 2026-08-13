@@ -9,7 +9,22 @@ import { trpc } from "@/lib/trpc";
 import { INVESTMENT_PROFILE_QUERY_KEY } from "@/api/investmentProfile";
 import { toast } from "@/components/mvp/primitives/sonner";
 import { Textarea } from "@/components/mvp/primitives/textarea";
-import { MANDATE_DEFAULTS, type InvestmentProfile } from "@/data/mandateDefaults";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/mvp/primitives/select";
+import {
+  MANDATE_DEFAULTS,
+  SECTOR_PRESETS,
+  STAGE_PRESETS,
+  GEOGRAPHY_PRESETS,
+  DEALTYPE_PRESETS,
+  ASSETCLASS_PRESETS,
+  type InvestmentProfile,
+} from "@/data/mandateDefaults";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -29,6 +44,11 @@ function getStringArray(mandate: Record<string, unknown>, key: string, fallback:
   const v = mandate[key];
   if (Array.isArray(v) && v.every((x) => typeof x === "string")) return v as string[];
   return [...fallback];
+}
+
+function getNumber(mandate: Record<string, unknown>, key: string, fallback: number): number {
+  const v = mandate[key];
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
 }
 
 export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props) {
@@ -55,7 +75,7 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
   // Dirty state — set to true on any field change, false after successful save.
   const [isDirty, setIsDirty] = useState(false);
   const [openSections, setOpenSections] = useState<Set<string>>(
-    new Set(["financial", "universe", "mustHaves", "dealBreakers", "esg", "notes"])
+    new Set(["parameters", "financial", "mustHaves", "dealBreakers", "esg", "notes"])
   );
 
   const toggleSection = (id: string) =>
@@ -66,14 +86,22 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
     });
 
   const m = profile?.mandate ?? {};
-  const [checkSize, setCheckSize] = useState(() => getString(m, "checkSize", MANDATE_DEFAULTS.checkSize));
-  const [revenueBand, setRevenueBand] = useState(() => getString(m, "revenueBand", MANDATE_DEFAULTS.revenueBand));
-  const [ebitda, setEbitda] = useState(() => getString(m, "ebitda", MANDATE_DEFAULTS.ebitda));
-  const [grossMargin, setGrossMargin] = useState(() => getString(m, "grossMargin", MANDATE_DEFAULTS.grossMargin));
+  // Old free-text `checkSize` blobs (pre-migration) intentionally aren't parsed —
+  // fall back to the numeric defaults, same as any other missing field.
+  const [checkMin, setCheckMin] = useState(() => getNumber(m, "checkMin", MANDATE_DEFAULTS.checkMinK));
+  const [checkMax, setCheckMax] = useState(() => getNumber(m, "checkMax", MANDATE_DEFAULTS.checkMaxK));
+  // Financial Thresholds — mockup's 5 numeric fields, replacing the old
+  // free-text Revenue Band/EBITDA/Gross Margin/Ownership/Max Entry Valuation.
+  const [minMrr, setMinMrr] = useState(() => getNumber(m, "minMrr", MANDATE_DEFAULTS.minMrr));
+  const [minMomGrowth, setMinMomGrowth] = useState(() => getNumber(m, "minMomGrowth", MANDATE_DEFAULTS.minMomGrowth));
+  const [maxBurnMultiple, setMaxBurnMultiple] = useState(() => getNumber(m, "maxBurnMultiple", MANDATE_DEFAULTS.maxBurnMultiple));
+  const [minRunway, setMinRunway] = useState(() => getNumber(m, "minRunway", MANDATE_DEFAULTS.minRunway));
+  const [maxValMultiple, setMaxValMultiple] = useState(() => getNumber(m, "maxValMultiple", MANDATE_DEFAULTS.maxValMultiple));
+  // holdPeriod/targetReturn aren't part of the mockup's Financial Thresholds card,
+  // but are real fields read by FirmProfileBlock/Deals.tsx/MandateBanner — kept
+  // editable here (appended below the mockup's 5 fields) rather than dropped.
   const [holdPeriod, setHoldPeriod] = useState(() => getString(m, "holdPeriod", MANDATE_DEFAULTS.holdPeriod));
   const [targetReturn, setTargetReturn] = useState(() => getString(m, "targetReturn", MANDATE_DEFAULTS.targetReturn));
-  const [ownership, setOwnership] = useState(() => getString(m, "ownership", MANDATE_DEFAULTS.ownership));
-  const [maxValuation, setMaxValuation] = useState(() => getString(m, "maxValuation", MANDATE_DEFAULTS.maxValuation));
   const [sectorLabels, setSectorLabels] = useState<string[]>(() =>
     getStringArray(m, "mandateSectorLabels", MANDATE_DEFAULTS.mandateSectorLabels)
   );
@@ -82,6 +110,12 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
   );
   const [investmentStages, setInvestmentStages] = useState<string[]>(() =>
     getStringArray(m, "investmentStages", MANDATE_DEFAULTS.investmentStages)
+  );
+  const [dealTypeLabels, setDealTypeLabels] = useState<string[]>(() =>
+    getStringArray(m, "dealTypeLabels", [])
+  );
+  const [assetClassLabels, setAssetClassLabels] = useState<string[]>(() =>
+    getStringArray(m, "assetClassLabels", [])
   );
   const [mustHaves, setMustHaves] = useState<string[]>(() =>
     getStringArray(m, "mustHaves", MANDATE_DEFAULTS.mustHaves)
@@ -96,10 +130,9 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
     getString(m, "specialNotes", MANDATE_DEFAULTS.specialNotes)
   );
 
-  // Inline add inputs
-  const [newSector, setNewSector] = useState("");
-  const [newGeo, setNewGeo] = useState("");
-  const [newStage, setNewStage] = useState("");
+  // Inline add inputs — Target Sectors/Investment Stages/Geographies now use
+  // TagField's own preset-dropdown-or-custom-input state (see TagField below),
+  // so only the plain-text BulletList fields need ephemeral input state here.
   const [newMustHave, setNewMustHave] = useState("");
   const [newDealBreaker, setNewDealBreaker] = useState("");
   const [newEsg, setNewEsg] = useState("");
@@ -112,17 +145,20 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
     hydratedRef.current = key;
     hasHydrated.current = true;
     const mn = profile?.mandate ?? {};
-    setCheckSize(getString(mn, "checkSize", MANDATE_DEFAULTS.checkSize));
-    setRevenueBand(getString(mn, "revenueBand", MANDATE_DEFAULTS.revenueBand));
-    setEbitda(getString(mn, "ebitda", MANDATE_DEFAULTS.ebitda));
-    setGrossMargin(getString(mn, "grossMargin", MANDATE_DEFAULTS.grossMargin));
+    setCheckMin(getNumber(mn, "checkMin", MANDATE_DEFAULTS.checkMinK));
+    setCheckMax(getNumber(mn, "checkMax", MANDATE_DEFAULTS.checkMaxK));
+    setMinMrr(getNumber(mn, "minMrr", MANDATE_DEFAULTS.minMrr));
+    setMinMomGrowth(getNumber(mn, "minMomGrowth", MANDATE_DEFAULTS.minMomGrowth));
+    setMaxBurnMultiple(getNumber(mn, "maxBurnMultiple", MANDATE_DEFAULTS.maxBurnMultiple));
+    setMinRunway(getNumber(mn, "minRunway", MANDATE_DEFAULTS.minRunway));
+    setMaxValMultiple(getNumber(mn, "maxValMultiple", MANDATE_DEFAULTS.maxValMultiple));
     setHoldPeriod(getString(mn, "holdPeriod", MANDATE_DEFAULTS.holdPeriod));
     setTargetReturn(getString(mn, "targetReturn", MANDATE_DEFAULTS.targetReturn));
-    setOwnership(getString(mn, "ownership", MANDATE_DEFAULTS.ownership));
-    setMaxValuation(getString(mn, "maxValuation", MANDATE_DEFAULTS.maxValuation));
     setSectorLabels(getStringArray(mn, "mandateSectorLabels", MANDATE_DEFAULTS.mandateSectorLabels));
     setGeoLabels(getStringArray(mn, "mandateGeoLabels", MANDATE_DEFAULTS.mandateGeoLabels));
     setInvestmentStages(getStringArray(mn, "investmentStages", MANDATE_DEFAULTS.investmentStages));
+    setDealTypeLabels(getStringArray(mn, "dealTypeLabels", []));
+    setAssetClassLabels(getStringArray(mn, "assetClassLabels", []));
     setMustHaves(getStringArray(mn, "mustHaves", MANDATE_DEFAULTS.mustHaves));
     setDealBreakers(getStringArray(mn, "dealBreakers", MANDATE_DEFAULTS.dealBreakers));
     setEsgCriteria(getStringArray(mn, "esgCriteria", MANDATE_DEFAULTS.esgCriteria));
@@ -132,16 +168,19 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
   const doSave = useCallback(() => {
     upsertMutation.mutate({
       mandate: {
-        checkSize, revenueBand, ebitda, grossMargin, holdPeriod,
-        targetReturn, ownership, maxValuation,
+        checkMin, checkMax,
+        minMrr, minMomGrowth, maxBurnMultiple, minRunway, maxValMultiple,
+        holdPeriod, targetReturn,
         mandateSectorLabels: sectorLabels,
         mandateGeoLabels: geoLabels,
-        investmentStages, mustHaves, dealBreakers, esgCriteria, specialNotes,
+        investmentStages, dealTypeLabels, assetClassLabels,
+        mustHaves, dealBreakers, esgCriteria, specialNotes,
       },
     });
   }, [
-    checkSize, revenueBand, ebitda, grossMargin, holdPeriod, targetReturn,
-    ownership, maxValuation, sectorLabels, geoLabels, investmentStages,
+    checkMin, checkMax, minMrr, minMomGrowth, maxBurnMultiple, minRunway, maxValMultiple,
+    holdPeriod, targetReturn, sectorLabels, geoLabels, investmentStages,
+    dealTypeLabels, assetClassLabels,
     mustHaves, dealBreakers, esgCriteria, specialNotes, upsertMutation,
   ]);
 
@@ -172,11 +211,11 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
     val: string,
     list: string[],
     setList: React.Dispatch<React.SetStateAction<string[]>>,
-    setNew: React.Dispatch<React.SetStateAction<string>>
+    setNew?: React.Dispatch<React.SetStateAction<string>>
   ) => {
     const t = val.trim();
     if (t && !list.includes(t)) { setList((p) => [...p, t]); setIsDirty(true); }
-    setNew("");
+    setNew?.("");
   };
 
   const removeFromList = (
@@ -184,141 +223,222 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
     setList: React.Dispatch<React.SetStateAction<string[]>>
   ) => { setList((p) => p.filter((x) => x !== item)); setIsDirty(true); };
 
-  return (
-    <div className="space-y-3">
+  // Financial Thresholds — mockup's 5 numeric fields (lines 4309-4315 of the
+  // source mockup), each a labeled row with a small centered number input
+  // and a unit suffix.
+  const thresholdFields: { key: string; label: string; value: number; set: (n: number) => void; unit: string }[] = [
+    { key: "minMrr", label: "Min MRR/ARR at Investment ($K)", value: minMrr, set: setMinMrr, unit: "$K" },
+    { key: "minMomGrowth", label: "Min Month-over-Month Growth", value: minMomGrowth, set: setMinMomGrowth, unit: "%MoM" },
+    { key: "maxBurnMultiple", label: "Max Burn Multiple", value: maxBurnMultiple, set: setMaxBurnMultiple, unit: "×" },
+    { key: "minRunway", label: "Min Runway Post-Raise (months)", value: minRunway, set: setMinRunway, unit: "mo" },
+    { key: "maxValMultiple", label: "Max Pre-Money Valuation", value: maxValMultiple, set: setMaxValMultiple, unit: "×ARR" },
+  ];
 
-      {/* 1 — Financial Thresholds */}
-      <SectionCard
-        id="financial"
-        icon={<DollarSign className="w-4 h-4 text-blue-500" />}
-        title="Financial Thresholds"
-        open={openSections.has("financial")}
-        onToggle={() => toggleSection("financial")}
-      >
-        <div className="grid grid-cols-2 gap-x-5 gap-y-4 pt-4">
-          {(
-            [
-              { label: "Check Size", value: checkSize, set: setCheckSize, placeholder: "$10M – $50M" },
-              { label: "Revenue Band", value: revenueBand, set: setRevenueBand, placeholder: "$10M – $100M ARR" },
-              { label: "Min EBITDA Margin", value: ebitda, set: setEbitda, placeholder: "Rule of 40 ≥ 30%" },
-              { label: "Min Gross Margin", value: grossMargin, set: setGrossMargin, placeholder: "≥ 70%" },
-              { label: "Max Entry Valuation", value: maxValuation, set: setMaxValuation, placeholder: "$500M" },
-              { label: "Hold Period", value: holdPeriod, set: setHoldPeriod, placeholder: "4–6 years" },
-              { label: "Target Return", value: targetReturn, set: setTargetReturn, placeholder: "3–5× MoIC / 25%+ IRR" },
-              { label: "Ownership Target", value: ownership, set: setOwnership, placeholder: "Minority (10–25%)" },
-            ] as { label: string; value: string; set: (v: string) => void; placeholder: string }[]
-          ).map(({ label, value, set, placeholder }) => (
-            <div key={label}>
-              <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">{label}</label>
-              <input
-                value={value}
-                onChange={(e) => { set(e.target.value); markDirty(); }}
-                placeholder={placeholder}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300 bg-white"
+  return (
+    <div className="space-y-4">
+      {/* Mockup's mtBuilder 2-column grid (1.5fr/1fr): left = Investment
+          Parameters + Must-Have Criteria, right = Financial Thresholds +
+          Deal-Breaker Criteria. */}
+      <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+        <div className="flex flex-col gap-4">
+          {/* 1 — Investment Parameters (was "Target Universe"; Check Size
+              Range moved in here from Financial Thresholds to match the
+              mockup's placement). */}
+          <SectionCard
+            id="parameters"
+            icon={<Target className="w-4 h-4 text-[color:var(--rev-primary)]" />}
+            title="Investment Parameters"
+            badge={`${sectorLabels.length} sectors · ${geoLabels.length} geos · ${dealTypeLabels.length} deal types · ${assetClassLabels.length} asset classes`}
+            open={openSections.has("parameters")}
+            onToggle={() => toggleSection("parameters")}
+          >
+            <div className="grid grid-cols-2 gap-x-5 gap-y-5 pt-4">
+              <TagField
+                label="Investment Stage"
+                items={investmentStages}
+                presets={STAGE_PRESETS}
+                addLabel="stage"
+                onAdd={(value) => addToList(value, investmentStages, setInvestmentStages)}
+                onRemove={(item) => removeFromList(item, setInvestmentStages)}
+              />
+              <TagField
+                label="Geographies"
+                items={geoLabels}
+                presets={GEOGRAPHY_PRESETS}
+                addLabel="geography"
+                onAdd={(value) => addToList(value, geoLabels, setGeoLabels)}
+                onRemove={(item) => removeFromList(item, setGeoLabels)}
+              />
+              <TagField
+                label="Target Sectors"
+                items={sectorLabels}
+                presets={SECTOR_PRESETS}
+                addLabel="sector"
+                onAdd={(value) => addToList(value, sectorLabels, setSectorLabels)}
+                onRemove={(item) => removeFromList(item, setSectorLabels)}
+              />
+              <TagField
+                label="Deal Types"
+                items={dealTypeLabels}
+                presets={DEALTYPE_PRESETS}
+                addLabel="deal type"
+                onAdd={(value) => addToList(value, dealTypeLabels, setDealTypeLabels)}
+                onRemove={(item) => removeFromList(item, setDealTypeLabels)}
+              />
+              <TagField
+                label="Asset Classes"
+                items={assetClassLabels}
+                presets={ASSETCLASS_PRESETS}
+                addLabel="asset class"
+                onAdd={(value) => addToList(value, assetClassLabels, setAssetClassLabels)}
+                onRemove={(item) => removeFromList(item, setAssetClassLabels)}
+              />
+              <div>
+                <p className="mb-2 text-xs font-semibold text-[color:var(--rev-text-3)]">Check Size Range</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="whitespace-nowrap rounded-lg bg-[color:var(--rev-primary)] px-2.5 py-1.5 font-mono text-xs font-semibold text-white">
+                    ${checkMin}K–${checkMax}K
+                  </span>
+                  <input
+                    type="number"
+                    value={checkMin}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      if (Number.isFinite(n)) { setCheckMin(n); markDirty(); }
+                    }}
+                    className="w-[52px] rounded-lg border border-[color:var(--rev-border-strong)] bg-[color:var(--rev-surface)] px-1.5 py-1 text-center text-sm text-[color:var(--rev-text-2)] focus:outline-none focus:ring-2 focus:ring-[color:var(--rev-primary)]"
+                  />
+                  <span className="text-[color:var(--rev-text-7)]">–</span>
+                  <input
+                    type="number"
+                    value={checkMax}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      if (Number.isFinite(n)) { setCheckMax(n); markDirty(); }
+                    }}
+                    className="w-[52px] rounded-lg border border-[color:var(--rev-border-strong)] bg-[color:var(--rev-surface)] px-1.5 py-1 text-center text-sm text-[color:var(--rev-text-2)] focus:outline-none focus:ring-2 focus:ring-[color:var(--rev-primary)]"
+                  />
+                  <span className="font-mono text-[11px] text-[color:var(--rev-text-6)]">$K</span>
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* 2 — Must-Have Criteria */}
+          <SectionCard
+            id="mustHaves"
+            icon={<CheckCircle2 className="w-4 h-4 text-[color:var(--rev-success)]" />}
+            title="Must-Have Criteria"
+            badge={String(mustHaves.length)}
+            badgeColor="emerald"
+            open={openSections.has("mustHaves")}
+            onToggle={() => toggleSection("mustHaves")}
+          >
+            <div className="pt-3">
+              <p className="mb-3 text-xs text-[color:var(--rev-text-6)]">Non-negotiable criteria every deal must satisfy before proceeding to diligence.</p>
+              <BulletList
+                items={mustHaves}
+                onRemove={(item) => removeFromList(item, setMustHaves)}
+                color="emerald"
+                newValue={newMustHave}
+                onNewValueChange={setNewMustHave}
+                onAdd={() => addToList(newMustHave, mustHaves, setMustHaves, setNewMustHave)}
+                placeholder="e.g. ARR ≥ $5M with ≥ 60% YoY growth"
               />
             </div>
-          ))}
+          </SectionCard>
         </div>
-      </SectionCard>
 
-      {/* 2 — Target Universe */}
-      <SectionCard
-        id="universe"
-        icon={<Target className="w-4 h-4 text-blue-500" />}
-        title="Target Universe"
-        badge={`${sectorLabels.length} sectors · ${geoLabels.length} geos`}
-        open={openSections.has("universe")}
-        onToggle={() => toggleSection("universe")}
-      >
-        <div className="space-y-5 pt-4">
-          <TagField
-            label="Target Sectors"
-            items={sectorLabels}
-            newValue={newSector}
-            onNewValueChange={setNewSector}
-            onAdd={() => addToList(newSector, sectorLabels, setSectorLabels, setNewSector)}
-            onRemove={(item) => removeFromList(item, setSectorLabels)}
-            placeholder="e.g. B2B SaaS"
-          />
-          <TagField
-            label="Investment Stages"
-            items={investmentStages}
-            newValue={newStage}
-            onNewValueChange={setNewStage}
-            onAdd={() => addToList(newStage, investmentStages, setInvestmentStages, setNewStage)}
-            onRemove={(item) => removeFromList(item, setInvestmentStages)}
-            placeholder="e.g. Series B"
-          />
-          <TagField
-            label="Geographies"
-            items={geoLabels}
-            newValue={newGeo}
-            onNewValueChange={setNewGeo}
-            onAdd={() => addToList(newGeo, geoLabels, setGeoLabels, setNewGeo)}
-            onRemove={(item) => removeFromList(item, setGeoLabels)}
-            placeholder="e.g. North America"
-          />
+        <div className="flex flex-col gap-4">
+          {/* 3 — Financial Thresholds */}
+          <SectionCard
+            id="financial"
+            icon={<DollarSign className="w-4 h-4 text-[color:var(--rev-primary)]" />}
+            title="Financial Thresholds"
+            open={openSections.has("financial")}
+            onToggle={() => toggleSection("financial")}
+          >
+            <div className="pt-1">
+              {thresholdFields.map((f) => (
+                <div key={f.key} className="flex items-center gap-2.5 border-t border-[color:var(--rev-border)] py-2.5">
+                  <span className="flex-1 text-[13px] text-[color:var(--rev-text-2)]">{f.label}</span>
+                  <input
+                    type="number"
+                    value={f.value}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      if (Number.isFinite(n)) { f.set(n); markDirty(); }
+                    }}
+                    className="w-[58px] rounded-md border border-[color:var(--rev-border-strong)] bg-[color:var(--rev-surface)] py-1.5 text-center font-mono text-[13px] text-[color:var(--rev-text-2)] focus:outline-none focus:ring-2 focus:ring-[color:var(--rev-primary)]"
+                  />
+                  <span className="w-9 font-mono text-[10.5px] text-[color:var(--rev-text-7)]">{f.unit}</span>
+                </div>
+              ))}
+              {/* Not part of the mockup's Financial Thresholds card, but real
+                  fields read elsewhere (FirmProfileBlock's Firm Summary,
+                  Deals.tsx, MandateBanner) — kept editable here rather than
+                  silently dropped. */}
+              <div className="flex items-center gap-2.5 border-t border-[color:var(--rev-border)] py-2.5">
+                <span className="flex-1 text-[13px] text-[color:var(--rev-text-2)]">Hold Period</span>
+                <input
+                  value={holdPeriod}
+                  onChange={(e) => { setHoldPeriod(e.target.value); markDirty(); }}
+                  placeholder="4–6 years"
+                  className="w-[130px] rounded-md border border-[color:var(--rev-border-strong)] bg-[color:var(--rev-surface)] px-2 py-1.5 text-right text-xs text-[color:var(--rev-text-2)] placeholder:text-[color:var(--rev-text-7)] focus:outline-none focus:ring-2 focus:ring-[color:var(--rev-primary)]"
+                />
+              </div>
+              <div className="flex items-center gap-2.5 border-t border-[color:var(--rev-border)] py-2.5">
+                <span className="flex-1 text-[13px] text-[color:var(--rev-text-2)]">Target Return</span>
+                <input
+                  value={targetReturn}
+                  onChange={(e) => { setTargetReturn(e.target.value); markDirty(); }}
+                  placeholder="3–5× MoIC / 25%+ IRR"
+                  className="w-[130px] rounded-md border border-[color:var(--rev-border-strong)] bg-[color:var(--rev-surface)] px-2 py-1.5 text-right text-xs text-[color:var(--rev-text-2)] placeholder:text-[color:var(--rev-text-7)] focus:outline-none focus:ring-2 focus:ring-[color:var(--rev-primary)]"
+                />
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* 4 — Deal-Breaker Criteria */}
+          <SectionCard
+            id="dealBreakers"
+            icon={<XCircle className="w-4 h-4 text-[color:var(--rev-danger)]" />}
+            title="Deal-Breaker Criteria"
+            badge={String(dealBreakers.length)}
+            badgeColor="red"
+            tone="danger"
+            open={openSections.has("dealBreakers")}
+            onToggle={() => toggleSection("dealBreakers")}
+          >
+            <div className="pt-3">
+              <p className="mb-3 text-xs text-[color:var(--rev-danger)]/80">Automatic disqualifiers — any match is an instant pass regardless of other merits.</p>
+              <BulletList
+                items={dealBreakers}
+                onRemove={(item) => removeFromList(item, setDealBreakers)}
+                color="red"
+                newValue={newDealBreaker}
+                onNewValueChange={setNewDealBreaker}
+                onAdd={() => addToList(newDealBreaker, dealBreakers, setDealBreakers, setNewDealBreaker)}
+                placeholder="e.g. Minority stake without protective rights"
+              />
+            </div>
+          </SectionCard>
         </div>
-      </SectionCard>
+      </div>
 
-      {/* 3 — Must-Haves */}
-      <SectionCard
-        id="mustHaves"
-        icon={<CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-        title="Must-Haves"
-        badge={String(mustHaves.length)}
-        badgeColor="emerald"
-        open={openSections.has("mustHaves")}
-        onToggle={() => toggleSection("mustHaves")}
-      >
-        <div className="pt-3">
-          <p className="text-xs text-gray-400 mb-3">Non-negotiable criteria every deal must satisfy before proceeding to diligence.</p>
-          <BulletList
-            items={mustHaves}
-            onRemove={(item) => removeFromList(item, setMustHaves)}
-            color="emerald"
-            newValue={newMustHave}
-            onNewValueChange={setNewMustHave}
-            onAdd={() => addToList(newMustHave, mustHaves, setMustHaves, setNewMustHave)}
-            placeholder="e.g. ARR ≥ $5M with ≥ 60% YoY growth"
-          />
-        </div>
-      </SectionCard>
-
-      {/* 4 — Deal-Breakers */}
-      <SectionCard
-        id="dealBreakers"
-        icon={<XCircle className="w-4 h-4 text-red-500" />}
-        title="Deal-Breakers"
-        badge={String(dealBreakers.length)}
-        badgeColor="red"
-        open={openSections.has("dealBreakers")}
-        onToggle={() => toggleSection("dealBreakers")}
-      >
-        <div className="pt-3">
-          <p className="text-xs text-gray-400 mb-3">Automatic disqualifiers — any match is an instant pass regardless of other merits.</p>
-          <BulletList
-            items={dealBreakers}
-            onRemove={(item) => removeFromList(item, setDealBreakers)}
-            color="red"
-            newValue={newDealBreaker}
-            onNewValueChange={setNewDealBreaker}
-            onAdd={() => addToList(newDealBreaker, dealBreakers, setDealBreakers, setNewDealBreaker)}
-            placeholder="e.g. Minority stake without protective rights"
-          />
-        </div>
-      </SectionCard>
-
+      {/* ESG & Special Considerations aren't shown in this screen of the source
+          mockup, but hold real saved data (esgCriteria/specialNotes) with no
+          other home in the redesign — kept, full-width, below the 2-column grid. */}
       {/* 5 — ESG & Values Criteria */}
       <SectionCard
         id="esg"
-        icon={<Leaf className="w-4 h-4 text-violet-500" />}
+        icon={<Leaf className="w-4 h-4 text-[color:var(--rev-info)]" />}
         title="ESG & Values Criteria"
         open={openSections.has("esg")}
         onToggle={() => toggleSection("esg")}
       >
         <div className="pt-3">
-          <p className="text-xs text-gray-400 mb-3">Standards a company must meet or commit to for alignment with your firm's values.</p>
+          <p className="mb-3 text-xs text-[color:var(--rev-text-6)]">Standards a company must meet or commit to for alignment with your firm's values.</p>
           <BulletList
             items={esgCriteria}
             onRemove={(item) => removeFromList(item, setEsgCriteria)}
@@ -334,7 +454,7 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
       {/* 6 — Special Considerations */}
       <SectionCard
         id="notes"
-        icon={<FileText className="w-4 h-4 text-gray-400" />}
+        icon={<FileText className="w-4 h-4 text-[color:var(--rev-text-6)]" />}
         title="Special Considerations & Structural Notes"
         open={openSections.has("notes")}
         onToggle={() => toggleSection("notes")}
@@ -362,37 +482,58 @@ interface SectionCardProps {
   title: string;
   badge?: string;
   badgeColor?: "emerald" | "red";
+  /** Deal-breakers gets the mockup's red-tinted card treatment (tinted border,
+   * not a filled background) — visual only, doesn't affect any other prop. */
+  tone?: "danger";
   open: boolean;
   onToggle: () => void;
   children: React.ReactNode;
 }
 
-function SectionCard({ icon, title, badge, badgeColor, open, onToggle, children }: SectionCardProps) {
+function SectionCard({ icon, title, badge, badgeColor, tone, open, onToggle, children }: SectionCardProps) {
   const badgeCls =
     badgeColor === "emerald"
-      ? "bg-emerald-100 text-emerald-700"
+      ? "text-[color:var(--rev-success)]"
       : badgeColor === "red"
-      ? "bg-red-100 text-red-700"
-      : "bg-gray-100 text-gray-500";
+      ? "text-[color:var(--rev-danger)]"
+      : "text-[color:var(--rev-text-6)]";
+  const badgeStyle =
+    badgeColor === "emerald"
+      ? { background: "var(--rev-tint-success)" }
+      : badgeColor === "red"
+      ? { background: "var(--rev-tint-danger)" }
+      : { background: "var(--rev-tint-neutral)" };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border bg-[color:var(--rev-surface)] shadow-[0_1px_2px_rgba(16,24,40,0.04)]",
+        tone === "danger" ? "border-[#F0DEDB]" : "border-[color:var(--rev-border)]"
+      )}
+    >
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center gap-2.5 px-5 py-4 text-left hover:bg-gray-50 transition"
+        className="flex w-full items-center gap-2.5 px-5 py-4 text-left transition hover:bg-[color:var(--rev-tint-neutral-subtle)]"
       >
         {icon}
-        <span className="text-sm font-semibold text-gray-900 flex-1">{title}</span>
+        <span
+          className={cn(
+            "flex-1 font-mono text-[11px] font-semibold uppercase tracking-[0.075em]",
+            tone === "danger" ? "text-[#9B4038]" : "text-[color:var(--rev-text-6)]"
+          )}
+        >
+          {title}
+        </span>
         {badge && (
-          <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full mr-2", badgeCls)}>
+          <span className={cn("mr-2 rounded-full px-2 py-0.5 text-xs font-semibold", badgeCls)} style={badgeStyle}>
             {badge}
           </span>
         )}
         {open ? (
-          <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <ChevronUp className="h-4 w-4 flex-shrink-0 text-[color:var(--rev-text-6)]" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <ChevronDown className="h-4 w-4 flex-shrink-0 text-[color:var(--rev-text-6)]" />
         )}
       </button>
       {open && <div className="px-5 pb-5">{children}</div>}
@@ -400,54 +541,116 @@ function SectionCard({ icon, title, badge, badgeColor, open, onToggle, children 
   );
 }
 
+// Sentinel select-item value for the "+ Custom…" option — chip values are
+// always non-empty free text, so this can never collide with a real chip.
+const CUSTOM_OPTION = "__custom__";
+
 interface TagFieldProps {
   label: string;
   items: string[];
-  newValue: string;
-  onNewValueChange: (v: string) => void;
-  onAdd: () => void;
+  /** Preset values offered in the add-dropdown, e.g. SECTOR_PRESETS. */
+  presets: readonly string[];
+  /** Singular noun used in "+ Add {addLabel}" / dropdown aria-label, e.g. "sector". */
+  addLabel: string;
+  onAdd: (value: string) => void;
   onRemove: (item: string) => void;
-  placeholder: string;
 }
 
-function TagField({ label, items, newValue, onNewValueChange, onAdd, onRemove, placeholder }: TagFieldProps) {
+/** Chip list with a preset-dropdown-or-custom-input add flow: "+ Add X" opens
+ * a dropdown of presets (excluding values already present, case-insensitive)
+ * plus a "+ Custom…" option; picking a preset commits immediately, picking
+ * "+ Custom…" swaps in a free-text input committed via Enter/Add button. */
+function TagField({ label, items, presets, addLabel, onAdd, onRemove }: TagFieldProps) {
+  const [mode, setMode] = useState<"closed" | "preset" | "custom">("closed");
+  const [customValue, setCustomValue] = useState("");
+
+  const usedLower = new Set(items.map((i) => i.toLowerCase()));
+  const availablePresets = presets.filter((p) => !usedLower.has(p.toLowerCase()));
+
+  const commitCustom = () => {
+    const t = customValue.trim();
+    if (t) onAdd(t);
+    setMode("closed");
+    setCustomValue("");
+  };
+
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">{label}</p>
-      <div className="flex flex-wrap gap-1.5 mb-2">
+      <p className="mb-2 text-xs font-semibold text-[color:var(--rev-text-3)]">{label}</p>
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
         {items.map((item) => (
           <span
             key={item}
-            className="flex items-center gap-1 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-full px-2.5 py-1"
+            className="flex items-center gap-1.5 rounded-lg border border-[color:var(--rev-border-strong)] bg-[color:var(--rev-tint-neutral)] py-1 pl-2.5 pr-1 text-xs text-[color:var(--rev-text-3)]"
           >
             {item}
             <button
               type="button"
               onClick={() => onRemove(item)}
-              className="text-blue-400 hover:text-blue-700 leading-none ml-0.5"
+              className="ml-0.5 leading-none text-[color:var(--rev-text-7)] hover:text-[color:var(--rev-text-3)]"
               aria-label={`Remove ${item}`}
             >
               <X className="w-3 h-3" />
             </button>
           </span>
         ))}
+
+        {mode === "preset" && (
+          <Select
+            onValueChange={(value) => {
+              if (value === CUSTOM_OPTION) { setMode("custom"); setCustomValue(""); return; }
+              onAdd(value);
+              setMode("closed");
+            }}
+          >
+            <SelectTrigger
+              className="h-8 min-w-[180px] rounded-lg border-[color:var(--rev-border-strong)] bg-[color:var(--rev-surface)] text-xs text-[color:var(--rev-text-2)]"
+              aria-label={`Select ${addLabel} to add`}
+            >
+              <SelectValue placeholder="Select to add…" />
+            </SelectTrigger>
+            <SelectContent>
+              {availablePresets.map((opt) => (
+                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              ))}
+              <SelectItem value={CUSTOM_OPTION}>+ Custom…</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+
+        {mode === "custom" && (
+          <span className="flex items-center gap-1.5">
+            <input
+              autoFocus
+              value={customValue}
+              onChange={(e) => setCustomValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); commitCustom(); }
+                else if (e.key === "Escape") { setMode("closed"); setCustomValue(""); }
+              }}
+              placeholder="Type & Enter"
+              className="h-8 w-36 rounded-lg border border-[color:var(--rev-border-strong)] bg-[color:var(--rev-surface)] px-2.5 text-xs text-[color:var(--rev-text-2)] placeholder:text-[color:var(--rev-text-7)] focus:outline-none focus:ring-2 focus:ring-[color:var(--rev-primary)]"
+            />
+            <button
+              type="button"
+              onClick={commitCustom}
+              className="rounded-lg bg-[color:var(--rev-primary)] px-2.5 py-1.5 text-xs font-medium text-white transition hover:opacity-90"
+            >
+              Add
+            </button>
+          </span>
+        )}
       </div>
-      <div className="flex gap-2">
-        <input
-          value={newValue}
-          onChange={(e) => onNewValueChange(e.target.value)}
-          placeholder={placeholder}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onAdd(); } }}
-          className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300 bg-white"
-        />
+
+      {mode === "closed" && (
         <button
           type="button"
-          onClick={onAdd}
-          className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition"
+          onClick={() => setMode("preset")}
+          className="flex items-center gap-1 text-xs font-medium text-[color:var(--rev-primary)] hover:underline"
         >
-          <Plus className="w-3.5 h-3.5" />Add
+          <Plus className="w-3.5 h-3.5" />Add {addLabel}
         </button>
-      </div>
+      )}
     </div>
   );
 }
@@ -462,46 +665,50 @@ interface BulletListProps {
   placeholder: string;
 }
 
+// No `--rev-tint-info` token exists (unlike success/danger) — derived via
+// color-mix from `--rev-info`, matching the same pattern SummaryTab.tsx and
+// DealScorecardTab.tsx already use for one-off tinted surfaces.
+const BULLET_TONE: Record<BulletListProps["color"], { dot: string; border: string; bg: string }> = {
+  emerald: { dot: "var(--rev-success)", border: "color-mix(in srgb, var(--rev-success) 22%, white)", bg: "var(--rev-tint-success)" },
+  red: { dot: "var(--rev-danger)", border: "color-mix(in srgb, var(--rev-danger) 20%, white)", bg: "var(--rev-tint-danger)" },
+  violet: { dot: "var(--rev-info)", border: "color-mix(in srgb, var(--rev-info) 20%, white)", bg: "color-mix(in srgb, var(--rev-info) 8%, white)" },
+};
+
 function BulletList({ items, onRemove, color, newValue, onNewValueChange, onAdd, placeholder }: BulletListProps) {
-  const dotCls = color === "emerald" ? "bg-emerald-500" : color === "red" ? "bg-red-500" : "bg-violet-500";
-  const rowCls =
-    color === "emerald"
-      ? "bg-emerald-50/60 border-emerald-100"
-      : color === "red"
-      ? "bg-red-50/60 border-red-100"
-      : "bg-violet-50/60 border-violet-100";
+  const tone = BULLET_TONE[color];
 
   return (
     <div className="space-y-1.5">
       {items.map((item) => (
         <div
           key={item}
-          className={cn("flex items-center gap-2.5 px-3 py-2 rounded-lg border group", rowCls)}
+          className="group flex items-center gap-2.5 rounded-lg border px-3 py-2"
+          style={{ borderColor: tone.border, background: tone.bg }}
         >
-          <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", dotCls)} />
-          <span className="flex-1 text-sm text-gray-800">{item}</span>
+          <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: tone.dot }} />
+          <span className="flex-1 text-sm text-[color:var(--rev-text-2)]">{item}</span>
           <button
             type="button"
             onClick={() => onRemove(item)}
-            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity"
+            className="text-[color:var(--rev-text-7)] opacity-0 transition-opacity hover:text-[color:var(--rev-danger)] group-hover:opacity-100"
             aria-label={`Remove ${item}`}
           >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       ))}
-      <div className="flex gap-2 mt-2">
+      <div className="mt-2 flex gap-2">
         <input
           value={newValue}
           onChange={(e) => onNewValueChange(e.target.value)}
           placeholder={placeholder}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onAdd(); } }}
-          className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300 bg-white"
+          className="flex-1 rounded-lg border border-[color:var(--rev-border-strong)] bg-[color:var(--rev-surface)] px-3 py-1.5 text-sm text-[color:var(--rev-text-2)] placeholder:text-[color:var(--rev-text-7)] focus:outline-none focus:ring-2 focus:ring-[color:var(--rev-primary)]"
         />
         <button
           type="button"
           onClick={onAdd}
-          className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-blue-600 hover:bg-blue-50 transition font-medium"
+          className="flex items-center gap-1 rounded-lg border border-[color:var(--rev-border-strong)] px-3 py-1.5 text-xs font-medium text-[color:var(--rev-primary)] transition hover:bg-[color:var(--rev-tint-primary)]"
         >
           <Plus className="w-3.5 h-3.5" />Add
         </button>

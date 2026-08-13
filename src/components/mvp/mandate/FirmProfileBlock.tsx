@@ -1,12 +1,12 @@
 import type React from "react";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Users } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { INVESTMENT_PROFILE_QUERY_KEY } from "@/api/investmentProfile";
 import { toast } from "@/components/mvp/primitives/sonner";
 import { Textarea } from "@/components/mvp/primitives/textarea";
 import { MANDATE_DEFAULTS, type InvestmentProfile } from "@/data/mandateDefaults";
+import { SimperoMarkIcon } from "@/components/mvp/icons";
 
 interface Props {
   profile: InvestmentProfile | null;
@@ -22,8 +22,9 @@ function getStr(obj: Record<string, unknown>, key: string, fallback = ""): strin
 }
 
 const inp =
-  "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300 bg-white";
-const lbl = "block text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5";
+  "w-full rounded-lg border border-[color:var(--rev-border-strong)] bg-[color:var(--rev-surface)] px-3 py-2 text-sm text-[color:var(--rev-text-2)] placeholder:text-[color:var(--rev-text-7)] focus:outline-none focus:ring-2 focus:ring-[color:var(--rev-primary)]";
+const lbl =
+  "block font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[color:var(--rev-text-6)] mb-1.5";
 
 export function FirmProfileBlock({ profile, saveRef, onStateChange }: Props) {
   const utils = trpc.useUtils();
@@ -82,17 +83,28 @@ export function FirmProfileBlock({ profile, saveRef, onStateChange }: Props) {
   }, [isDirty, upsertMutation.isPending, onStateChange]);
 
   const m = profile?.mandate ?? {};
-  const checkSize = getStr(m, "checkSize", MANDATE_DEFAULTS.checkSize);
+  // checkSize is now stored as numeric checkMin/checkMax (see EditableMandateBlock) —
+  // derive the same display string here rather than parsing the old free-text field.
+  const checkMin = typeof m.checkMin === "number" ? m.checkMin : MANDATE_DEFAULTS.checkMinK;
+  const checkMax = typeof m.checkMax === "number" ? m.checkMax : MANDATE_DEFAULTS.checkMaxK;
+  const checkSize = `$${checkMin}K–$${checkMax}K`;
   const targetReturn = getStr(m, "targetReturn", MANDATE_DEFAULTS.targetReturn);
   const holdPeriod = getStr(m, "holdPeriod", MANDATE_DEFAULTS.holdPeriod);
 
   return (
     <div className="space-y-4">
       {/* FIRM IDENTITY */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex items-center gap-2 mb-5">
-          <Users className="w-4 h-4 text-blue-500" />
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Firm Identity</span>
+      <div className="rounded-xl border border-[color:var(--rev-border)] bg-[color:var(--rev-surface)] p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+        <div className="mb-5 flex items-center gap-3.5">
+          <div
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[11px]"
+            style={{ background: "linear-gradient(140deg, #3B6FF5, #2F5FEA)" }}
+          >
+            <SimperoMarkIcon className="h-5 w-5 text-white" />
+          </div>
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.075em] text-[color:var(--rev-text-6)]">
+            Firm Identity
+          </span>
         </div>
         <div className="grid grid-cols-2 gap-x-5 gap-y-4">
           <div>
@@ -128,35 +140,37 @@ export function FirmProfileBlock({ profile, saveRef, onStateChange }: Props) {
         </div>
       </div>
 
-      {/* FIRM SUMMARY dark card */}
-      <div className="bg-gray-900 rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-amber-400 text-sm leading-none">★</span>
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Firm Summary</span>
+      {/* FIRM SUMMARY dark card — same gradient treatment as MandateScorecard's
+          Investment Mandate Summary banner, for visual consistency across the
+          page rather than a one-off dark card. */}
+      <div className="rounded-xl p-5" style={{ background: "var(--rev-mandate-gradient)" }}>
+        <div className="mb-4 flex items-center gap-2">
+          <span className="text-sm leading-none text-[#8FB4FF]">★</span>
+          <span className="font-mono text-[11px] uppercase tracking-[0.075em] text-[#8FB4FF]">Firm Summary</span>
         </div>
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">Firm Name</p>
+            <p className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.05em] text-[#7F8B98]">Firm Name</p>
             <p className="text-sm font-semibold text-white">{firmName || "—"}</p>
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">Type</p>
+            <p className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.05em] text-[#7F8B98]">Type</p>
             <p className="text-sm font-semibold text-white">{firmType || "—"}</p>
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">AUM</p>
+            <p className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.05em] text-[#7F8B98]">AUM</p>
             <p className="text-sm font-semibold text-white">{aum || "—"}</p>
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">Check Size</p>
+            <p className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.05em] text-[#7F8B98]">Check Size</p>
             <p className="text-sm font-semibold text-white">{checkSize}</p>
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">Target Return</p>
+            <p className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.05em] text-[#7F8B98]">Target Return</p>
             <p className="text-sm font-semibold text-white">{targetReturn}</p>
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">Hold Period</p>
+            <p className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.05em] text-[#7F8B98]">Hold Period</p>
             <p className="text-sm font-semibold text-white">{holdPeriod}</p>
           </div>
         </div>

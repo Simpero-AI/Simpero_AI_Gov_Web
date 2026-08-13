@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useUserDisplay } from "@/hooks/useUserDisplay";
 import { Link, Redirect, useLocation, useSearch } from "wouter";
-import { CheckCircle, Layers, ListChecks, RotateCcw, Save, ShieldAlert, Target } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -15,7 +15,6 @@ import { MvpNavRenderer } from "@/components/mvp/shell/MvpNavRenderer";
 import { MvpFundSelector } from "@/components/mvp/shell/MvpFundSelector";
 import { MvpTopbar, type MandateSaveState } from "@/components/mvp/shell/MvpTopbar";
 import { PageContainer } from "@/components/mvp/common/PageContainer";
-import { KpiTile } from "@/components/mvp/tiles/KpiTile";
 import { FirmProfileBlock } from "@/components/mvp/mandate/FirmProfileBlock";
 import { EditableMandateBlock } from "@/components/mvp/mandate/EditableMandateBlock";
 import { EditableFrameworkBlock } from "@/components/mvp/mandate/EditableFrameworkBlock";
@@ -25,17 +24,6 @@ import { buildMvpNav, ROUTES } from "@/components/mvp/nav/mvpNav";
 import { usePageTitle } from "@/components/mvp/common/usePageTitle";
 import { cn } from "@/lib/utils";
 import { MANDATE_DEFAULTS, FRAMEWORK_DEFAULTS } from "@/data/mandateDefaults";
-
-function getFrameworkStats(profile: { mandate: Record<string, unknown>; weights: Record<string, unknown> } | null) {
-  const mandate = profile?.mandate ?? {};
-  const mustHaves = Array.isArray(mandate.mustHaves) ? mandate.mustHaves.length : 0;
-  const dealBreakers = Array.isArray(mandate.dealBreakers) ? mandate.dealBreakers.length : 0;
-  const esgCriteria = Array.isArray(mandate.esgCriteria) ? mandate.esgCriteria.length : 0;
-  const fw = profile?.weights?.["framework"] as { categories?: Array<{ criteria: unknown[] }> } | undefined;
-  const categories = fw?.categories?.length ?? 0;
-  const totalCriteria = fw?.categories?.reduce((s, c) => s + (c.criteria?.length ?? 0), 0) ?? 0;
-  return { mustHaves, dealBreakers, esgCriteria, categories, totalCriteria };
-}
 
 type Section = "firm" | "mandate" | "framework" | "scorecard";
 const VALID_SECTIONS: Section[] = ["firm", "mandate", "framework", "scorecard"];
@@ -122,32 +110,6 @@ export default function MandateScorecard({ section }: Props) {
   const profile = profileQuery.data ?? null;
 
   const mandate = profile?.mandate ?? {};
-  const bandItems = [
-    {
-      label: "Check Size",
-      value: (typeof mandate.checkSize === "string" && mandate.checkSize) ? mandate.checkSize : "—",
-    },
-    {
-      label: "Target Return",
-      value: (typeof mandate.targetReturn === "string" && mandate.targetReturn) ? mandate.targetReturn : "—",
-    },
-    {
-      label: "Hold Period",
-      value: (typeof mandate.holdPeriod === "string" && mandate.holdPeriod) ? mandate.holdPeriod : "—",
-    },
-    {
-      label: "Focus Sectors",
-      value: (() => {
-        const labels = mandate.mandateSectorLabels;
-        if (Array.isArray(labels) && labels.length > 0) {
-          return (labels as string[]).slice(0, 3).join(" · ");
-        }
-        return "Not configured";
-      })(),
-    },
-  ];
-
-  const stats = getFrameworkStats(profile);
   const aum = typeof mandate.aum === "string" && mandate.aum ? mandate.aum : undefined;
   const saving = firmState.saving || mandateState.saving || frameworkState.saving;
   const dirty = firmState.dirty || mandateState.dirty || frameworkState.dirty;
@@ -165,14 +127,15 @@ export default function MandateScorecard({ section }: Props) {
   const handleResetToDefaults = () => {
     resetMutation.mutate({
       mandate: {
-        checkSize: MANDATE_DEFAULTS.checkSize,
-        revenueBand: MANDATE_DEFAULTS.revenueBand,
-        ebitda: MANDATE_DEFAULTS.ebitda,
-        grossMargin: MANDATE_DEFAULTS.grossMargin,
+        checkMin: MANDATE_DEFAULTS.checkMinK,
+        checkMax: MANDATE_DEFAULTS.checkMaxK,
+        minMrr: MANDATE_DEFAULTS.minMrr,
+        minMomGrowth: MANDATE_DEFAULTS.minMomGrowth,
+        maxBurnMultiple: MANDATE_DEFAULTS.maxBurnMultiple,
+        minRunway: MANDATE_DEFAULTS.minRunway,
+        maxValMultiple: MANDATE_DEFAULTS.maxValMultiple,
         holdPeriod: MANDATE_DEFAULTS.holdPeriod,
         targetReturn: MANDATE_DEFAULTS.targetReturn,
-        ownership: MANDATE_DEFAULTS.ownership,
-        maxValuation: MANDATE_DEFAULTS.maxValuation,
         specialNotes: MANDATE_DEFAULTS.specialNotes,
         mandateSectorLabels: [...MANDATE_DEFAULTS.mandateSectorLabels],
         mandateGeoLabels: [...MANDATE_DEFAULTS.mandateGeoLabels],
@@ -206,6 +169,8 @@ export default function MandateScorecard({ section }: Props) {
           <MvpTopbar.MandateMeta
             saveState={saveState}
             onOpenHistory={() => setHistoryOpen(true)}
+            onSave={handleSaveConfiguration}
+            onReset={() => setShowResetModal(true)}
             firm={profile?.firmName ?? undefined}
             aum={aum}
           />
@@ -216,60 +181,10 @@ export default function MandateScorecard({ section }: Props) {
 
       <MvpAppShell.Main>
         <PageContainer>
-          {/* Page header with action buttons */}
-          <div className="mb-6 flex items-start justify-between">
-            <div>
-              <h1 className="font-serif text-[27px] font-semibold text-[color:var(--rev-text-1)]">Mandate &amp; Scorecard</h1>
-              <p className="mt-1.5 text-sm text-[color:var(--rev-text-5)]">
-                Configure your firm profile, investment mandate, and scoring framework. Changes apply to future analyses.
-              </p>
-            </div>
-            <div className="flex flex-shrink-0 items-center gap-2 pt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowResetModal(true)}
-                className="flex items-center gap-1.5"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />Reset to Defaults
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleSaveConfiguration}
-                className="flex items-center gap-1.5"
-              >
-                <Save className="w-3.5 h-3.5" />Save Configuration
-              </Button>
-            </div>
-          </div>
-
-          <section
-            aria-label="Investment Mandate Summary"
-            className="mb-5 rounded-xl px-6 py-5"
-            style={{ background: "var(--rev-mandate-gradient)" }}
-          >
-            <div className="mb-4 flex items-center gap-2">
-              <Target className="h-4 w-4 text-[#8FB4FF]" aria-hidden="true" />
-              <span className="font-mono text-[11px] uppercase tracking-[0.075em] text-[#8FB4FF]">
-                Investment Mandate Summary
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              {bandItems.map((it) => (
-                <div key={it.label}>
-                  <p className="font-mono text-[9.5px] uppercase tracking-[0.05em] text-[#7F8B98]">{it.label}</p>
-                  <p className="mt-1.5 text-[14.5px] leading-snug text-white">{it.value}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <KpiTile eyebrow="Must-Haves" value={stats.mustHaves} icon={CheckCircle} tint="success" />
-            <KpiTile eyebrow="Deal-Breakers" value={stats.dealBreakers} icon={ShieldAlert} tint="danger" />
-            <KpiTile eyebrow="Scoring Categories" value={stats.categories} icon={Layers} tint="primary" />
-            <KpiTile eyebrow="Total Criteria" value={stats.totalCriteria} icon={ListChecks} tint="info" />
-          </div>
+          {/* No page header/banner/KPI tiles here — the mockup's Mandate &
+              Scorecard view goes straight from the topbar into the tab bar
+              on every tab (docs/... mockup lines 4085-4123). Save/Reset now
+              live in MvpTopbar.MandateMeta instead of a page-header button row. */}
 
           {/* Top tabs — restyled from the old left-side vertical nav; same
               path-based Link navigation (not local tab state), so each

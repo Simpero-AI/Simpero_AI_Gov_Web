@@ -14,8 +14,9 @@ describe("FinancialsTab", () => {
     expect(screen.getByText("Financial projections not yet extracted")).toBeInTheDocument();
     expect(screen.getByText("Unit economics not yet extracted")).toBeInTheDocument();
     expect(screen.getByText("See Company tab for revenue mix")).toBeInTheDocument();
+    expect(screen.getByText("Multi-year financial trend not yet available")).toBeInTheDocument();
     expect(screen.getByText("Balance sheet data coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Valuation methodology coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Valuation & deal-structure figures coming soon")).toBeInTheDocument();
     expect(screen.getByText("Financial model not yet available")).toBeInTheDocument();
     expect(screen.getByText("Valuation cross-check coming soon")).toBeInTheDocument();
     expect(screen.getByText(/no structured source citations/i)).toBeInTheDocument();

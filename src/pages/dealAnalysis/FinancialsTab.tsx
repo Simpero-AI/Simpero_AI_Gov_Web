@@ -212,8 +212,11 @@ function HeadlineMetricsCard({
 // ICMemoDeliverable (financialGrid, unitEconomics, retentionMetrics,
 // salesEfficiency, exitStrategy.scenarios). Same "use real per-field data,
 // don't fabricate" approach CompanyTab/MarketTab established. Balance Sheet
-// Snapshot, Valuation Methodology/Comparables, and the DCF-style projection
-// table have no backing field, so they contribute nothing here.
+// Snapshot, the 3-Year Financial Trend, Valuation & Deal Structure, and the
+// DCF-style projection table have no backing field, so they contribute
+// nothing here. (investmentStructure is deliberately not counted on this
+// tab — it's CapTableTab's corroboration signal, not this one's; see the
+// note on the Valuation & Deal Structure card below.)
 // ---------------------------------------------------------------------------
 
 function collectFinancialsCorroboration(
@@ -458,6 +461,20 @@ export function FinancialsTab({ memoTyped, dealMetrics, dealMetricDiscrepancies 
         );
       })()}
 
+      {/* 3-Year Financial Trend (mockup: Meridian Diligence.dc.html
+          ~L3061-3073, Revenue/EBITDA/EBITDA Margin by historical year) — no
+          per-year historical-actuals array exists anywhere on DealMetrics or
+          ICMemoDeliverable. financialGrid (the Financial Projections card
+          above) is forward-looking A/E/P columns for a different purpose,
+          not a 3-year actuals trend, so it isn't reused here; 100% unbacked. */}
+      <SectionCard eyebrow="3-Year Financial Trend" icon={<LineChart className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
+        <UnbackedSection
+          icon={LineChart}
+          title="Multi-year financial trend not yet available"
+          description="A 3-year historical revenue/EBITDA trend isn't produced by the current pipeline — only latest-period figures (Headline Metrics) and forward projections (Financial Projections) are extracted today."
+        />
+      </SectionCard>
+
       {/* Balance Sheet Snapshot — no assets/liabilities/cash/debt field exists
           anywhere on ICMemoDeliverable; 100% unbacked, per the same
           verify-against-the-real-type discipline as Company/Market tabs. */}
@@ -469,15 +486,27 @@ export function FinancialsTab({ memoTyped, dealMetrics, dealMetricDiscrepancies 
         />
       </SectionCard>
 
-      {/* Valuation Methodology & Comparable Transactions — no methodology
-          prose field or comparable-transaction list exists on
-          ICMemoDeliverable (the closest field, aiGenerationNotice.comparableTxnCount,
-          is a derived count only — not a usable multiple/EV list); 100% unbacked. */}
-      <SectionCard eyebrow="Valuation Methodology &amp; Comparable Transactions" icon={<Scale className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
+      {/* Valuation & Deal Structure (mockup ~L3087-3116: one card, figures
+          grid — Enterprise Value / EV per Revenue / EV per EBITDA / Proposed
+          Structure / Fund Allocation / Target Close — on top, methodology +
+          comparables below a divider). None of those figures have a backing
+          field on DealMetrics or ICMemoDeliverable: EV/Revenue is the only
+          overlap (dealMetrics.evRevenue, already shown in Headline Metrics
+          above), and there's no Enterprise Value / EV-EBITDA / deal-
+          structure-narrative field. NOTE: investmentStructure (investment
+          amount, pre/post-money valuation, ownership %, governance rights)
+          is NOT reused here even though it's a tempting fit for a "deal
+          terms" grid — it's already the real backing for CapTableTab's "Key
+          Deal Terms" card, which matches the mockup's actual CapTable-tab
+          section (~L3577-3589) field-for-field; rendering it again here
+          would recreate the exact cross-tab duplication this audit removed
+          from SummaryTab. So the whole card, including the figures grid,
+          stays 100% unbacked. */}
+      <SectionCard eyebrow="Valuation &amp; Deal Structure" icon={<Scale className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
         <UnbackedSection
           icon={Scale}
-          title="Valuation methodology coming soon"
-          description="An analyst-written valuation rationale and a comparable-transactions multiple table aren't produced by the current pipeline."
+          title="Valuation & deal-structure figures coming soon"
+          description="Enterprise value, EV/EBITDA, proposed structure, fund allocation, target close, an analyst-written valuation rationale, and a comparable-transactions multiple table aren't produced by the current pipeline. (Investment amount, pre/post-money valuation, ownership %, and governance rights are already shown under Cap Table → Key Deal Terms.)"
         />
       </SectionCard>
 

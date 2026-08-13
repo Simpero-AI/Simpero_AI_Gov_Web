@@ -25,7 +25,6 @@ import { formatUsdShort, formatBpAsPct, formatRatio } from "@/lib/dealMetricsFor
 import {
   governanceFlagReviewerNote,
   type ICMemoResult,
-  type MetricValue,
   type Claim,
   type SourcedSentence,
   type Sourced,
@@ -200,11 +199,10 @@ function collectSummaryCorroboration(memoTyped: Partial<ICMemoResult> | null): {
     d.executiveSummary?.investmentHighlight,
     d.investmentThesisCards,
     d.riskRegister,
-    d.investmentStructure?.investmentAmountUsd,
-    d.investmentStructure?.valuationPreUsd,
-    d.investmentStructure?.valuationPostUsd,
-    d.investmentStructure?.ownershipPct,
-    d.investmentStructure?.governanceRights,
+    // investmentStructure fields removed along with the "Proposed Deal
+    // Terms" section itself — already counted in CapTableTab's own
+    // corroboration collector (its real, correct home; see removal note
+    // above the old section's location).
     d.headerMetrics?.targetIrrPct,
     d.headerMetrics?.exitValuationUsd,
     d.headerMetrics?.moic,
@@ -379,70 +377,28 @@ export function SummaryTab({ memoTyped }: SummaryTabProps) {
         )}
       </SectionCard>
 
-      {/* Proposed Deal Terms */}
-      <SectionCard eyebrow="Proposed Deal Terms">
-        {(() => {
-          const is = memoTyped?.deliverable?.investmentStructure;
-          if (!is) {
-            return (
-              <p className="text-sm italic text-[color:var(--rev-text-6)]">
-                Deal terms sourced from pipeline — not yet available.
-              </p>
-            );
-          }
-          const v = is;
-          return (
-            <div className="overflow-hidden rounded-lg border border-[color:var(--rev-border-subtle)]">
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-[color:var(--rev-border-subtle)]">
-                  <tr className="bg-[color:var(--mvp-sidebar-bg)]">
-                    <td className="py-3 px-5 text-xs text-[color:var(--mvp-sidebar-muted)]">Investment Amount</td>
-                    <td className="py-3 px-5 text-right text-sm font-semibold text-white">
-                      {v.investmentAmountUsd ? <SourcedValue sourced={v.investmentAmountUsd} format={(val) => val != null ? formatUsdShort(val) : "—"} fieldLabel="Investment Amount" /> : "—"}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 px-5 text-xs text-[color:var(--rev-text-6)]">Pre-Money Valuation</td>
-                    <td className="py-3 px-5 text-right text-sm font-semibold text-[color:var(--rev-text-1)]">
-                      {v.valuationPreUsd ? <SourcedValue sourced={v.valuationPreUsd} format={(val) => val != null ? formatUsdShort(val) : "—"} fieldLabel="Pre-Money Valuation" /> : "—"}
-                    </td>
-                  </tr>
-                  <tr className="bg-[color:var(--mvp-sidebar-bg)]">
-                    <td className="py-3 px-5 text-xs text-[color:var(--mvp-sidebar-muted)]">Post-Money Valuation</td>
-                    <td className="py-3 px-5 text-right text-sm font-semibold text-white">
-                      {v.valuationPostUsd ? <SourcedValue sourced={v.valuationPostUsd} format={(val) => val != null ? formatUsdShort(val) : "—"} fieldLabel="Post-Money Valuation" /> : "—"}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 px-5 text-xs text-[color:var(--rev-text-6)]">Ownership %</td>
-                    <td className="py-3 px-5 text-right text-sm font-semibold text-[color:var(--rev-text-1)]">
-                      {v.ownershipPct ? <SourcedValue sourced={v.ownershipPct} format={(val) => val != null ? formatBpAsPct(val) : "—"} fieldLabel="Ownership %" /> : "—"}
-                    </td>
-                  </tr>
-                  {v.governanceRights && v.governanceRights.provenance !== "missing" && v.governanceRights.value?.length ? (
-                    <tr>
-                      <td className="py-3 px-5 text-xs text-[color:var(--rev-text-6)] align-top">Governance Rights</td>
-                      <td className="py-3 px-5 text-right text-sm font-semibold text-[color:var(--rev-text-1)]">
-                        <div className="flex flex-col items-end gap-0.5">
-                          {v.governanceRights.value.map((r, ri) => (
-                            <span key={ri} className="text-xs font-medium text-[color:var(--rev-text-3)]">{r.value || r.label}</span>
-                          ))}
-                          <ProvenanceBadge
-                            provenance={v.governanceRights.provenance}
-                            citationVerified={v.governanceRights.citation?.verified}
-                            onClick={citationCtx ? () => citationCtx.openCitation({ fieldLabel: "Governance Rights", citation: v.governanceRights?.citation ?? null }) : undefined}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          );
-        })()}
-      </SectionCard>
+      {/*
+        Proposed Deal Terms removed: the mockup has no such section on the
+        Summary tab (zero grep hits), and its fields (investmentStructure:
+        investment amount, pre/post-money valuation, ownership %, governance
+        rights) are the exact same set already correctly rendered by
+        CapTableTab's "Key Deal Terms" card, matching the mockup's actual
+        deal-terms section (Meridian Diligence.dc.html ~L3577-3589, on the
+        Cap Table tab, not Financials) field-for-field. Duplicate render of
+        data with a real, existing, already-correct home — not orphaned
+        content.
+      */}
 
+      {/*
+        FLAG (2026-08-13 content-misplacement audit): Return Targets
+        (headerMetrics.targetIrrPct / exitValuationUsd / moic) has no home
+        anywhere in the mockup (Meridian Diligence.dc.html) — grepped both
+        the Summary (asSummary) and Financials (asFinancials) tab blocks and
+        the page header/hero area, zero hits for "Target IRR" / "Expected
+        MOIC" / "Exit Valuation". Left in place rather than deleted per
+        instruction — this is real, sourced data with no confirmed
+        replacement location; needs a product decision, not a silent cut.
+      */}
       {/* Return Targets (Target IRR, Exit Valuation, MOIC) */}
       {(() => {
         const hm = memoTyped?.deliverable?.headerMetrics;
@@ -481,71 +437,26 @@ export function SummaryTab({ memoTyped }: SummaryTabProps) {
         );
       })()}
 
-      {/* Valuation & Multiples Analysis */}
-      <SectionCard eyebrow="Valuation & Multiples Analysis">
-        {(() => {
-          const dm = memoTyped?.dealMetrics;
-          const hasAny = dm?.evRevenue?.value != null || dm?.revenueLatestUsd?.value != null || dm?.revenueGrowthPct?.value != null || dm?.ebitdaMarginPct?.value != null;
+      {/*
+        Valuation & Multiples Analysis removed: the mockup has no such
+        section on the Summary tab (zero grep hits), and its fields
+        (dealMetrics.evRevenue / revenueLatestUsd / revenueGrowthPct /
+        ebitdaMarginPct) are the exact same set already correctly rendered
+        by FinancialsTab's "Headline Metrics" card — this was a duplicate
+        render of data with a real, existing home, not orphaned content.
+      */}
 
-          if (!hasAny) {
-            return (
-              <p className="text-xs italic text-[color:var(--rev-text-6)]">
-                Valuation multiples and comparable benchmarks are sourced from the pipeline. Not yet available for this deal.
-              </p>
-            );
-          }
-
-          const renderCell = (mv: MetricValue | undefined, label: string, fmt: (v: number) => string) => {
-            if (!mv || mv.value == null) return null;
-            return (
-              <DenseTableRow key={label}>
-                <DenseTableCell>{label}</DenseTableCell>
-                <DenseTableCell numeric>
-                  <span className="inline-flex items-center gap-1.5">
-                    {fmt(mv.value)}
-                    {mv.citation ? (
-                      <CitationRef
-                        page={mv.citation.page ?? null}
-                        section={mv.citation.section ?? null}
-                        verified={!!mv.citation.verified}
-                        onClick={() => citationCtx?.openCitation({ fieldLabel: label, citation: mv.citation! })}
-                      />
-                    ) : (
-                      <ProvenanceBadge
-                        provenance="synthesized"
-                        onClick={() => citationCtx?.openCitation({ fieldLabel: label, citation: null })}
-                      />
-                    )}
-                  </span>
-                </DenseTableCell>
-              </DenseTableRow>
-            );
-          };
-
-          return (
-            <div className="overflow-hidden rounded-lg border border-[color:var(--rev-border-subtle)]">
-              <DenseTable>
-                <DenseTableHeaderRow>
-                  <DenseTableRow>
-                    <DenseTableHead>Metric</DenseTableHead>
-                    <DenseTableHead className="text-right">This Deal</DenseTableHead>
-                  </DenseTableRow>
-                </DenseTableHeaderRow>
-                <DenseTableBody>
-                  {renderCell(dm?.evRevenue, "EV / Revenue", formatRatio)}
-                  {renderCell(dm?.revenueLatestUsd, "Total Revenue", formatUsdShort)}
-                  {renderCell(dm?.revenueGrowthPct, "YoY Growth", formatBpAsPct)}
-                  {renderCell(dm?.ebitdaMarginPct, "EBITDA Margin", formatBpAsPct)}
-                </DenseTableBody>
-              </DenseTable>
-              <div className="border-t border-[color:var(--rev-border-subtle)] bg-[color:var(--rev-tint-neutral)] px-5 py-2.5">
-                <span className="text-[10px] italic text-[color:var(--rev-text-7)]">Sector medians and premium benchmarks coming soon</span>
-              </div>
-            </div>
-          );
-        })()}
-      </SectionCard>
-
+      {/*
+        FLAG (2026-08-13 content-misplacement audit): Exit Strategy has no
+        home in the mockup either (zero grep hits). Its `scenarios` half
+        duplicates data already shown in FinancialsTab's "Financial Model"
+        card (same exitStrategy.scenarios field, scenario-toggle UI matching
+        the mockup's Downside/Base/Upside pattern), but `weightedReturn`
+        (Weighted MOIC / IRR / Return Period) is real, sourced data with no
+        other renderer anywhere in this codebase. Left in place rather than
+        split/deleted — needs a product decision on whether weightedReturn
+        gets its own mockup-backed home.
+      */}
       {/* Exit Strategy */}
       {(() => {
         const es = memoTyped?.deliverable?.exitStrategy;

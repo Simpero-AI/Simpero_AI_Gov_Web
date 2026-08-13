@@ -52,9 +52,9 @@ function SectionCard({
 const SEVERITY_ORDER: Record<"H" | "M" | "L", number> = { H: 0, M: 1, L: 2 };
 const SEVERITY_LABEL: Record<"H" | "M" | "L", string> = { H: "High", M: "Medium", L: "Low" };
 const SEVERITY_CHIP: Record<"H" | "M" | "L", string> = {
-  H: "bg-red-50 text-red-700 border border-red-200",
-  M: "bg-amber-50 text-amber-700 border border-amber-200",
-  L: "bg-slate-50 text-slate-600 border border-slate-200",
+  H: "bg-[color:var(--rev-tint-danger)] text-[color:var(--rev-danger)] border border-[color:var(--rev-border)]",
+  M: "bg-[color:var(--rev-tint-warning)] text-[color:var(--rev-warning)] border border-[color:var(--rev-border)]",
+  L: "bg-[color:var(--rev-tint-neutral)] text-[color:var(--rev-text-6)] border border-[color:var(--rev-border)]",
 };
 
 // Top-N cap for the risks summary — this is a condensed callout, not a

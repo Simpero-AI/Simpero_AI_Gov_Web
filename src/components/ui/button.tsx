@@ -10,9 +10,21 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "border-primary bg-primary text-primary-foreground shadow-[var(--shadow-card)] hover:bg-[color:var(--brand-primary-hover)]",
+          // !text-primary-foreground (not the bare utility): index.css's
+          // deliberately-unlayered `a { color: inherit }` reset (kept
+          // unlayered on purpose, to out-priority a third-party Carbon
+          // stylesheet's own unlayered `a` selector — see the comment above
+          // that rule) otherwise wins over this layered Tailwind utility
+          // whenever the button renders as an <a> (asChild + href, e.g.
+          // EmptyState's action.href), inheriting the dark body text color
+          // onto a dark-green button background and making the label
+          // unreadable. The `!` forces !important so this always wins.
+          "border-primary bg-primary !text-primary-foreground shadow-[var(--shadow-card)] hover:bg-[color:var(--brand-primary-hover)]",
         destructive:
-          "border-destructive bg-destructive text-destructive-foreground hover:bg-[color:color-mix(in_srgb,var(--destructive)_92%,black)] focus-visible:ring-destructive/20",
+          // Same unlayered-`a`-reset problem as `default` above — a
+          // destructive button rendered as an <a> would otherwise show
+          // dark-on-red text.
+          "border-destructive bg-destructive !text-destructive-foreground hover:bg-[color:color-mix(in_srgb,var(--destructive)_92%,black)] focus-visible:ring-destructive/20",
         outline:
           "border-border bg-card text-foreground shadow-none hover:border-border/90 hover:bg-secondary",
         secondary: "border-border-strong bg-secondary text-foreground hover:bg-muted",
