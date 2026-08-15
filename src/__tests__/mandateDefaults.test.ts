@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { FRAMEWORK_DEFAULTS, MANDATE_DEFAULTS } from "../data/mandateDefaults";
+import { FRAMEWORK_DEFAULTS } from "../data/mandateDefaults";
 
 describe("FRAMEWORK_DEFAULTS", () => {
   it("has benchmark and subWeight on every criterion", () => {
@@ -21,19 +21,5 @@ describe("FRAMEWORK_DEFAULTS", () => {
   it("category weights sum to 100", () => {
     const total = FRAMEWORK_DEFAULTS.reduce((s, cat) => s + cat.weight, 0);
     expect(total, `Category weights total ${total}%, expected 100%`).toBe(100);
-  });
-});
-
-describe("MANDATE_DEFAULTS", () => {
-  it("has mustHaves array with 7 items", () => {
-    expect(MANDATE_DEFAULTS.mustHaves).toHaveLength(7);
-  });
-
-  it("has dealBreakers array with 7 items", () => {
-    expect(MANDATE_DEFAULTS.dealBreakers).toHaveLength(7);
-  });
-
-  it("has esgCriteria array with 4 items", () => {
-    expect(MANDATE_DEFAULTS.esgCriteria).toHaveLength(4);
   });
 });

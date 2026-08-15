@@ -12,6 +12,8 @@ import type {
   CreateOrgBody,
   CreateInviteBody,
   UpdateRoleBody,
+  AdminMandateCategory,
+  AdminMandateOption,
 } from "../types";
 
 /**
@@ -124,6 +126,91 @@ export async function updateMemberRole(userId: number, body: UpdateRoleBody): Pr
 }
 
 /** Platform-guarded; clerkUserId is OrgMember.userId (Clerk user id), not OrgMember.id. */
+// ── Mandate taxonomy (/api/admin/mandates/...) ──────────────────────────────
+
+export async function listMandateCategories(): Promise<AdminMandateCategory[]> {
+  const res = await apiFetch("/api/admin/mandates/categories");
+  if (!res.ok) throw new Error(`GET /admin/mandates/categories failed: ${res.status}`);
+  return (await res.json()) as AdminMandateCategory[];
+}
+
+export async function createMandateCategory(body: { category: string }): Promise<AdminMandateCategory> {
+  const res = await apiFetch("/api/admin/mandates/categories", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`POST /admin/mandates/categories failed: ${res.status}`);
+  return (await res.json()) as AdminMandateCategory;
+}
+
+export async function updateMandateCategory(
+  id: string,
+  body: { category: string }
+): Promise<AdminMandateCategory> {
+  const res = await apiFetch(`/api/admin/mandates/categories/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`PATCH /admin/mandates/categories/${id} failed: ${res.status}`);
+  return (await res.json()) as AdminMandateCategory;
+}
+
+export async function deleteMandateCategory(id: string): Promise<void> {
+  const res = await apiFetch(`/api/admin/mandates/categories/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`DELETE /admin/mandates/categories/${id} failed: ${res.status}`);
+}
+
+export async function createMandateOption(
+  categoryId: string,
+  body: { option: string }
+): Promise<AdminMandateOption> {
+  const res = await apiFetch(`/api/admin/mandates/categories/${categoryId}/options`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok)
+    throw new Error(`POST /admin/mandates/categories/${categoryId}/options failed: ${res.status}`);
+  return (await res.json()) as AdminMandateOption;
+}
+
+export async function updateMandateOption(id: string, body: { option: string }): Promise<AdminMandateOption> {
+  const res = await apiFetch(`/api/admin/mandates/options/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`PATCH /admin/mandates/options/${id} failed: ${res.status}`);
+  return (await res.json()) as AdminMandateOption;
+}
+
+export async function deleteMandateOption(id: string): Promise<void> {
+  const res = await apiFetch(`/api/admin/mandates/options/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`DELETE /admin/mandates/options/${id} failed: ${res.status}`);
+}
+
+/**
+ * Creates a child option under an existing option (mandate-suboptions plan
+ * D9). 404s until the Alpha addendum's `parent_option_id` migration ships —
+ * expected, not a bug; the caller's error-toast handles it like any other
+ * failed mutation.
+ */
+export async function createMandateSubOption(
+  parentOptionId: string,
+  body: { option: string }
+): Promise<AdminMandateOption> {
+  const res = await apiFetch(`/api/admin/mandates/options/${parentOptionId}/suboptions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok)
+    throw new Error(`POST /admin/mandates/options/${parentOptionId}/suboptions failed: ${res.status}`);
+  return (await res.json()) as AdminMandateOption;
+}
+
 export async function updateOrgMemberRole(
   clerkOrgId: string,
   clerkUserId: string,

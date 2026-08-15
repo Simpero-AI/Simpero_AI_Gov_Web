@@ -1,17 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronDown, ChevronRight, LayoutTemplate, Plus, Trash2, X } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { trpc } from "@/lib/trpc";
-import { INVESTMENT_PROFILE_QUERY_KEY } from "@/api/investmentProfile";
-import { toast } from "@/components/mvp/primitives/sonner";
 import { cn } from "@/lib/utils";
 import { FRAMEWORK_DEFAULTS, type FrameworkCategory, type FrameworkCriterion, type InvestmentProfile } from "@/data/mandateDefaults";
 
 interface Props {
   profile: InvestmentProfile | null;
-  saveRef?: React.MutableRefObject<(() => void) | null>;
-  /** Fires whenever local dirty/saving state changes — lets the page-level
-   * topbar show a real save-status indicator instead of a fabricated one. */
+  /** Fires whenever local dirty state changes — lets the page-level topbar
+   * show a real save-status indicator instead of a fabricated one. `saving`
+   * is always false: this block has no persistence path (see the no-save
+   * comment below). */
   onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
 }
 
@@ -48,23 +45,16 @@ export function loadCategories(profile: InvestmentProfile | null): FrameworkCate
 const inp =
   "bg-transparent focus:outline-none border-0 border-b border-transparent focus:border-[color:var(--rev-border-strong)] text-sm text-[color:var(--rev-text-1)]";
 
-export function EditableFrameworkBlock({ profile, saveRef, onStateChange }: Props) {
-  const utils = trpc.useUtils();
-  const queryClient = useQueryClient();
+export function EditableFrameworkBlock({ profile, onStateChange }: Props) {
   const [isDirty, setIsDirty] = useState(false);
-  const upsertMutation = trpc.investmentProfile.upsert.useMutation({
-    onSuccess: async () => {
-      // Invalidate both caches: the trpc-backed write still lives here, but
-      // readers (MandateScorecard, MvpFundSelector) migrated to apiFetch.
-      await Promise.all([
-        utils.investmentProfile.get.invalidate(),
-        queryClient.invalidateQueries({ queryKey: INVESTMENT_PROFILE_QUERY_KEY }),
-      ]);
-      setIsDirty(false);
-      toast.success("Framework saved.");
-    },
-    onError: (err) => toast.error(err.message),
-  });
+  // No persistence path: this block used to call
+  // trpc.investmentProfile.upsert.useMutation() to save the framework
+  // weights, same dead endpoint as FirmProfileBlock — it 404s
+  // unconditionally (no Express/tRPC server, and no FastAPI write endpoint
+  // for scoring-framework weights was ever built; confirmed live). Categories/
+  // criteria/weights below stay fully editable (local state + dirty tracking
+  // only); Save is disabled for this tab in MandateScorecard's topbar
+  // instead of attempting a call that can never succeed.
 
   const [categories, setCategoriesRaw] = useState<FrameworkCategory[]>(() => loadCategories(profile));
   // Every local edit to `categories` (add/remove/rename category or
@@ -86,15 +76,13 @@ export function EditableFrameworkBlock({ profile, saveRef, onStateChange }: Prop
   }, [profile]);
 
   useEffect(() => {
-    onStateChange?.({ dirty: isDirty, saving: upsertMutation.isPending });
-  }, [isDirty, upsertMutation.isPending, onStateChange]);
+    onStateChange?.({ dirty: isDirty, saving: false });
+  }, [isDirty, onStateChange]);
 
   const weightTotal = categories.reduce((sum, c) => sum + c.weight, 0);
   const totalCriteria = categories.reduce((s, c) => s + c.criteria.length, 0);
-  const hasEmptyCriteria = categories.some((c) => c.criteria.some((cr) => cr.name.trim() === ""));
   const weightOk = Math.abs(weightTotal - 100) <= 1;
   const weightWarn = !weightOk && Math.abs(weightTotal - 100) <= 20;
-  const canSave = weightOk && !hasEmptyCriteria;
 
   const toggleCat = (id: string) =>
     setOpenCats((prev) => {
@@ -146,14 +134,6 @@ export function EditableFrameworkBlock({ profile, saveRef, onStateChange }: Prop
     setCategoriesRaw(loadCategories(profile));
     setIsDirty(false);
   };
-
-  const doSave = useCallback(() => {
-    upsertMutation.mutate({ weights: { framework: { categories } } });
-  }, [categories, upsertMutation]);
-
-  useEffect(() => {
-    if (saveRef) saveRef.current = canSave ? doSave : null;
-  }, [saveRef, canSave, doSave]);
 
   return (
     <div className="space-y-4">

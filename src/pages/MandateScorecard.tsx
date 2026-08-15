@@ -2,10 +2,10 @@ import { useRef, useState } from "react";
 import { useUserDisplay } from "@/hooks/useUserDisplay";
 import { Link, Redirect, useLocation, useSearch } from "wouter";
 import { RotateCcw } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { trpc } from "@/lib/trpc";
 import { INVESTMENT_PROFILE_QUERY_KEY, fetchInvestmentProfile } from "@/api/investmentProfile";
+import { MANDATE_QUERY_KEY, putMandate } from "@/api/mandate";
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/mvp/primitives/button";
 import { toast } from "@/components/mvp/primitives/sonner";
@@ -23,7 +23,6 @@ import { MandateHistoryDrawer } from "@/components/mvp/mandate/MandateHistoryDra
 import { buildMvpNav, ROUTES } from "@/components/mvp/nav/mvpNav";
 import { usePageTitle } from "@/components/mvp/common/usePageTitle";
 import { cn } from "@/lib/utils";
-import { MANDATE_DEFAULTS, FRAMEWORK_DEFAULTS } from "@/data/mandateDefaults";
 
 type Section = "firm" | "mandate" | "framework" | "scorecard";
 const VALID_SECTIONS: Section[] = ["firm", "mandate", "framework", "scorecard"];
@@ -48,9 +47,11 @@ export default function MandateScorecard({ section }: Props) {
   const { user, loading: authLoading } = useAuth();
   const [showResetModal, setShowResetModal] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const frameworkSaveRef = useRef<(() => void) | null>(null);
+  // Only Mandate Builder still has a working save path (Firm Profile and
+  // Scoring Framework's writes 404 unconditionally with no FastAPI
+  // replacement — see FirmProfileBlock/EditableFrameworkBlock's no-save
+  // comments) — so this is the only save ref left to wire up.
   const mandateSaveRef = useRef<(() => void) | null>(null);
-  const firmSaveRef = useRef<(() => void) | null>(null);
 
   // Real dirty/saving state lifted from the three editable blocks — drives
   // the topbar's save-status indicator. Never fabricated (plan Phase 7 §3).
@@ -59,22 +60,11 @@ export default function MandateScorecard({ section }: Props) {
   const [frameworkState, setFrameworkState] = useState<DirtyState>(IDLE_STATE);
 
   // All hooks — must be called unconditionally before any early returns.
-  // upsert is still tRPC (Phase 2 write path); its cache lives separately from
-  // the migrated `investmentProfile.get` read below, so both must be
-  // invalidated on save or this page and MvpFundSelector go stale.
-  const utils = trpc.useUtils();
   const queryClient = useQueryClient();
-  const resetMutation = trpc.investmentProfile.upsert.useMutation({
-    onSuccess: async () => {
-      await Promise.all([
-        utils.investmentProfile.get.invalidate(),
-        queryClient.invalidateQueries({ queryKey: INVESTMENT_PROFILE_QUERY_KEY }),
-      ]);
-      toast.success("Reset to defaults.");
-      setShowResetModal(false);
-    },
-    onError: (err) => toast.error(err.message),
-  });
+  // Bare (no onSuccess/onError) — handleResetToDefaults below awaits it and
+  // centralizes the toast/invalidation/modal-close, same D5-style
+  // orchestration as EditableMandateBlock's doSave.
+  const resetMandateMutation = useMutation({ mutationFn: putMandate });
   const profileQuery = useQuery({
     queryKey: INVESTMENT_PROFILE_QUERY_KEY,
     queryFn: fetchInvestmentProfile,
@@ -111,45 +101,58 @@ export default function MandateScorecard({ section }: Props) {
 
   const mandate = profile?.mandate ?? {};
   const aum = typeof mandate.aum === "string" && mandate.aum ? mandate.aum : undefined;
-  const saving = firmState.saving || mandateState.saving || frameworkState.saving;
-  const dirty = firmState.dirty || mandateState.dirty || frameworkState.dirty;
+  // Scoped to the active tab only — an edit sitting in a tab the user isn't
+  // looking at shouldn't drive the topbar's save-status dot, and Save
+  // shouldn't fire (or fail) for sections other than the one on screen.
+  // "scorecard" has no state of its own (nothing persists there).
+  const activeState: DirtyState =
+    active === "firm" ? firmState : active === "mandate" ? mandateState : active === "framework" ? frameworkState : IDLE_STATE;
+  const saving = activeState.saving;
+  const dirty = activeState.dirty;
   const saveState: MandateSaveState = saving ? "saving" : dirty ? "unsaved" : "saved";
 
+  // Firm Profile and Scoring Framework have no persistence path at all (see
+  // FirmProfileBlock/EditableFrameworkBlock) — their Save/Reset controls are
+  // force-disabled+explained (topbar props below) rather than attempted, so
+  // Mandate Builder is the only tab this ever needs to act on.
+  const saveDisabled = active === "firm" || active === "framework";
+  const saveDisabledReason =
+    active === "firm"
+      ? "Saving isn't available for Firm Profile yet"
+      : active === "framework"
+      ? "Saving isn't available for Scoring Framework yet"
+      : undefined;
+  const resetDisabled = active !== "mandate";
+  const resetDisabledReason = resetDisabled ? "Reset is only available for Mandate Builder" : undefined;
+
   const handleSaveConfiguration = () => {
-    // All three sections are always mounted — save all so switching tabs between
-    // edits never silently drops unsaved data from an inactive section.
-    if (firmSaveRef.current) firmSaveRef.current();
-    if (mandateSaveRef.current) mandateSaveRef.current();
-    if (frameworkSaveRef.current) frameworkSaveRef.current();
-    else toast.error("Fix framework weights before saving (must total 100%).");
+    if (active === "mandate") mandateSaveRef.current?.();
   };
 
-  const handleResetToDefaults = () => {
-    resetMutation.mutate({
-      mandate: {
-        checkMin: MANDATE_DEFAULTS.checkMinK,
-        checkMax: MANDATE_DEFAULTS.checkMaxK,
-        minMrr: MANDATE_DEFAULTS.minMrr,
-        minMomGrowth: MANDATE_DEFAULTS.minMomGrowth,
-        maxBurnMultiple: MANDATE_DEFAULTS.maxBurnMultiple,
-        minRunway: MANDATE_DEFAULTS.minRunway,
-        maxValMultiple: MANDATE_DEFAULTS.maxValMultiple,
-        holdPeriod: MANDATE_DEFAULTS.holdPeriod,
-        targetReturn: MANDATE_DEFAULTS.targetReturn,
-        specialNotes: MANDATE_DEFAULTS.specialNotes,
-        mandateSectorLabels: [...MANDATE_DEFAULTS.mandateSectorLabels],
-        mandateGeoLabels: [...MANDATE_DEFAULTS.mandateGeoLabels],
-        mustHaves: [...MANDATE_DEFAULTS.mustHaves],
-        dealBreakers: [...MANDATE_DEFAULTS.dealBreakers],
-        investmentStages: [...MANDATE_DEFAULTS.investmentStages],
-        esgCriteria: [...MANDATE_DEFAULTS.esgCriteria],
-      },
-      weights: {
-        framework: {
-          categories: FRAMEWORK_DEFAULTS.map((cat) => ({ ...cat, criteria: cat.criteria.map((c) => ({ ...c })) })),
-        },
-      },
-    });
+  const handleResetToDefaults = async () => {
+    // The legacy trpc.investmentProfile.upsert write used to run here
+    // alongside resetMandateMutation, both wrapped in one Promise.all — since
+    // it 404s unconditionally (no Express/tRPC server exists anymore, and no
+    // write endpoint was ever ported to FastAPI, same as
+    // EditableMandateBlock.doSave), Promise.all failed the *entire* reset
+    // even when resetMandateMutation (the real PUT /mandate reset-to-empty
+    // call, below) succeeded. It's removed entirely rather than patched: the
+    // checkMin/checkMax/minMrr/minMomGrowth/maxBurnMultiple/minRunway/
+    // maxValMultiple reset values and the Scoring Framework weights reset
+    // (FRAMEWORK_DEFAULTS) it used to carry have no persistence path right
+    // now — same fields called out in EditableMandateBlock.doSave, and this
+    // call never actually succeeded here before either, since it 404s the
+    // same way.
+    try {
+      // Clears the mandates table — without this, "Reset to Defaults" would
+      // leave every category chip in place (plan Phase 3).
+      await resetMandateMutation.mutateAsync([]);
+      await queryClient.invalidateQueries({ queryKey: MANDATE_QUERY_KEY });
+      toast.success("Reset to defaults.");
+      setShowResetModal(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to reset.");
+    }
   };
 
   return (
@@ -171,6 +174,10 @@ export default function MandateScorecard({ section }: Props) {
             onOpenHistory={() => setHistoryOpen(true)}
             onSave={handleSaveConfiguration}
             onReset={() => setShowResetModal(true)}
+            saveDisabled={saveDisabled}
+            saveDisabledReason={saveDisabledReason}
+            resetDisabled={resetDisabled}
+            resetDisabledReason={resetDisabledReason}
             firm={profile?.firmName ?? undefined}
             aum={aum}
           />
@@ -233,13 +240,13 @@ export default function MandateScorecard({ section }: Props) {
               // when active.
               <>
                 <div style={{ display: active === "firm" ? undefined : "none" }}>
-                  <FirmProfileBlock profile={profile} saveRef={firmSaveRef} onStateChange={setFirmState} />
+                  <FirmProfileBlock profile={profile} onStateChange={setFirmState} />
                 </div>
                 <div style={{ display: active === "mandate" ? undefined : "none" }}>
                   <EditableMandateBlock profile={profile} saveRef={mandateSaveRef} onStateChange={setMandateState} />
                 </div>
                 <div style={{ display: active === "framework" ? undefined : "none" }}>
-                  <EditableFrameworkBlock profile={profile} saveRef={frameworkSaveRef} onStateChange={setFrameworkState} />
+                  <EditableFrameworkBlock profile={profile} onStateChange={setFrameworkState} />
                 </div>
                 {active === "scorecard" && (
                   <DealScorecardTab profile={profile} dealId={dealId} onDealIdChange={setDealId} />
@@ -268,21 +275,21 @@ export default function MandateScorecard({ section }: Props) {
               <h3 className="text-gray-900 font-semibold">Reset to Defaults?</h3>
             </div>
             <p className="text-sm text-gray-500 mb-5 leading-relaxed">
-              This will reset all mandate settings and scoring framework to the default configuration. Any custom changes will be lost.
+              This will reset your mandate to the default configuration. Any custom changes will be lost.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowResetModal(false)}
-                className="flex-1 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition"
+                className="flex-1 py-2 rounded-lg border border-gray-300 text-center text-sm text-gray-700 hover:bg-gray-50 transition"
               >
                 Cancel
               </button>
               <button
                 onClick={handleResetToDefaults}
-                disabled={resetMutation.isPending}
-                className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-sm text-white font-medium transition disabled:opacity-60"
+                disabled={resetMandateMutation.isPending}
+                className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-center text-sm text-white font-medium transition disabled:opacity-60"
               >
-                {resetMutation.isPending ? "Resetting…" : "Reset"}
+                {resetMandateMutation.isPending ? "Resetting…" : "Reset"}
               </button>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { Redirect, Route, Switch } from "wouter";
 import AdminGuard from "./components/AdminGuard";
 import AdminHome from "./pages/AdminHome";
 import Invitations from "./pages/Invitations";
+import MandateTaxonomy from "./pages/MandateTaxonomy";
 import Members from "./pages/Members";
 import OrgDetail from "./pages/OrgDetail";
 import Organizations from "./pages/Organizations";
@@ -17,6 +18,7 @@ export default function AdminApp() {
         <Route path="/" component={AdminHome} />
         <Route path="/organizations" component={Organizations} />
         <Route path="/organizations/:orgId" component={OrgDetail} />
+        <Route path="/mandate-taxonomy" component={MandateTaxonomy} />
         <Route path="/members" component={Members} />
         <Route path="/invitations" component={Invitations} />
         <Route>

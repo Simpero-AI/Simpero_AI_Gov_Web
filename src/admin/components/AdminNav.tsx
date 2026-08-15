@@ -1,4 +1,4 @@
-import { Building2, Mail, Users } from "lucide-react";
+import { Building2, ListChecks, Mail, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ function navItemsFor(isPlatformAdmin: boolean, isOrgAdmin: boolean): NavItem[] {
   const items: NavItem[] = [];
   if (isPlatformAdmin) {
     items.push({ href: "/organizations", label: "Organizations", icon: Building2 });
+    items.push({ href: "/mandate-taxonomy", label: "Mandate Taxonomy", icon: ListChecks });
   }
   if (isOrgAdmin) {
     items.push({ href: "/members", label: "Members", icon: Users });
