@@ -22,42 +22,34 @@ vi.mock("@/_core/hooks/useAuth", () => ({
   }),
 }));
 
-const { upsertMutateSpy, frameworkSaveSpy, mandateSaveSpy } = vi.hoisted(() => ({
-  upsertMutateSpy: vi.fn(),
-  frameworkSaveSpy: vi.fn(),
+const { mandateSaveSpy } = vi.hoisted(() => ({
   mandateSaveSpy: vi.fn(),
 }));
 
-// The upsert mutation still lives on the legacy tRPC client — mock it
-// wholesale. FirmProfileBlock is left un-mocked (real component) so the
-// always-mounted/save-all mechanism under test here drives real typed
-// state and a real save call.
-vi.mock("@/lib/trpc", () => ({
-  trpc: {
-    useUtils: () => ({ investmentProfile: { get: { invalidate: vi.fn() } } }),
-    investmentProfile: { upsert: { useMutation: () => ({ mutate: upsertMutateSpy, isPending: false }) } },
-  },
-}));
-
-// Stand in for the other two always-mounted sections — their own
-// dirty-tracking/save wiring is covered by FirmProfileBlock.test.tsx (same
-// shape, per plan Phase 7 §3); here only MandateScorecard's own
-// mount-persistence and save-all fan-out are under test.
+// Mandate Builder is the only tab with a working save path — Firm Profile
+// and Scoring Framework have no persistence path at all (see their own
+// no-save comments) and no longer accept a saveRef prop. FirmProfileBlock
+// is left un-mocked (real component) for the tab-persistence test below;
+// EditableFrameworkBlock is a plain stub. EditableMandateBlock's mock fires
+// onStateChange({dirty: true}) on mount so its tab's Save button is
+// exercisable without needing a real edit interaction.
 vi.mock("@/components/mvp/mandate/EditableMandateBlock", () => ({
-  EditableMandateBlock: ({ saveRef }: { saveRef?: React.MutableRefObject<(() => void) | null> }) => {
+  EditableMandateBlock: ({
+    saveRef,
+    onStateChange,
+  }: {
+    saveRef?: React.MutableRefObject<(() => void) | null>;
+    onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
+  }) => {
     useEffect(() => {
       if (saveRef) saveRef.current = mandateSaveSpy;
-    }, [saveRef]);
+      onStateChange?.({ dirty: true, saving: false });
+    }, [saveRef, onStateChange]);
     return <div data-testid="mandate-block-stub" />;
   },
 }));
 vi.mock("@/components/mvp/mandate/EditableFrameworkBlock", () => ({
-  EditableFrameworkBlock: ({ saveRef }: { saveRef?: React.MutableRefObject<(() => void) | null> }) => {
-    useEffect(() => {
-      if (saveRef) saveRef.current = frameworkSaveSpy;
-    }, [saveRef]);
-    return <div data-testid="framework-block-stub" />;
-  },
+  EditableFrameworkBlock: () => <div data-testid="framework-block-stub" />,
 }));
 
 // jsdom doesn't implement Element.scrollTo — MvpAppShell calls it on every
@@ -101,17 +93,52 @@ describe("MandateScorecard — always-mounted sections", () => {
     expect(screen.getByPlaceholderText("e.g. Vistara Growth Partners")).toHaveValue("Acme Test Capital");
   });
 
-  it("save-all triggers all three section save refs, including firm's real upsert mutation", async () => {
+  it("save on the active tab only triggers that tab's save ref", async () => {
     vi.mocked(fetchInvestmentProfile).mockResolvedValue(null);
-    renderMandateScorecard("firm");
+    renderMandateScorecard("mandate");
 
-    await screen.findByPlaceholderText("e.g. Vistara Growth Partners");
+    await screen.findByTestId("mandate-block-stub");
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /save configuration/i }));
     });
 
-    expect(upsertMutateSpy).toHaveBeenCalledTimes(1);
     expect(mandateSaveSpy).toHaveBeenCalledTimes(1);
-    expect(frameworkSaveSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables Save (with an explanatory title) on Firm Profile and Scoring Framework tabs, which have no persistence path", async () => {
+    vi.mocked(fetchInvestmentProfile).mockResolvedValue(null);
+
+    // `section` is a literal render-time prop in this harness (real routing
+    // supplies it via a `:section` route param, not exercised here) — a
+    // fresh render per tab is how these tests switch tabs, not a Link click.
+    const { unmount: unmountFirm } = renderMandateScorecard("firm");
+    const saveOnFirm = await screen.findByRole("button", { name: /save configuration/i });
+    expect(saveOnFirm).toBeDisabled();
+    expect(saveOnFirm).toHaveAttribute("title", "Saving isn't available for Firm Profile yet");
+    unmountFirm();
+
+    renderMandateScorecard("framework");
+    const saveOnFramework = await screen.findByRole("button", { name: /save configuration/i });
+    expect(saveOnFramework).toBeDisabled();
+    expect(saveOnFramework).toHaveAttribute("title", "Saving isn't available for Scoring Framework yet");
+
+    // Neither tab has a save ref to fire — clicking (were it not disabled)
+    // must never reach Mandate Builder's save.
+    expect(mandateSaveSpy).not.toHaveBeenCalled();
+  });
+
+  it("disables Reset (with an explanatory title) on every tab except Mandate Builder", async () => {
+    vi.mocked(fetchInvestmentProfile).mockResolvedValue(null);
+
+    const { unmount: unmountFirm } = renderMandateScorecard("firm");
+    const resetOnFirm = await screen.findByRole("button", { name: "Reset to defaults" });
+    expect(resetOnFirm).toBeDisabled();
+    expect(resetOnFirm).toHaveAttribute("title", "Reset is only available for Mandate Builder");
+    unmountFirm();
+
+    renderMandateScorecard("mandate");
+    const resetOnMandate = await screen.findByRole("button", { name: "Reset to defaults" });
+    expect(resetOnMandate).not.toBeDisabled();
+    expect(resetOnMandate).toHaveAttribute("title", "Reset to defaults");
   });
 });

@@ -119,6 +119,15 @@ interface MandateMetaProps {
    * icon buttons instead of the old page-header buttons. */
   onSave: () => void;
   onReset: () => void;
+  /** Force-disables Save regardless of `saveState`, with `saveDisabledReason`
+   * shown as the button's tooltip — used when the page's active section has
+   * no working persistence path at all. Kept generic (no page/tab names
+   * baked in here) so this shell component stays reusable. */
+  saveDisabled?: boolean;
+  saveDisabledReason?: string;
+  /** Same shape as the Save pair above, for Reset. */
+  resetDisabled?: boolean;
+  resetDisabledReason?: string;
   firm?: string;
   aum?: string;
 }
@@ -128,7 +137,9 @@ interface MandateMetaProps {
  * mirroring the mockup's single-row layout (docs/plans/2026-08-12-web-
  * design-revamp.md Phase 7).
  */
-const MandateMeta: SlotComponent<MandateMetaProps> = ({ saveState, onOpenHistory, onSave, onReset, firm, aum }) => {
+const MandateMeta: SlotComponent<MandateMetaProps> = ({
+  saveState, onOpenHistory, onSave, onReset, saveDisabled, saveDisabledReason, resetDisabled, resetDisabledReason, firm, aum,
+}) => {
   const cfg = SAVE_STATE_CONFIG[saveState];
   return (
     <div className="flex items-center gap-2.5">
@@ -150,8 +161,9 @@ const MandateMeta: SlotComponent<MandateMetaProps> = ({ saveState, onOpenHistory
         type="button"
         onClick={onReset}
         aria-label="Reset to defaults"
-        title="Reset to defaults"
-        className="flex items-center rounded-md p-1 text-[color:var(--rev-text-5)] hover:bg-[color:var(--rev-tint-neutral)] hover:text-[color:var(--rev-text-2)]"
+        title={resetDisabled && resetDisabledReason ? resetDisabledReason : "Reset to defaults"}
+        disabled={resetDisabled}
+        className="flex items-center rounded-md p-1 text-[color:var(--rev-text-5)] hover:bg-[color:var(--rev-tint-neutral)] hover:text-[color:var(--rev-text-2)] disabled:opacity-40 disabled:pointer-events-none"
       >
         <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
@@ -159,8 +171,8 @@ const MandateMeta: SlotComponent<MandateMetaProps> = ({ saveState, onOpenHistory
         type="button"
         onClick={onSave}
         aria-label="Save configuration"
-        title="Save configuration"
-        disabled={saveState === "saving"}
+        title={saveDisabled && saveDisabledReason ? saveDisabledReason : "Save configuration"}
+        disabled={saveDisabled || saveState !== "unsaved"}
         className="flex items-center gap-1 rounded-md bg-[color:var(--rev-primary)] px-2 py-1 font-mono text-[11px] font-medium text-white transition hover:opacity-90 disabled:opacity-60"
       >
         <Save className="h-3 w-3" aria-hidden="true" />

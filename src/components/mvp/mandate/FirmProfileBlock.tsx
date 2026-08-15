@@ -1,18 +1,14 @@
-import type React from "react";
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { trpc } from "@/lib/trpc";
-import { INVESTMENT_PROFILE_QUERY_KEY } from "@/api/investmentProfile";
-import { toast } from "@/components/mvp/primitives/sonner";
+import { useState, useEffect, useRef } from "react";
 import { Textarea } from "@/components/mvp/primitives/textarea";
 import { MANDATE_DEFAULTS, type InvestmentProfile } from "@/data/mandateDefaults";
 import { SimperoMarkIcon } from "@/components/mvp/icons";
 
 interface Props {
   profile: InvestmentProfile | null;
-  saveRef?: React.MutableRefObject<(() => void) | null>;
-  /** Fires whenever local dirty/saving state changes — lets the page-level
-   * topbar show a real save-status indicator instead of a fabricated one. */
+  /** Fires whenever local dirty state changes — lets the page-level topbar
+   * show a real save-status indicator instead of a fabricated one. `saving`
+   * is always false: this block has no persistence path (see the no-save
+   * comment below). */
   onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
 }
 
@@ -26,23 +22,17 @@ const inp =
 const lbl =
   "block font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[color:var(--rev-text-6)] mb-1.5";
 
-export function FirmProfileBlock({ profile, saveRef, onStateChange }: Props) {
-  const utils = trpc.useUtils();
-  const queryClient = useQueryClient();
+export function FirmProfileBlock({ profile, onStateChange }: Props) {
   const [isDirty, setIsDirty] = useState(false);
-  const upsertMutation = trpc.investmentProfile.upsert.useMutation({
-    onSuccess: async () => {
-      // Invalidate both caches: the trpc-backed write still lives here, but
-      // readers (MandateScorecard, MvpFundSelector) migrated to apiFetch.
-      await Promise.all([
-        utils.investmentProfile.get.invalidate(),
-        queryClient.invalidateQueries({ queryKey: INVESTMENT_PROFILE_QUERY_KEY }),
-      ]);
-      setIsDirty(false);
-      toast.success("Firm profile saved.");
-    },
-    onError: (err) => toast.error(err.message),
-  });
+  // No persistence path: this block used to call
+  // trpc.investmentProfile.upsert.useMutation() to save, but that endpoint
+  // 404s unconditionally — the Express/tRPC server it lived on was removed
+  // with the FastAPI migration and no write endpoint for firm-profile
+  // fields was ever ported (confirmed live: POST
+  // /api/trpc/investmentProfile.upsert?batch=1 → 404). Fields below stay
+  // fully editable (local state + dirty tracking only); Save is disabled
+  // for this tab in MandateScorecard's topbar instead of attempting a call
+  // that can never succeed.
 
   const hydratedRef = useRef<string | null>(null);
 
@@ -67,20 +57,9 @@ export function FirmProfileBlock({ profile, saveRef, onStateChange }: Props) {
     setIsDirty(false);
   }, [profile]);
 
-  const doSave = useCallback(() => {
-    upsertMutation.mutate({
-      firmName: firmName.trim() || null,
-      mandate: { firmTypeFreeText: firmType, aum, fundVintage, hqLocation, investmentThesis },
-    });
-  }, [firmName, firmType, aum, fundVintage, hqLocation, investmentThesis, upsertMutation]);
-
   useEffect(() => {
-    if (saveRef) saveRef.current = doSave;
-  }, [saveRef, doSave]);
-
-  useEffect(() => {
-    onStateChange?.({ dirty: isDirty, saving: upsertMutation.isPending });
-  }, [isDirty, upsertMutation.isPending, onStateChange]);
+    onStateChange?.({ dirty: isDirty, saving: false });
+  }, [isDirty, onStateChange]);
 
   const m = profile?.mandate ?? {};
   // checkSize is now stored as numeric checkMin/checkMax (see EditableMandateBlock) —
@@ -88,8 +67,9 @@ export function FirmProfileBlock({ profile, saveRef, onStateChange }: Props) {
   const checkMin = typeof m.checkMin === "number" ? m.checkMin : MANDATE_DEFAULTS.checkMinK;
   const checkMax = typeof m.checkMax === "number" ? m.checkMax : MANDATE_DEFAULTS.checkMaxK;
   const checkSize = `$${checkMin}K–$${checkMax}K`;
-  const targetReturn = getStr(m, "targetReturn", MANDATE_DEFAULTS.targetReturn);
-  const holdPeriod = getStr(m, "holdPeriod", MANDATE_DEFAULTS.holdPeriod);
+  // No fabricated fallback (§7 Q2) — both default to "" and render as "—" below.
+  const targetReturn = getStr(m, "targetReturn");
+  const holdPeriod = getStr(m, "holdPeriod");
 
   return (
     <div className="space-y-4">
@@ -167,11 +147,11 @@ export function FirmProfileBlock({ profile, saveRef, onStateChange }: Props) {
           </div>
           <div>
             <p className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.05em] text-[#7F8B98]">Target Return</p>
-            <p className="text-sm font-semibold text-white">{targetReturn}</p>
+            <p className="text-sm font-semibold text-white">{targetReturn || "—"}</p>
           </div>
           <div>
             <p className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.05em] text-[#7F8B98]">Hold Period</p>
-            <p className="text-sm font-semibold text-white">{holdPeriod}</p>
+            <p className="text-sm font-semibold text-white">{holdPeriod || "—"}</p>
           </div>
         </div>
       </div>

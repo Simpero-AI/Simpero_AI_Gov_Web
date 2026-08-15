@@ -74,3 +74,25 @@ export interface CreateInviteBody {
 export interface UpdateRoleBody {
   role: "member" | "admin";
 }
+
+// Mandate taxonomy (GET/POST/PATCH/DELETE /admin/mandates/...). The admin
+// option shape carries `categoryId`; the product-side one
+// (src/api/mandate.ts) doesn't — kept as separate types per the
+// admin/product boundary rule, not shared.
+// Recursive — `subOptions` is always present on the admin wire (unlike the
+// product-side MandateOptionNode, where it's optional for pre-migration
+// backend tolerance). One level of nesting is all the UI renders (D7 of the
+// sub-options plan), but the type itself is unbounded, matching the backend.
+export interface AdminMandateOption {
+  id: string;
+  categoryId: string;
+  option: string;
+  parentOptionId: string | null;
+  subOptions: AdminMandateOption[];
+}
+
+export interface AdminMandateCategory {
+  id: string;
+  category: string;
+  options: AdminMandateOption[];
+}

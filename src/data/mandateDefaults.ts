@@ -28,84 +28,14 @@ export const MANDATE_DEFAULTS = {
   checkMaxK: 100,
   // Financial Thresholds — mockup's 5 numeric fields (mtBuilder block), replacing
   // the old free-text Revenue Band/EBITDA/Gross Margin/Ownership/Max Entry
-  // Valuation fields (still expressed elsewhere; see holdPeriod/targetReturn below).
+  // Valuation fields. Card is currently commented out in EditableMandateBlock.tsx
+  // (D3, revised) but these numbers still feed its save payload.
   minMrr: 500, // $K
   minMomGrowth: 8, // %MoM
   maxBurnMultiple: 2, // ×
   minRunway: 12, // months
   maxValMultiple: 8, // ×ARR
-  // holdPeriod/targetReturn aren't in the mockup's Financial Thresholds card, but
-  // are read by FirmProfileBlock's Firm Summary card, Deals.tsx, and
-  // MandateBanner.tsx — kept as real editable fields (see EditableMandateBlock).
-  holdPeriod: "4–6 years",
-  targetReturn: "3–5× MoIC / 25%+ IRR",
-  mandateSectorLabels: ["B2B SaaS", "FinTech Infra", "HealthTech SaaS"],
-  mandateGeoLabels: ["United States", "Canada"],
-  mustHaves: [
-    "ARR ≥ $10M with ≥ 25% YoY organic growth",
-    "Software gross margins ≥ 70%",
-    "Net Revenue Retention ≥ 110%",
-    "Capital-efficient: CAC payback ≤ 24 months",
-    "Clear line of sight to Rule of 40 within 24 months",
-    "Defensible product moat in a vertical or workflow niche",
-    "Founder/CEO with demonstrated execution and scaling experience",
-  ],
-  dealBreakers: [
-    "Early-stage / pre-revenue or ARR < $5M",
-    "Consumer-facing or hardware-dependent business models",
-    "Gross margins < 50% (services-heavy disguised as SaaS)",
-    "Burn multiple > 3× with no path to efficiency",
-    "Top customer > 25% of ARR (concentration risk)",
-    "Regulated verticals: cannabis, gambling, crypto-native, defense",
-    "Founder unwilling to accept minority structured capital terms",
-  ],
-  investmentStages: ["Growth Stage", "Series C+", "Pre-IPO", "Founder-Led"],
-  esgCriteria: [
-    "Data privacy & SOC 2 Type II (or roadmap within 12 months)",
-    "Diverse hiring practices and reporting",
-    "Responsible AI / data usage policy where applicable",
-    "No exposure to fossil fuel extraction or controversial weapons",
-  ],
-  specialNotes: "Vistara focus: capital-efficient B2B SaaS with a clear path to profitability. Prefer companies where Vistara growth credit + equity structure is the primary capital raise.",
 } as const;
-
-/** Preset option lists for the mandate builder's chip-adding dropdowns
- * (TagField in EditableMandateBlock.tsx) — sourced verbatim from the source
- * mockup's STAGE_PRESETS / GEOGRAPHY_PRESETS / SECTOR_PRESETS. */
-export const STAGE_PRESETS = [
-  "Pre-Seed", "Seed", "Series A", "Series B", "Series C+", "Venture Growth",
-  "Growth Equity", "Buyout", "Leveraged Buyout", "Founder-Led / Family Business",
-  "Succession Transition", "Direct Co-Investment", "Recapitalization",
-  "Turnaround / Special Situations",
-] as const;
-
-export const GEOGRAPHY_PRESETS = [
-  "United States", "Canada", "United Kingdom", "Ireland", "Germany", "France",
-  "Switzerland", "Netherlands", "Nordics", "DACH", "Western Europe",
-  "Eastern Europe", "Australia", "New Zealand", "Singapore", "Japan", "India",
-  "Latin America", "Middle East", "Global / No Preference",
-] as const;
-
-export const SECTOR_PRESETS = [
-  "B2B Software / SaaS", "Consumer Internet", "Healthcare Services & MedTech",
-  "Financial Services Tech", "Specialty Manufacturing", "Real Asset Technology",
-  "Professional Services", "Industrials", "Energy & Infrastructure",
-  "Consumer & Retail", "Education", "Media & Entertainment",
-  "Logistics & Supply Chain", "Business Services",
-] as const;
-
-export const DEALTYPE_PRESETS = [
-  "Minority Preferred Equity", "Majority Buyout", "Growth Equity",
-  "Structured Credit", "Mezzanine Debt", "Senior Debt", "Co-investment",
-  "Succession Buy-out", "Recapitalization", "Carve-out", "PIPE",
-  "Secondary Purchase",
-] as const;
-
-export const ASSETCLASS_PRESETS = [
-  "Direct Private Equity", "Venture Capital", "Growth Capital", "Real Estate",
-  "Real Assets / Infrastructure", "Co-Investment / Club Deals",
-  "Private Credit", "Fund Commitments", "Secondaries",
-] as const;
 
 export const FRAMEWORK_DEFAULTS: FrameworkCategory[] = [
   {

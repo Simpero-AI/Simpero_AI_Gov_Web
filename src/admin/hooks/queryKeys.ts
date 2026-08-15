@@ -6,4 +6,5 @@ export const adminKeys = {
   invitations: ["admin", "invitations"] as const,
   members: ["admin", "members"] as const,
   orgMembers: (clerkOrgId: string) => ["admin", "organizations", clerkOrgId, "members"] as const,
+  mandateCategories: ["admin", "mandateCategories"] as const,
 };
