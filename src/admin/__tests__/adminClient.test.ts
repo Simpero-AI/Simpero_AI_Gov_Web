@@ -162,7 +162,9 @@ describe("adminClient", () => {
   });
 
   it("listMembers GETs /api/admin/members", async () => {
-    const members = [{ id: 1, clerkUserId: "u_1", email: "a@b.com", name: "A", role: "member" }];
+    const members = [
+      { id: "mem_1", userId: "u_1", email: "a@b.com", name: "A", role: "member", status: "active" },
+    ];
     mockedApiFetch.mockResolvedValue(okResponse(members));
 
     const result = await adminClient.listMembers();
@@ -176,17 +178,17 @@ describe("adminClient", () => {
     await expect(adminClient.listMembers()).rejects.toThrow(/500/);
   });
 
-  it("removeMember DELETEs /api/admin/members/{userId} (int) and returns void", async () => {
+  it("removeMember DELETEs /api/admin/members/{clerkUserId} and returns void", async () => {
     mockedApiFetch.mockResolvedValue(okResponse(null));
 
-    const result = await adminClient.removeMember(7);
+    const result = await adminClient.removeMember("u_1");
 
-    expect(mockedApiFetch).toHaveBeenCalledWith("/api/admin/members/7", { method: "DELETE" });
+    expect(mockedApiFetch).toHaveBeenCalledWith("/api/admin/members/u_1", { method: "DELETE" });
     expect(result).toBeUndefined();
   });
 
   it("removeMember throws on non-ok response", async () => {
     mockedApiFetch.mockResolvedValue(errResponse(403));
-    await expect(adminClient.removeMember(7)).rejects.toThrow(/403/);
+    await expect(adminClient.removeMember("u_1")).rejects.toThrow(/403/);
   });
 });

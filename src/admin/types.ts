@@ -31,20 +31,10 @@ export interface OrganizationCreated extends Organization {
   invitation: Invitation | null;
 }
 
-export interface Member {
-  id: number;
-  clerkUserId: string;
-  email: string | null;
-  name: string | null;
-  role: string;
-  status: "active" | "inactive";
-}
-
-// Platform-admin cross-org member view (GET
-// /admin/organizations/{clerkOrgId}/members) — sourced directly from Clerk,
-// not the local RLS-scoped `users` table. `id` is the Clerk org membership
-// id, not a local users.id — distinct from Member above, whose int id backs
-// the org-admin's own-org DELETE /members/{userId}.
+// Member view, sourced live from Clerk (merged with locally soft-deleted
+// rows) — shared shape for both GET /admin/members (own org) and GET
+// /admin/organizations/{clerkOrgId}/members (platform, arbitrary org). `id`
+// is the Clerk org membership id; `userId` is the Clerk user id.
 export interface OrgMember {
   id: string;
   userId: string;

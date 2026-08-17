@@ -87,8 +87,8 @@ describe("Members page", () => {
   it("renders populated rows and the org name from context", async () => {
     mockedListMembers.mockResolvedValue([
       {
-        id: 1,
-        clerkUserId: "u_1",
+        id: "mem_1",
+        userId: "user_1",
         email: "jane@acme.com",
         name: "Jane Doe",
         role: "member",
@@ -104,8 +104,8 @@ describe("Members page", () => {
   it("removes a member after confirm, invalidates the list, and toasts", async () => {
     mockedListMembers.mockResolvedValue([
       {
-        id: 1,
-        clerkUserId: "u_1",
+        id: "mem_1",
+        userId: "user_1",
         email: "jane@acme.com",
         name: "Jane Doe",
         role: "member",
@@ -122,7 +122,7 @@ describe("Members page", () => {
       Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Remove")!
     );
 
-    await waitFor(() => expect(mockedRemoveMember).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(mockedRemoveMember).toHaveBeenCalledWith("user_1"));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Member removed"));
     await waitFor(() => expect(mockedListMembers).toHaveBeenCalledTimes(2));
   });
@@ -130,16 +130,16 @@ describe("Members page", () => {
   it("disables Remove and the role control on the signed-in admin's own row", async () => {
     mockedListMembers.mockResolvedValue([
       {
-        id: 1,
-        clerkUserId: "u_current",
+        id: "mem_1",
+        userId: "u_current",
         email: "me@acme.com",
         name: "Me",
         role: "admin",
         status: "active",
       },
       {
-        id: 2,
-        clerkUserId: "u_1",
+        id: "mem_2",
+        userId: "user_1",
         email: "jane@acme.com",
         name: "Jane Doe",
         role: "member",
@@ -161,16 +161,16 @@ describe("Members page", () => {
   it("changes a non-self member's role, invalidates the list, and toasts", async () => {
     mockedListMembers.mockResolvedValue([
       {
-        id: 1,
-        clerkUserId: "u_current",
+        id: "mem_1",
+        userId: "u_current",
         email: "me@acme.com",
         name: "Me",
         role: "admin",
         status: "active",
       },
       {
-        id: 2,
-        clerkUserId: "u_1",
+        id: "mem_2",
+        userId: "user_1",
         email: "jane@acme.com",
         name: "Jane Doe",
         role: "member",
@@ -178,8 +178,8 @@ describe("Members page", () => {
       },
     ]);
     mockedUpdateMemberRole.mockResolvedValue({
-      id: 2,
-      clerkUserId: "u_1",
+      id: "mem_2",
+      userId: "user_1",
       email: "jane@acme.com",
       name: "Jane Doe",
       role: "admin",
@@ -193,7 +193,9 @@ describe("Members page", () => {
     await user.click(within(otherRow).getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "admin" }));
 
-    await waitFor(() => expect(mockedUpdateMemberRole).toHaveBeenCalledWith(2, { role: "admin" }));
+    await waitFor(() =>
+      expect(mockedUpdateMemberRole).toHaveBeenCalledWith("user_1", { role: "admin" })
+    );
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Role updated"));
     await waitFor(() => expect(mockedListMembers).toHaveBeenCalledTimes(2));
   });
@@ -201,16 +203,16 @@ describe("Members page", () => {
   it("sorts active members before inactive, renders Status badges, disables controls on inactive rows, and resends an invite", async () => {
     mockedListMembers.mockResolvedValue([
       {
-        id: 1,
-        clerkUserId: "u_1",
+        id: "mem_1",
+        userId: "user_1",
         email: "inactive@acme.com",
         name: "Inactive Person",
         role: "member",
         status: "inactive",
       },
       {
-        id: 2,
-        clerkUserId: "u_2",
+        id: "mem_2",
+        userId: "user_2",
         email: "jane@acme.com",
         name: "Jane Doe",
         role: "member",

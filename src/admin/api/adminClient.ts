@@ -7,7 +7,6 @@ import type {
   Organization,
   OrganizationCreated,
   Invitation,
-  Member,
   OrgMember,
   CreateOrgBody,
   CreateInviteBody,
@@ -104,25 +103,28 @@ export async function revokeInvitation(id: string): Promise<void> {
   if (!res.ok) throw new Error(`DELETE /admin/invitations/${id} failed: ${res.status}`);
 }
 
-export async function listMembers(): Promise<Member[]> {
+export async function listMembers(): Promise<OrgMember[]> {
   const res = await apiFetch("/api/admin/members");
   if (!res.ok) throw new Error(`GET /admin/members failed: ${res.status}`);
-  return (await res.json()) as Member[];
+  return (await res.json()) as OrgMember[];
 }
 
-export async function removeMember(userId: number): Promise<void> {
-  const res = await apiFetch(`/api/admin/members/${userId}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(`DELETE /admin/members/${userId} failed: ${res.status}`);
+export async function removeMember(clerkUserId: string): Promise<void> {
+  const res = await apiFetch(`/api/admin/members/${clerkUserId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`DELETE /admin/members/${clerkUserId} failed: ${res.status}`);
 }
 
-export async function updateMemberRole(userId: number, body: UpdateRoleBody): Promise<Member> {
-  const res = await apiFetch(`/api/admin/members/${userId}`, {
+export async function updateMemberRole(
+  clerkUserId: string,
+  body: UpdateRoleBody
+): Promise<OrgMember> {
+  const res = await apiFetch(`/api/admin/members/${clerkUserId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`PATCH /admin/members/${userId} failed: ${res.status}`);
-  return (await res.json()) as Member;
+  if (!res.ok) throw new Error(`PATCH /admin/members/${clerkUserId} failed: ${res.status}`);
+  return (await res.json()) as OrgMember;
 }
 
 /** Platform-guarded; clerkUserId is OrgMember.userId (Clerk user id), not OrgMember.id. */

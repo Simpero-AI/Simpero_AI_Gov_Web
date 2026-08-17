@@ -19,7 +19,7 @@ export function useRemoveMemberMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (userId: number) => removeMember(userId),
+    mutationFn: (clerkUserId: string) => removeMember(clerkUserId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.members });
       toast.success("Member removed");
@@ -34,8 +34,8 @@ export function useUpdateMemberRoleMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ userId, role }: { userId: number; role: "member" | "admin" }) =>
-      updateMemberRole(userId, { role }),
+    mutationFn: ({ clerkUserId, role }: { clerkUserId: string; role: "member" | "admin" }) =>
+      updateMemberRole(clerkUserId, { role }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.members });
       toast.success("Role updated");

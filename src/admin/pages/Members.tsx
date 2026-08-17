@@ -26,7 +26,7 @@ import {
   useRemoveMemberMutation,
   useUpdateMemberRoleMutation,
 } from "../hooks/useMembers";
-import type { Member } from "../types";
+import type { OrgMember } from "../types";
 
 export default function Members() {
   const { context } = useAdminContext();
@@ -35,7 +35,7 @@ export default function Members() {
   const removeMutation = useRemoveMemberMutation();
   const updateRoleMutation = useUpdateMemberRoleMutation();
   const inviteMutation = useCreateInvitationMutation();
-  const [pendingRemove, setPendingRemove] = useState<Member | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<OrgMember | null>(null);
   // Active first, inactive last — stable sort keeps original ordering within each group.
   const members = [...(data ?? [])].sort((a, b) =>
     a.status === b.status ? 0 : a.status === "active" ? -1 : 1
@@ -43,7 +43,7 @@ export default function Members() {
 
   function handleConfirm() {
     if (!pendingRemove) return;
-    removeMutation.mutate(pendingRemove.id, { onSuccess: () => setPendingRemove(null) });
+    removeMutation.mutate(pendingRemove.userId, { onSuccess: () => setPendingRemove(null) });
   }
 
   return (
@@ -76,11 +76,11 @@ export default function Members() {
             </TableHeader>
             <TableBody>
               {members.map((member) => {
-                const isSelf = member.clerkUserId === user?.id;
+                const isSelf = member.userId === user?.id;
                 const isInactive = member.status === "inactive";
                 const isRoleUpdating =
                   updateRoleMutation.isPending &&
-                  updateRoleMutation.variables?.userId === member.id;
+                  updateRoleMutation.variables?.clerkUserId === member.userId;
                 const isInviting =
                   inviteMutation.isPending &&
                   inviteMutation.variables?.emailAddress === member.email;
@@ -94,7 +94,7 @@ export default function Members() {
                         disabled={isSelf || isRoleUpdating || isInactive}
                         onValueChange={(role) =>
                           updateRoleMutation.mutate({
-                            userId: member.id,
+                            clerkUserId: member.userId,
                             role: role as "member" | "admin",
                           })
                         }
@@ -126,7 +126,8 @@ export default function Members() {
                           disabled={
                             isSelf ||
                             isInactive ||
-                            (removeMutation.isPending && removeMutation.variables === member.id)
+                            (removeMutation.isPending &&
+                              removeMutation.variables === member.userId)
                           }
                           title={isSelf ? "You cannot remove yourself" : undefined}
                           onClick={() => setPendingRemove(member)}
