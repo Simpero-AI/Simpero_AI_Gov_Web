@@ -88,7 +88,7 @@ export function MandateFitPanel({ fit, className }: MandateFitPanelProps) {
           Investment Fit
         </div>
         {fit.fitCriteria.map((c) => (
-          <CriterionRow key={c.label} criterion={c} />
+          <CriterionRow key={c.id ?? c.label} criterion={c} />
         ))}
       </div>
 
@@ -97,7 +97,7 @@ export function MandateFitPanel({ fit, className }: MandateFitPanelProps) {
           Deal Breakers
         </div>
         {fit.thresholdCriteria.map((c) => (
-          <CriterionRow key={c.label} criterion={c} />
+          <CriterionRow key={c.id ?? c.label} criterion={c} />
         ))}
       </div>
     </div>

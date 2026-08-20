@@ -7,20 +7,16 @@ import type {
 } from "@/components/mvp/screening/types";
 
 /**
- * A deal-breaker's tone is inverted vs a green-signal's: a met green signal is
- * a pass, but a tripped deal-breaker is a fail. `kind` comes from the backend
- * (joined from the rulebook); fall back to the rule-id prefix if it is absent.
+ * Tone from the verdict + the rule's `kind` (authoritative, joined from the
+ * rulebook on the backend). A green-signal met (Y) is a pass; a deal-breaker is
+ * inverted -- tripped (Y) is a fail, clear (N) is a pass. When `kind` is absent
+ * (rulebook version skew, or the backend enrichment isn't deployed) the row
+ * cannot be classified, so it surfaces as `review` rather than guessing from
+ * the rule-id prefix and silently inverting pass/fail.
  */
-function isDealBreaker(rule: ScreeningRuleResult): boolean {
-  if (rule.kind) return rule.kind === "deal_breaker";
-  return rule.ruleId.startsWith("db_");
-}
-
 function toneFor(rule: ScreeningRuleResult): ScreeningTone {
-  if (rule.verdict === "unknown") return "review";
-  const dealBreaker = isDealBreaker(rule);
-  // green_signal: Y = met = pass, N = not met = fail.
-  // deal_breaker: Y = tripped = fail, N = clear = pass.
+  if (rule.verdict === "unknown" || rule.kind == null) return "review";
+  const dealBreaker = rule.kind === "deal_breaker";
   if (rule.verdict === "Y") return dealBreaker ? "fail" : "pass";
   return dealBreaker ? "pass" : "fail";
 }
@@ -34,6 +30,7 @@ const DETAIL_DEFAULT: Record<ScreeningTone, string> = {
 function toCriterion(rule: ScreeningRuleResult): ScreeningCriterion {
   const status = toneFor(rule);
   return {
+    id: rule.ruleId,
     label: rule.question ?? rule.ruleId,
     status,
     detail: rule.reason ?? DETAIL_DEFAULT[status],
@@ -70,7 +67,9 @@ export function mapScreening(result: ScreeningResult): ScreeningView {
   const fitCriteria: ScreeningCriterion[] = [];
   const thresholdCriteria: ScreeningCriterion[] = [];
   for (const rule of result.ruleResults) {
-    (isDealBreaker(rule) ? thresholdCriteria : fitCriteria).push(toCriterion(rule));
+    // Section by the backend's kind; an unclassified (null-kind) row groups with
+    // the green-signals rather than being guessed into the deal-breakers.
+    (rule.kind === "deal_breaker" ? thresholdCriteria : fitCriteria).push(toCriterion(rule));
   }
 
   const all = [...fitCriteria, ...thresholdCriteria];

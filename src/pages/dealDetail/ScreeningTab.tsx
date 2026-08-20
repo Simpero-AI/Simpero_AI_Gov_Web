@@ -44,22 +44,42 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
 
       <MaterialsCard fileName={fileName} />
 
-      <VerdictHeader verdict={view?.verdict ?? null} />
-
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
-        <div className="flex flex-col gap-5">
-          <ExtractedGrid fields={null} />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <HighlightsPanel items={null} />
-            <RiskFlagsPanel items={null} />
-          </div>
+      {screeningQuery.isError ? (
+        <div
+          role="alert"
+          className="mt-4 rounded-[10px] border px-4 py-3 text-[13px]"
+          style={{
+            borderColor: "color-mix(in srgb, var(--rev-danger) 35%, transparent)",
+            background: "color-mix(in srgb, var(--rev-danger) 6%, transparent)",
+          }}
+        >
+          <span className="font-medium text-[color:var(--rev-text-2)]">
+            Couldn&apos;t load screening for this deal.
+          </span>{" "}
+          <span className="text-[color:var(--rev-text-6)]">
+            {(screeningQuery.error as Error | null)?.message ?? "Please try again."}
+          </span>
         </div>
-        <MandateFitPanel fit={view?.fit ?? null} />
-      </div>
+      ) : (
+        <>
+          <VerdictHeader verdict={view?.verdict ?? null} />
 
-      <div className="mt-5">
-        <ScreeningDecisionBar decision={null} />
-      </div>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
+            <div className="flex flex-col gap-5">
+              <ExtractedGrid fields={null} />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <HighlightsPanel items={null} />
+                <RiskFlagsPanel items={null} />
+              </div>
+            </div>
+            <MandateFitPanel fit={view?.fit ?? null} />
+          </div>
+
+          <div className="mt-5">
+            <ScreeningDecisionBar decision={null} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

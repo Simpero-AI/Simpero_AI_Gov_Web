@@ -84,12 +84,27 @@ describe("mapScreening — structure", () => {
     expect(fit.fitCriteria[0].label).toBe("zz_99");
   });
 
-  it("infers deal-breaker from the rule-id prefix when kind is absent", () => {
+  it("does not guess a null-kind row: groups it with green-signals and shows review", () => {
+    // kind is authoritative; without it we don't invert pass/fail from the id
+    // prefix (which could silently flip a tripped deal-breaker to a pass).
     const { fit } = mapScreening(
       result([rule({ ruleId: "db_02", verdict: "Y", question: null, kind: null })]),
     );
-    expect(fit.thresholdCriteria).toHaveLength(1);
-    expect(fit.thresholdCriteria[0].status).toBe("fail");
+    expect(fit.thresholdCriteria).toHaveLength(0);
+    expect(fit.fitCriteria).toHaveLength(1);
+    expect(fit.fitCriteria[0].status).toBe("review");
+    expect(fit.fitCriteria[0].label).toBe("db_02"); // label falls back to the rule_id
+  });
+
+  it("stamps each criterion with the rule_id for a stable, unique React key", () => {
+    const { fit } = mapScreening(
+      result([
+        rule({ ruleId: "gs_07", kind: "green_signal" }),
+        rule({ ruleId: "db_04", kind: "deal_breaker" }),
+      ]),
+    );
+    expect(fit.fitCriteria[0].id).toBe("gs_07");
+    expect(fit.thresholdCriteria[0].id).toBe("db_04");
   });
 
   it("maps the recommendation to the verdict header", () => {

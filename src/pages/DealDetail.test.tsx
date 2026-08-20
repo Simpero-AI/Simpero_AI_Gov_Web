@@ -17,6 +17,14 @@ vi.mock("@/api/deals", async importOriginal => {
   return { ...actual, fetchDeal: vi.fn(), fetchDealStatus: vi.fn() };
 });
 
+// The Screening tab fetches its own screening result; keep the real (pure)
+// screeningQueryKey so DealDetail's completion invalidation lines up, and mock
+// the fetch (default: not-screened -> null) so tests don't hit a real URL.
+vi.mock("@/api/screening", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/screening")>();
+  return { ...actual, fetchScreening: vi.fn().mockResolvedValue(null) };
+});
+
 vi.mock("@/_core/hooks/useAuth", () => ({
   useAuth: () => ({
     user: { id: 1, role: "user", name: "Test User", email: "test@example.com" },
