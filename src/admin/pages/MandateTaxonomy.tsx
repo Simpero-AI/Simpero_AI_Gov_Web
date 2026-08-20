@@ -19,6 +19,11 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Table,
   TableBody,
   TableCell,
@@ -41,32 +46,64 @@ import {
 } from "../hooks/useMandateCategories";
 import type { AdminMandateCategory, AdminMandateOption } from "../types";
 
-// Duplicated from SECTION_CATEGORY_NAMES in src/lib/mandateSelection.ts
-// (product code) rather than imported — this page must not cross the
-// admin/product boundary (CLAUDE.md). Keys are the exact
-// `mandate_categories.category` values the Mandate Builder currently joins
-// on by name (plan D1); values are the Builder field label shown here so an
-// admin can tell what a category feeds without visiting the Builder.
-const BUILDER_SECTION_LABELS: Record<string, string> = {
+// Duplicated from SECTION_SLUGS/SECTION_CATEGORY_NAMES in
+// src/lib/mandateSelection.ts (product code) rather than imported — this
+// page must not cross the admin/product boundary (CLAUDE.md) — and from the
+// backend's MandateCategorySlug enum. These are the only eight slugs a
+// category can ever be created with; order here is the order offered in the
+// "New category" picker below.
+const MANDATE_CATEGORY_SLUGS: { slug: string; canonicalLabel: string }[] = [
+  { slug: "investment_stage", canonicalLabel: "Investment Stage" },
+  { slug: "geographies", canonicalLabel: "Geographies" },
+  { slug: "target_sectors", canonicalLabel: "Target Sectors" },
+  { slug: "deal_types", canonicalLabel: "Deal Types" },
+  { slug: "asset_classes", canonicalLabel: "Asset Classes" },
+  { slug: "must_have", canonicalLabel: "Must Have" },
+  { slug: "deal_breaker", canonicalLabel: "Deal Breaker" },
+  { slug: "check_size_range", canonicalLabel: "Check Size Range" },
+];
+
+// "Builder section" table-column wording — friendlier than the canonical
+// name above (e.g. "Must-Have Criteria" vs. "Must Have"), keyed by slug now
+// that one exists rather than by the mutable display name, so a rename no
+// longer makes this column go blank for a category the Builder still uses.
+// asset_classes is omitted on purpose — that section is currently hidden in
+// the product Builder UI (state/save payload still live there).
+const BUILDER_SECTION_LABELS_BY_SLUG: Record<string, string> = {
+  investment_stage: "Investment Stage",
+  geographies: "Geographies",
+  target_sectors: "Target Sectors",
+  deal_types: "Deal Types",
+  must_have: "Must-Have Criteria",
+  deal_breaker: "Deal-Breaker Criteria",
+  check_size_range: "Check Size Range (numeric — no options needed)",
+};
+
+// Fallback for a category created before the backend's slug backfill ran —
+// the same name-based lookup this page always used.
+const BUILDER_SECTION_LABELS_BY_NAME: Record<string, string> = {
   "investment stage": "Investment Stage",
   "geographies": "Geographies",
   "target sectors": "Target Sectors",
   "deal types": "Deal Types",
-  // "asset classes": "Asset Classes",
   "must have": "Must-Have Criteria",
   "deal breaker": "Deal-Breaker Criteria",
-  // Structurally different from the other seven (D2 revised) — numeric
-  // min/max, not options — but still Builder-consumed, so an admin creating
-  // it shouldn't see the default "Not used by the Mandate Builder" label.
   "check size range": "Check Size Range (numeric — no options needed)",
 };
 
-function builderSectionLabel(category: string): string | null {
-  return BUILDER_SECTION_LABELS[category.trim().toLowerCase()] ?? null;
+function builderSectionLabel(category: AdminMandateCategory): string | null {
+  if (category.slug) return BUILDER_SECTION_LABELS_BY_SLUG[category.slug] ?? null;
+  return BUILDER_SECTION_LABELS_BY_NAME[category.category.trim().toLowerCase()] ?? null;
 }
 
+// slug: "custom" is the sentinel for "not one of the fixed eight" — Radix
+// Select's SelectItem can't take an empty-string value, so this stays a
+// plain string field rather than `string | undefined` and "custom" is
+// converted to `undefined` at submit time (onSubmit below).
+const CUSTOM_SLUG = "custom";
 const categorySchema = z.object({
   category: z.string().min(1, "Name is required").max(150, "Max 150 characters"),
+  slug: z.string(),
 });
 type CategoryFormValues = z.infer<typeof categorySchema>;
 
@@ -81,33 +118,41 @@ type OptionFormValues = z.infer<typeof optionSchema>;
 interface CategoryDialogProps {
   mode: "create" | "rename";
   category?: AdminMandateCategory;
+  /** Create mode only — slugs already used by an existing category, so the
+   * picker doesn't offer a slot that would just 409. */
+  usedSlugs?: Set<string>;
   trigger: ReactNode;
 }
 
 /** Self-contained trigger + dialog, one instance per "New category"/rename action — same idiom as InviteMemberDialog. */
-function CategoryDialog({ mode, category, trigger }: CategoryDialogProps) {
+function CategoryDialog({ mode, category, usedSlugs, trigger }: CategoryDialogProps) {
   const [open, setOpen] = useState(false);
   const createMutation = useCreateMandateCategoryMutation();
   const updateMutation = useUpdateMandateCategoryMutation();
   const mutation = mode === "create" ? createMutation : updateMutation;
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categorySchema),
-    defaultValues: { category: category?.category ?? "" },
+    defaultValues: { category: category?.category ?? "", slug: CUSTOM_SLUG },
   });
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
-    if (next) form.reset({ category: category?.category ?? "" });
+    if (next) form.reset({ category: category?.category ?? "", slug: CUSTOM_SLUG });
   }
 
   function onSubmit(values: CategoryFormValues) {
     const onSuccess = () => handleOpenChange(false);
     if (mode === "create") {
-      createMutation.mutate(values.category, { onSuccess });
+      createMutation.mutate(
+        { category: values.category, slug: values.slug === CUSTOM_SLUG ? undefined : values.slug },
+        { onSuccess }
+      );
     } else if (category) {
       updateMutation.mutate({ id: category.id, category: values.category }, { onSuccess });
     }
   }
+
+  const availableSlugs = MANDATE_CATEGORY_SLUGS.filter((s) => !usedSlugs?.has(s.slug));
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -117,12 +162,52 @@ function CategoryDialog({ mode, category, trigger }: CategoryDialogProps) {
           <DialogTitle>{mode === "create" ? "New category" : "Rename category"}</DialogTitle>
           <DialogDescription>
             {mode === "create"
-              ? "Categories feed the Mandate Builder's chip/row pickers by exact name match."
-              : "Renaming a category the Mandate Builder joins on by name will empty that Builder section until fixed."}
+              ? "Pick which Mandate Builder slot this feeds, or Custom for a category the Builder doesn't render."
+              : category?.slug
+              ? "Renaming is safe — the Mandate Builder joins on this category's fixed identity, not its name."
+              : "This category has no fixed identity yet (created before that existed, or the migration hasn't backfilled it) — renaming may still empty its Mandate Builder section until it's re-created with a slot picked, or the backfill runs."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+            {mode === "create" && (
+              <FormField
+                control={form.control}
+                name="slug"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mandate Builder slot</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        // Prefill the Name field with the slot's canonical
+                        // label — still freely editable afterward, matching
+                        // the backend's own default-from-slug behavior.
+                        // Switching to "Custom" leaves Name alone.
+                        const picked = MANDATE_CATEGORY_SLUGS.find((s) => s.slug === value);
+                        if (picked) form.setValue("category", picked.canonicalLabel, { shouldValidate: true });
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={CUSTOM_SLUG}>Custom (not used by the Mandate Builder)</SelectItem>
+                        {availableSlugs.map((s) => (
+                          <SelectItem key={s.slug} value={s.slug}>
+                            {s.canonicalLabel}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name="category"
@@ -233,6 +318,9 @@ function OptionDialog({ mode, categoryId, option, parentOptionId, trigger }: Opt
 export default function MandateTaxonomy() {
   const { data, isLoading, isError, error, refetch } = useMandateCategoriesQuery();
   const categories = data ?? [];
+  const usedSlugs = new Set(
+    categories.map((c) => c.slug).filter((s): s is string => Boolean(s))
+  );
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [deleteCategoryTarget, setDeleteCategoryTarget] = useState<AdminMandateCategory | null>(null);
   const [deleteOptionTarget, setDeleteOptionTarget] = useState<{
@@ -270,7 +358,7 @@ export default function MandateTaxonomy() {
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold text-foreground">Mandate Taxonomy</h1>
-          <CategoryDialog mode="create" trigger={<Button>New category</Button>} />
+          <CategoryDialog mode="create" usedSlugs={usedSlugs} trigger={<Button>New category</Button>} />
         </div>
 
         <DataState
@@ -295,7 +383,7 @@ export default function MandateTaxonomy() {
             <TableBody>
               {categories.map((cat) => {
                 const expanded = expandedIds.has(cat.id);
-                const sectionLabel = builderSectionLabel(cat.category);
+                const sectionLabel = builderSectionLabel(cat);
                 const isDeleting =
                   deleteCategoryMutation.isPending && deleteCategoryMutation.variables === cat.id;
                 return (

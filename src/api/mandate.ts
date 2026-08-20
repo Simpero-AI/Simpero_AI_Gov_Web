@@ -15,9 +15,16 @@ export interface MandateOptionNode {
   subOptions?: MandateOptionNode[];
 }
 
-/** GET /api/mandate-categories — product-side option shape has no `categoryId` (unlike admin's). */
+/** GET /api/mandate-categories — product-side option shape has no `categoryId` (unlike admin's).
+ * `slug` is the stable, admin-unrenameable identifier for one of the Builder's
+ * fixed known categories (see mandateSelection.ts's SECTION_SLUGS) — optional
+ * so the frontend degrades cleanly on a pre-migration backend that doesn't
+ * send it yet, same reasoning as MandateOptionNode.subOptions above. `null`
+ * means this row isn't one of the Builder's known categories (a custom
+ * admin-created one) or hasn't been backfilled with a slug yet. */
 export interface MandateCategory {
   id: string;
+  slug?: string | null;
   category: string;
   options: MandateOptionNode[];
 }

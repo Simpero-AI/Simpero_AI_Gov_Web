@@ -83,6 +83,7 @@ export interface AdminMandateOption {
 
 export interface AdminMandateCategory {
   id: string;
+  slug: string | null;
   category: string;
   options: AdminMandateOption[];
 }
