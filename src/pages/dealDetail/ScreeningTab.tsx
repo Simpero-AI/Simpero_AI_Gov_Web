@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { MaterialsCard } from "@/components/mvp/screening/MaterialsCard";
 import { VerdictHeader } from "@/components/mvp/screening/VerdictHeader";
 import { ExtractedGrid } from "@/components/mvp/screening/ExtractedGrid";
@@ -5,22 +6,33 @@ import { HighlightsPanel } from "@/components/mvp/screening/HighlightsPanel";
 import { RiskFlagsPanel } from "@/components/mvp/screening/RiskFlagsPanel";
 import { MandateFitPanel } from "@/components/mvp/screening/MandateFitPanel";
 import { ScreeningDecisionBar } from "@/components/mvp/screening/ScreeningDecisionBar";
+import { fetchScreening, screeningQueryKey } from "@/api/screening";
+import { mapScreening } from "@/lib/screeningView";
 
 export interface ScreeningTabProps {
-  /** The deal's uploaded source file name, if any — the only real data this tab has today. */
+  dealId: string;
+  /** The deal's uploaded source file name, if any. */
   fileName: string | null;
 }
 
 /**
  * Initial Screening tab (docs/plans/2026-08-12-web-design-revamp.md Phase 4
- * item 4). Only `MaterialsCard` has real backing data today — verdict, fit
- * %, extracted fields, agent highlights, risk flags, mandate-fit scoring,
- * and the advance/reject decision are all a separately-tracked backend gap
- * (plan §4c). Each of those components is wired for real data later but
- * passed `null` here, rendering an honest coming-soon state rather than
- * fabricated content.
+ * item 4). The mandate-fit verdict and per-question pass/review/fail come from
+ * GET /deals/{id}/screening (mapped by mapScreening) into the VerdictHeader and
+ * MandateFitPanel. Until a deal has been screened the endpoint 404s -> null and
+ * those panels render their coming-soon state.
+ *
+ * ExtractedGrid, HighlightsPanel, RiskFlagsPanel and ScreeningDecisionBar are
+ * separate backend surfaces that the screening_result does not carry, so they
+ * stay null until their own wiring lands.
  */
-export function ScreeningTab({ fileName }: ScreeningTabProps) {
+export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
+  const screeningQuery = useQuery({
+    queryKey: screeningQueryKey(dealId),
+    queryFn: () => fetchScreening(dealId),
+  });
+  const view = screeningQuery.data ? mapScreening(screeningQuery.data) : null;
+
   return (
     <div>
       <div className="mb-4">
@@ -32,7 +44,7 @@ export function ScreeningTab({ fileName }: ScreeningTabProps) {
 
       <MaterialsCard fileName={fileName} />
 
-      <VerdictHeader verdict={null} />
+      <VerdictHeader verdict={view?.verdict ?? null} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
         <div className="flex flex-col gap-5">
@@ -42,7 +54,7 @@ export function ScreeningTab({ fileName }: ScreeningTabProps) {
             <RiskFlagsPanel items={null} />
           </div>
         </div>
-        <MandateFitPanel fit={null} />
+        <MandateFitPanel fit={view?.fit ?? null} />
       </div>
 
       <div className="mt-5">
