@@ -1,9 +1,9 @@
 import type React from "react";
 import { useEffect } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router";
+import { createMemoryRouter, type RouteObject, RouterProvider } from "react-router";
 import MandateScorecard from "./MandateScorecard";
 import { fetchInvestmentProfile } from "@/api/investmentProfile";
 
@@ -62,15 +62,28 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function renderMandateScorecard(section: string) {
+// MandateScorecard now calls useBlocker unconditionally, which requires a
+// data router (RouterProvider), not the declarative <MemoryRouter> this
+// harness used pre-Phase-6 — plain <MemoryRouter> has no DataRouterContext
+// and useBlocker throws outside one. `section` stays a literal render-time
+// prop (real routing supplies it via a `:section` route param — the route
+// path here only provides router context/matching for Link clicks and
+// `router.navigate`, it doesn't feed the prop back in), so a fresh render
+// per tab is still how most of these tests switch tabs, not a Link click —
+// except the first test and the two navigation-guard suites below, which do
+// click `role="tab"` links / call `router.navigate` directly.
+function renderMandateScorecard(section: string, extraRoutes: RouteObject[] = []) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const router = createMemoryRouter(
+    [{ path: "/mandate-scorecard/:tab", element: <MandateScorecard section={section} /> }, ...extraRoutes],
+    { initialEntries: [`/mandate-scorecard/${section}`] }
+  );
+  const utils = render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/mandate-scorecard/${section}`]}>
-        <MandateScorecard section={section} />
-      </MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   );
+  return { ...utils, router };
 }
 
 describe("MandateScorecard — always-mounted sections", () => {
@@ -139,5 +152,65 @@ describe("MandateScorecard — always-mounted sections", () => {
     const resetOnMandate = await screen.findByRole("button", { name: "Reset to defaults" });
     expect(resetOnMandate).not.toBeDisabled();
     expect(resetOnMandate).toHaveAttribute("title", "Reset to defaults");
+  });
+});
+
+describe("MandateScorecard — unsaved-changes navigation guard", () => {
+  const OTHER_ROUTE: RouteObject = { path: "/deals", element: <div data-testid="deals-page">Deals page</div> };
+
+  it("blocks navigating to a different route while a tab is dirty, and 'Stay' dismisses it with edits intact", async () => {
+    vi.mocked(fetchInvestmentProfile).mockResolvedValue(null);
+    const { router } = renderMandateScorecard("firm", [OTHER_ROUTE]);
+
+    const firmNameInput = await screen.findByPlaceholderText("e.g. Vistara Growth Partners");
+    fireEvent.change(firmNameInput, { target: { value: "Acme Test Capital" } });
+
+    await act(async () => {
+      router.navigate("/deals");
+    });
+
+    expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.getByText(/unsaved changes in: Firm Profile/i)).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/mandate-scorecard/firm");
+
+    fireEvent.click(screen.getByRole("button", { name: "Stay on this page" }));
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(router.state.location.pathname).toBe("/mandate-scorecard/firm");
+    expect(screen.getByPlaceholderText("e.g. Vistara Growth Partners")).toHaveValue("Acme Test Capital");
+  });
+
+  it("completes the navigation when 'Leave and discard changes' is chosen", async () => {
+    vi.mocked(fetchInvestmentProfile).mockResolvedValue(null);
+    const { router } = renderMandateScorecard("firm", [OTHER_ROUTE]);
+
+    const firmNameInput = await screen.findByPlaceholderText("e.g. Vistara Growth Partners");
+    fireEvent.change(firmNameInput, { target: { value: "Acme Test Capital" } });
+
+    await act(async () => {
+      router.navigate("/deals");
+    });
+    expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Leave and discard changes" }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/deals"));
+    expect(await screen.findByTestId("deals-page")).toBeInTheDocument();
+  });
+
+  it("never blocks switching between tabs, even while a tab is dirty (path-prefix regression guard)", async () => {
+    vi.mocked(fetchInvestmentProfile).mockResolvedValue(null);
+    const { router } = renderMandateScorecard("firm");
+
+    const firmNameInput = await screen.findByPlaceholderText("e.g. Vistara Growth Partners");
+    fireEvent.change(firmNameInput, { target: { value: "Acme Test Capital" } });
+
+    for (const tabName of ["Mandate Builder", "Firm Profile", "Scoring Framework", "Deal Scorecard"]) {
+      await act(async () => {
+        fireEvent.click(screen.getByRole("tab", { name: tabName }));
+      });
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    }
+    expect(router.state.location.pathname).toBe("/mandate-scorecard/scorecard");
   });
 });
