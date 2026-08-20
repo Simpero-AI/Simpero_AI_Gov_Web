@@ -119,6 +119,42 @@ describe("findCheckSizeCategoryId", () => {
   it("returns null when the category doesn't exist yet", () => {
     expect(findCheckSizeCategoryId(CATEGORIES_NO_CHECK_SIZE)).toBeNull();
   });
+
+  it("still resolves by slug even when the display name has been renamed away from CHECK_SIZE_CATEGORY_NAME", () => {
+    const renamed: MandateCategory[] = [
+      { id: "cat-checksize", slug: "check_size_range", category: "Ticket Size", options: [] },
+    ];
+    expect(findCheckSizeCategoryId(renamed)).toBe("cat-checksize");
+  });
+});
+
+describe("category lookup — slug-first, name-fallback (a platform-admin rename must not orphan a section)", () => {
+  it("resolves a category by slug even though its display name no longer matches SECTION_CATEGORY_NAMES", () => {
+    const renamed: MandateCategory[] = [
+      {
+        id: "cat-stage",
+        slug: "investment_stage",
+        category: "Fund Stage", // renamed away from "Investment Stage" in the admin Taxonomy page
+        options: [{ id: "opt-a", option: "Series A" }],
+      },
+    ];
+    expect(categoryDisplayName(renamed, "investmentStages")).toBe("Fund Stage");
+    expect(optionsForSection(renamed, "investmentStages")).toEqual([{ id: "opt-a", option: "Series A" }]);
+  });
+
+  it("falls back to name matching when slug is absent (pre-backfill or a backend that hasn't shipped slug yet)", () => {
+    const noSlug: MandateCategory[] = [{ id: "cat-stage", category: "Investment Stage", options: [] }];
+    expect(categoryDisplayName(noSlug, "investmentStages")).toBe("Investment Stage");
+  });
+
+  it("prefers slug over a coincidental name match", () => {
+    const bothPresent: MandateCategory[] = [
+      // Named correctly but wrong slug — must lose to the slug match below.
+      { id: "cat-wrong", slug: "some_other_category", category: "Investment Stage", options: [] },
+      { id: "cat-right", slug: "investment_stage", category: "Fund Stage", options: [] },
+    ];
+    expect(categoryDisplayName(bothPresent, "investmentStages")).toBe("Fund Stage");
+  });
 });
 
 describe("toMandateItems / fromMandateItems round-trip", () => {

@@ -136,7 +136,15 @@ export async function listMandateCategories(): Promise<AdminMandateCategory[]> {
   return (await res.json()) as AdminMandateCategory[];
 }
 
-export async function createMandateCategory(body: { category: string }): Promise<AdminMandateCategory> {
+/** `slug` is one of the backend's fixed MandateCategorySlug values (see
+ * MandateTaxonomy.tsx's MANDATE_CATEGORY_SLUGS) or omitted for a custom
+ * category the product Builder doesn't render. `category` is optional
+ * exactly when `slug` is given — the backend defaults it to that slug's
+ * canonical label — but is always sent explicitly here since the dialog
+ * pre-fills it and leaves it editable, matching that same default. */
+export async function createMandateCategory(
+  body: { category: string; slug?: string }
+): Promise<AdminMandateCategory> {
   const res = await apiFetch("/api/admin/mandates/categories", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

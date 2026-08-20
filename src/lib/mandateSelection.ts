@@ -26,6 +26,24 @@ export const SECTION_CATEGORY_NAMES: Record<MandateSection, string> = {
   dealBreakers: "Deal Breaker",
 };
 
+/**
+ * The stable, admin-unrenameable identifier for each of the seven sections —
+ * matched first, so a platform admin renaming a category's display name in
+ * the Mandate Taxonomy admin page no longer orphans that section here.
+ * SECTION_CATEGORY_NAMES above is now only a fallback (findCategory below)
+ * for a category that predates the backend's slug backfill, or a backend
+ * that hasn't shipped `slug` yet — see MandateCategory.slug in api/mandate.ts.
+ */
+export const SECTION_SLUGS: Record<MandateSection, string> = {
+  investmentStages: "investment_stage",
+  geoLabels: "geographies",
+  sectorLabels: "target_sectors",
+  dealTypeLabels: "deal_types",
+  assetClassLabels: "asset_classes",
+  mustHaves: "must_have",
+  dealBreakers: "deal_breaker",
+};
+
 const MANDATE_SECTIONS = Object.keys(SECTION_CATEGORY_NAMES) as MandateSection[];
 
 /**
@@ -35,6 +53,7 @@ const MANDATE_SECTIONS = Object.keys(SECTION_CATEGORY_NAMES) as MandateSection[]
  * the Builder's option-backed chip/row sections.
  */
 export const CHECK_SIZE_CATEGORY_NAME = "Check Size Range";
+export const CHECK_SIZE_SLUG = "check_size_range";
 
 /** The Builder's Check Size Range inputs are denominated in $K (e.g. an
  * entered "30" means $30K) — the saved mandate stores the full dollar
@@ -60,6 +79,10 @@ function normalize(s: string): string {
 }
 
 function findCategory(categories: MandateCategory[], section: MandateSection): MandateCategory | undefined {
+  const bySlug = categories.find((c) => c.slug === SECTION_SLUGS[section]);
+  if (bySlug) return bySlug;
+  // Fallback for a category with no slug yet (pre-backfill, or a backend
+  // that hasn't shipped `slug` at all) — the same name match as before.
   const name = normalize(SECTION_CATEGORY_NAMES[section]);
   return categories.find((c) => normalize(c.category) === name);
 }
@@ -77,9 +100,15 @@ export function categoryDisplayName(categories: MandateCategory[], section: Mand
   return findCategory(categories, section)?.category ?? SECTION_CATEGORY_NAMES[section];
 }
 
-function findCategoryByName(categories: MandateCategory[], name: string): MandateCategory | undefined {
-  const target = normalize(name);
-  return categories.find((c) => normalize(c.category) === target);
+/** Check Size Range isn't one of the seven MandateSection-keyed categories
+ * (see findCategory above), so it gets its own slug-first, name-fallback
+ * lookup rather than reusing that one. Only ever called with
+ * CHECK_SIZE_CATEGORY_NAME — not a generic by-name lookup. */
+function findCheckSizeCategory(categories: MandateCategory[]): MandateCategory | undefined {
+  const bySlug = categories.find((c) => c.slug === CHECK_SIZE_SLUG);
+  if (bySlug) return bySlug;
+  const name = normalize(CHECK_SIZE_CATEGORY_NAME);
+  return categories.find((c) => normalize(c.category) === name);
 }
 
 /**
@@ -88,7 +117,7 @@ function findCategoryByName(categories: MandateCategory[], name: string): Mandat
  * simply omitted from the PUT /mandate payload until it exists).
  */
 export function findCheckSizeCategoryId(categories: MandateCategory[]): string | null {
-  return findCategoryByName(categories, CHECK_SIZE_CATEGORY_NAME)?.id ?? null;
+  return findCheckSizeCategory(categories)?.id ?? null;
 }
 
 /**
@@ -170,7 +199,7 @@ export function toMandateItems(
     items.push({ category: category.category, category_id: category.id, options });
   }
 
-  const checkSizeCategory = findCategoryByName(categories, CHECK_SIZE_CATEGORY_NAME);
+  const checkSizeCategory = findCheckSizeCategory(categories);
   if (checkSizeCategory) {
     items.push({
       category: checkSizeCategory.category,

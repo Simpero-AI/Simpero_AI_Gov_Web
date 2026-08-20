@@ -2,13 +2,11 @@ import { useRef, useState } from "react";
 import { useUserDisplay } from "@/hooks/useUserDisplay";
 import { Link, Redirect, useLocation, useSearch } from "wouter";
 import { RotateCcw } from "lucide-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { INVESTMENT_PROFILE_QUERY_KEY, fetchInvestmentProfile } from "@/api/investmentProfile";
-import { MANDATE_QUERY_KEY, putMandate } from "@/api/mandate";
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/mvp/primitives/button";
-import { toast } from "@/components/mvp/primitives/sonner";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
 import { MvpSidebar } from "@/components/mvp/shell/MvpSidebar";
 import { MvpNavRenderer } from "@/components/mvp/shell/MvpNavRenderer";
@@ -52,6 +50,8 @@ export default function MandateScorecard({ section }: Props) {
   // replacement — see FirmProfileBlock/EditableFrameworkBlock's no-save
   // comments) — so this is the only save ref left to wire up.
   const mandateSaveRef = useRef<(() => void) | null>(null);
+  const mandateResetRef = useRef<(() => Promise<void>) | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
 
   // Real dirty/saving state lifted from the three editable blocks — drives
   // the topbar's save-status indicator. Never fabricated (plan Phase 7 §3).
@@ -60,11 +60,6 @@ export default function MandateScorecard({ section }: Props) {
   const [frameworkState, setFrameworkState] = useState<DirtyState>(IDLE_STATE);
 
   // All hooks — must be called unconditionally before any early returns.
-  const queryClient = useQueryClient();
-  // Bare (no onSuccess/onError) — handleResetToDefaults below awaits it and
-  // centralizes the toast/invalidation/modal-close, same D5-style
-  // orchestration as EditableMandateBlock's doSave.
-  const resetMandateMutation = useMutation({ mutationFn: putMandate });
   const profileQuery = useQuery({
     queryKey: INVESTMENT_PROFILE_QUERY_KEY,
     queryFn: fetchInvestmentProfile,
@@ -130,28 +125,21 @@ export default function MandateScorecard({ section }: Props) {
   };
 
   const handleResetToDefaults = async () => {
-    // The legacy trpc.investmentProfile.upsert write used to run here
-    // alongside resetMandateMutation, both wrapped in one Promise.all — since
-    // it 404s unconditionally (no Express/tRPC server exists anymore, and no
-    // write endpoint was ever ported to FastAPI, same as
-    // EditableMandateBlock.doSave), Promise.all failed the *entire* reset
-    // even when resetMandateMutation (the real PUT /mandate reset-to-empty
-    // call, below) succeeded. It's removed entirely rather than patched: the
-    // checkMin/checkMax/minMrr/minMomGrowth/maxBurnMultiple/minRunway/
-    // maxValMultiple reset values and the Scoring Framework weights reset
-    // (FRAMEWORK_DEFAULTS) it used to carry have no persistence path right
-    // now — same fields called out in EditableMandateBlock.doSave, and this
-    // call never actually succeeded here before either, since it 404s the
-    // same way.
+    // The legacy trpc.investmentProfile.upsert write that used to run
+    // alongside this is gone (404s unconditionally, same as
+    // EditableMandateBlock.doSave) — the checkMin/checkMax/minMrr/
+    // minMomGrowth/maxBurnMultiple/minRunway/maxValMultiple reset values and
+    // the Scoring Framework weights reset it used to carry have no
+    // persistence path right now. The actual PUT /mandate reset-to-empty
+    // call, plus clearing the form fields it hydrates, both live in
+    // EditableMandateBlock.doReset — not here — since only that component
+    // owns the local chip state and its hydration guard.
+    setIsResetting(true);
     try {
-      // Clears the mandates table — without this, "Reset to Defaults" would
-      // leave every category chip in place (plan Phase 3).
-      await resetMandateMutation.mutateAsync([]);
-      await queryClient.invalidateQueries({ queryKey: MANDATE_QUERY_KEY });
-      toast.success("Reset to defaults.");
+      await mandateResetRef.current?.();
       setShowResetModal(false);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to reset.");
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -243,7 +231,7 @@ export default function MandateScorecard({ section }: Props) {
                   <FirmProfileBlock profile={profile} onStateChange={setFirmState} />
                 </div>
                 <div style={{ display: active === "mandate" ? undefined : "none" }}>
-                  <EditableMandateBlock profile={profile} saveRef={mandateSaveRef} onStateChange={setMandateState} />
+                  <EditableMandateBlock profile={profile} saveRef={mandateSaveRef} resetRef={mandateResetRef} onStateChange={setMandateState} />
                 </div>
                 <div style={{ display: active === "framework" ? undefined : "none" }}>
                   <EditableFrameworkBlock profile={profile} onStateChange={setFrameworkState} />
@@ -286,10 +274,10 @@ export default function MandateScorecard({ section }: Props) {
               </button>
               <button
                 onClick={handleResetToDefaults}
-                disabled={resetMandateMutation.isPending}
+                disabled={isResetting}
                 className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-center text-sm text-white font-medium transition disabled:opacity-60"
               >
-                {resetMandateMutation.isPending ? "Resetting…" : "Reset"}
+                {isResetting ? "Resetting…" : "Reset"}
               </button>
             </div>
           </div>

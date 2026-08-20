@@ -118,12 +118,13 @@ function renderBlock(
 
   const queryClient = new QueryClient();
   const saveRef: React.MutableRefObject<(() => void) | null> = { current: null };
+  const resetRef: React.MutableRefObject<(() => Promise<void>) | null> = { current: null };
   const utils = render(
     <QueryClientProvider client={queryClient}>
-      <EditableMandateBlock profile={profile} saveRef={saveRef} onStateChange={onStateChange} />
+      <EditableMandateBlock profile={profile} saveRef={saveRef} resetRef={resetRef} onStateChange={onStateChange} />
     </QueryClientProvider>
   );
-  return { ...utils, saveRef };
+  return { ...utils, saveRef, resetRef };
 }
 
 describe("EditableMandateBlock — dropdown-only OptionPicker (D6)", () => {
@@ -169,6 +170,25 @@ describe("EditableMandateBlock — dropdown-only OptionPicker (D6)", () => {
     // Must-Have/Deal-Breaker's old free-text add rows are gone too.
     expect(screen.queryByPlaceholderText(/ARR ≥ \$5M/i)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/Minority stake without protective rights/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("EditableMandateBlock — categories still loading vs. genuinely unconfigured", () => {
+  it("shows a loading note, not the 'ask a platform admin' note, while /mandate-categories is in flight", async () => {
+    fetchMandateCategoriesMock.mockImplementation(() => new Promise(() => {}));
+    fetchMandateMock.mockResolvedValue(null);
+
+    const queryClient = new QueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <EditableMandateBlock profile={null} />
+      </QueryClientProvider>
+    );
+
+    const trigger = await screen.findByRole("button", { name: "Add stage" });
+    expect(trigger).toBeDisabled();
+    expect(screen.getAllByText("Loading options…").length).toBeGreaterThan(0);
+    expect(screen.queryByText("No options configured — ask a platform admin.")).not.toBeInTheDocument();
   });
 });
 
@@ -381,6 +401,85 @@ describe("EditableMandateBlock — save (putMandate only, no legacy trpc write)"
     expect(toast.success).not.toHaveBeenCalled();
     // isDirty is never reset to false in the catch branch — still dirty.
     expect(onStateChange).toHaveBeenLastCalledWith({ dirty: true, saving: false });
+  });
+});
+
+describe("EditableMandateBlock — save while /mandate-categories is still loading", () => {
+  it("refuses to save (no PUT, error toast) instead of wiping the mandate with an empty selection set", async () => {
+    // Categories never resolve during this test — mandateQuery still hydrates
+    // fine (it's an independent request), so the form can become dirty and
+    // Save becomes clickable, but toMandateItems would drop every section
+    // (findCategory finds nothing in an empty/absent categories list) and
+    // send `{ mandate: [] }` to the create-or-replace PUT if it ran.
+    fetchMandateCategoriesMock.mockImplementation(() => new Promise(() => {}));
+    fetchMandateMock.mockResolvedValue({
+      mandate: [
+        {
+          category: "Investment Stage",
+          category_id: "cat-stage",
+          options: [{ option: "Series A", option_id: "opt-a" }],
+        },
+      ],
+      updatedAt: "2026-01-02T00:00:00Z",
+    });
+    putMandateMock.mockResolvedValue({ mandate: [], updatedAt: "2026-01-01T00:00:00Z" });
+
+    const queryClient = new QueryClient();
+    const saveRef: React.MutableRefObject<(() => void) | null> = { current: null };
+    render(
+      <QueryClientProvider client={queryClient}>
+        <EditableMandateBlock profile={null} saveRef={saveRef} />
+      </QueryClientProvider>
+    );
+
+    // Removing the hydrated chip doesn't require the (still-loading) options
+    // list, so the form goes dirty without ever needing categories to load.
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Remove Series A" }));
+
+    await saveRef.current?.();
+
+    expect(putMandateMock).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Still loading mandate options — try saving again in a moment.");
+  });
+});
+
+describe("EditableMandateBlock — reset to defaults (resetRef)", () => {
+  it("clears chips on screen immediately, and a later unrelated save does not resurrect them", async () => {
+    const { resetRef, saveRef } = renderBlock(null, {
+      mandate: [
+        {
+          category: "Investment Stage",
+          category_id: "cat-stage",
+          options: [{ option: "Series A", option_id: "opt-a" }],
+        },
+      ],
+      updatedAt: "2026-01-02T00:00:00Z",
+    });
+    expect(await screen.findByText("Series A")).toBeInTheDocument();
+
+    await resetRef.current?.();
+
+    // The old one-shot hydration guard meant a refetch after reset was
+    // silently ignored and the chip stayed on screen — doReset must clear it
+    // directly instead of relying on that refetch.
+    await waitFor(() => expect(screen.queryByText("Series A")).not.toBeInTheDocument());
+    expect(putMandateMock.mock.calls[putMandateMock.mock.calls.length - 1][0]).toEqual([]);
+    expect(toast.success).toHaveBeenCalledWith("Reset to defaults.");
+
+    // An unrelated edit afterward must save only the new state, not
+    // resurrect the pre-reset "Series A" selection.
+    const user = await openPicker("Add stage");
+    await user.click(await screen.findByRole("option", { name: "Series B" }));
+    await saveRef.current?.();
+
+    expect(putMandateMock.mock.calls[putMandateMock.mock.calls.length - 1][0]).toEqual([
+      {
+        category: "Investment Stage",
+        category_id: "cat-stage",
+        options: [{ option: "Series B", option_id: "opt-b" }],
+      },
+    ]);
   });
 });
 

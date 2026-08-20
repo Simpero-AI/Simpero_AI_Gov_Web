@@ -33,6 +33,11 @@ import { cn } from "@/lib/utils";
 interface Props {
   profile: InvestmentProfile | null;
   saveRef?: React.MutableRefObject<(() => void) | null>;
+  /** MandateScorecard's "Reset to Defaults" modal calls this instead of
+   * hitting PUT /mandate itself — resetting from outside this component left
+   * the one-shot mandate-hydration guard never re-firing, so the form kept
+   * showing pre-reset chips until an unrelated edit silently re-saved them. */
+  resetRef?: React.MutableRefObject<(() => Promise<void>) | null>;
   /** Fires whenever local dirty/saving state changes — lets the page-level
    * topbar show a real save-status indicator instead of a fabricated one. */
   onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
@@ -55,6 +60,16 @@ function getNumber(mandate: Record<string, unknown>, key: string, fallback: numb
 }
 
 const NO_OPTIONS_CONFIGURED = "No options configured — ask a platform admin.";
+const OPTIONS_LOADING = "Loading options…";
+
+/** A disabled OptionPicker trigger needs a different explanation depending on
+ * *why* there's nothing to pick from — still loading vs. confirmed empty —
+ * otherwise every dropdown falsely says "ask a platform admin" for the
+ * first second or two after the page opens, on every load. */
+function disabledReasonFor(disabled: boolean, categoriesLoading: boolean): string | undefined {
+  if (!disabled) return undefined;
+  return categoriesLoading ? OPTIONS_LOADING : NO_OPTIONS_CONFIGURED;
+}
 
 /** Every user-editable field this component owns, snapshotted for real
  * dirty detection (not a "was anything touched" flag) — see buildSnapshot. */
@@ -96,7 +111,7 @@ function sectionOptionLabels(categories: MandateCategory[], section: MandateSect
   return options ? options.map((o) => o.option) : null;
 }
 
-export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props) {
+export function EditableMandateBlock({ profile, saveRef, resetRef, onStateChange }: Props) {
   const queryClient = useQueryClient();
   const putMandateMutation = useMutation({ mutationFn: putMandate });
 
@@ -279,6 +294,16 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
     // button ignores doSave's return value, so this is the only guard.
     if (putMandateMutation.isPending) return;
 
+    // Guard against the categories request still being in flight: toMandateItems
+    // resolves every selection to a category/option id via `categories`, and
+    // silently drops any section whose category isn't found there yet. Saving
+    // against an empty/partial categories list would send an empty selection
+    // set to the create-or-replace PUT and wipe the org's saved mandate.
+    if (!categoriesQuery.isSuccess) {
+      toast.error("Still loading mandate options — try saving again in a moment.");
+      return;
+    }
+
     const selections: Record<MandateSection, string[]> = {
       investmentStages, geoLabels, sectorLabels, dealTypeLabels, assetClassLabels, mustHaves, dealBreakers,
     };
@@ -306,13 +331,59 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save mandate.");
     }
-  }, [putMandateMutation, queryClient, categories, checkMin, checkMax, subSelections, currentSnapshot,
+  }, [putMandateMutation, queryClient, categories, categoriesQuery.isSuccess, checkMin, checkMax, subSelections, currentSnapshot,
     sectorLabels, geoLabels, investmentStages, dealTypeLabels, assetClassLabels, mustHaves, dealBreakers,
   ]);
 
   useEffect(() => {
     if (saveRef) saveRef.current = doSave;
   }, [saveRef, doSave]);
+
+  // Clears the mandate on the server, then clears the local category-backed
+  // fields directly — never via a refetch, since the one-shot
+  // hasHydratedMandate guard above would just ignore the refreshed (now
+  // empty) GET /mandate response and leave the old chips on screen. Also
+  // reuses putMandateMutation (rather than a second mutation) so a reset and
+  // a save can't race each other.
+  const doReset = useCallback(async () => {
+    if (putMandateMutation.isPending) return;
+    try {
+      await putMandateMutation.mutateAsync([]);
+      await queryClient.invalidateQueries({ queryKey: MANDATE_QUERY_KEY });
+      setInvestmentStages([]);
+      setGeoLabels([]);
+      setSectorLabels([]);
+      setDealTypeLabels([]);
+      setAssetClassLabels([]);
+      setMustHaves([]);
+      setDealBreakers([]);
+      setSubSelections(createEmptySubSelections());
+      setCheckMin(MANDATE_DEFAULTS.checkMinK);
+      setCheckMax(MANDATE_DEFAULTS.checkMaxK);
+      // Move the baseline to the just-reset (empty) values directly, the
+      // same reason doSave does this after a save — currentSnapshot's
+      // closure here still reflects the pre-reset render, not the setState
+      // calls just made above.
+      setOriginalSnapshot(
+        buildSnapshot({
+          checkMin: MANDATE_DEFAULTS.checkMinK, checkMax: MANDATE_DEFAULTS.checkMaxK,
+          minMrr, minMomGrowth, maxBurnMultiple, minRunway, maxValMultiple,
+          holdPeriod, targetReturn, esgCriteria, specialNotes,
+          sectorLabels: [], geoLabels: [], investmentStages: [], dealTypeLabels: [], assetClassLabels: [],
+          mustHaves: [], dealBreakers: [], subSelections: createEmptySubSelections(),
+        })
+      );
+      toast.success("Reset to defaults.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to reset.");
+    }
+  }, [putMandateMutation, queryClient, minMrr, minMomGrowth, maxBurnMultiple, minRunway, maxValMultiple,
+    holdPeriod, targetReturn, esgCriteria, specialNotes,
+  ]);
+
+  useEffect(() => {
+    if (resetRef) resetRef.current = doReset;
+  }, [resetRef, doReset]);
 
   useEffect(() => {
     onStateChange?.({ dirty: isDirty, saving: putMandateMutation.isPending });
@@ -410,6 +481,7 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
                 label={categoryDisplayName(categories, "investmentStages")}
                 items={investmentStages}
                 options={sectionOptionLabels(categories, "investmentStages")}
+                categoriesLoading={categoriesQuery.isLoading}
                 addLabel="stage"
                 onAdd={(value) => addToList(value, investmentStages, setInvestmentStages)}
                 onRemove={(item) => removeFromList(item, setInvestmentStages, "investmentStages")}
@@ -422,6 +494,7 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
                 label={categoryDisplayName(categories, "geoLabels")}
                 items={geoLabels}
                 options={sectionOptionLabels(categories, "geoLabels")}
+                categoriesLoading={categoriesQuery.isLoading}
                 addLabel="geography"
                 onAdd={(value) => addToList(value, geoLabels, setGeoLabels)}
                 onRemove={(item) => removeFromList(item, setGeoLabels, "geoLabels")}
@@ -434,6 +507,7 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
                 label={categoryDisplayName(categories, "sectorLabels")}
                 items={sectorLabels}
                 options={sectionOptionLabels(categories, "sectorLabels")}
+                categoriesLoading={categoriesQuery.isLoading}
                 addLabel="sector"
                 onAdd={(value) => addToList(value, sectorLabels, setSectorLabels)}
                 onRemove={(item) => removeFromList(item, setSectorLabels, "sectorLabels")}
@@ -446,6 +520,7 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
                 label={categoryDisplayName(categories, "dealTypeLabels")}
                 items={dealTypeLabels}
                 options={sectionOptionLabels(categories, "dealTypeLabels")}
+                categoriesLoading={categoriesQuery.isLoading}
                 addLabel="deal type"
                 onAdd={(value) => addToList(value, dealTypeLabels, setDealTypeLabels)}
                 onRemove={(item) => removeFromList(item, setDealTypeLabels, "dealTypeLabels")}
@@ -464,6 +539,7 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
                 label={categoryDisplayName(categories, "assetClassLabels")}
                 items={assetClassLabels}
                 options={sectionOptionLabels(categories, "assetClassLabels")}
+                categoriesLoading={categoriesQuery.isLoading}
                 addLabel="asset class"
                 onAdd={(value) => addToList(value, assetClassLabels, setAssetClassLabels)}
                 onRemove={(item) => removeFromList(item, setAssetClassLabels, "assetClassLabels")}
@@ -521,6 +597,7 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
                 onRemove={(item) => removeFromList(item, setMustHaves)}
                 color="emerald"
                 options={sectionOptionLabels(categories, "mustHaves")}
+                categoriesLoading={categoriesQuery.isLoading}
                 pickerLabel="must-have criterion"
                 onAdd={(value) => addToList(value, mustHaves, setMustHaves)}
               />
@@ -597,6 +674,7 @@ export function EditableMandateBlock({ profile, saveRef, onStateChange }: Props)
                 onRemove={(item) => removeFromList(item, setDealBreakers)}
                 color="red"
                 options={sectionOptionLabels(categories, "dealBreakers")}
+                categoriesLoading={categoriesQuery.isLoading}
                 pickerLabel="deal-breaker criterion"
                 onAdd={(value) => addToList(value, dealBreakers, setDealBreakers)}
               />
@@ -809,6 +887,10 @@ interface TagFieldProps {
   items: string[];
   /** From optionsForSection — null when the category is absent from /mandate-categories. */
   options: string[] | null;
+  /** True while GET /mandate-categories is still in flight — an empty/null
+   * `options` in that case means "not loaded yet", not "genuinely
+   * unconfigured", so the disabled trigger's explanation must say which. */
+  categoriesLoading: boolean;
   /** Singular noun used in "+ Add {addLabel}" / picker aria-label, e.g. "sector". */
   addLabel: string;
   onAdd: (value: string) => void;
@@ -830,7 +912,7 @@ interface TagFieldProps {
  * and its selected children as smaller removable chips indented beneath it —
  * one level only (D7), reusing OptionPicker verbatim. */
 function TagField({
-  label, items, options, addLabel, onAdd, onRemove, subOptions, subItems, onAddSub, onRemoveSub,
+  label, items, options, categoriesLoading, addLabel, onAdd, onRemove, subOptions, subItems, onAddSub, onRemoveSub,
 }: TagFieldProps) {
   const disabled = !options || options.length === 0;
 
@@ -893,7 +975,7 @@ function TagField({
         options={options ?? []}
         used={items}
         disabled={disabled}
-        disabledReason={disabled ? NO_OPTIONS_CONFIGURED : undefined}
+        disabledReason={disabledReasonFor(disabled, categoriesLoading)}
         onSelect={onAdd}
       />
     </div>
@@ -909,6 +991,9 @@ interface BulletListProps {
    * free-text input/Add button (D6). `null`/`[]` → disabled + D7 note.
    * Omitted entirely → ESG's free-text path (not a MandateOptions category). */
   options?: string[] | null;
+  /** Same meaning as TagFieldProps.categoriesLoading — only read when
+   * `options` is provided (picker mode); irrelevant to ESG's free-text mode. */
+  categoriesLoading?: boolean;
   /** Required when `options` is provided — see OptionPickerProps.label. */
   pickerLabel?: string;
   // Free-text mode only (ESG & Values) — required when `options` is omitted.
@@ -927,7 +1012,7 @@ const BULLET_TONE: Record<BulletListProps["color"], { dot: string; border: strin
 };
 
 function BulletList({
-  items, onRemove, color, onAdd, options, pickerLabel, newValue, onNewValueChange, placeholder,
+  items, onRemove, color, onAdd, options, categoriesLoading = false, pickerLabel, newValue, onNewValueChange, placeholder,
 }: BulletListProps) {
   const tone = BULLET_TONE[color];
   const usingPicker = options !== undefined;
@@ -960,7 +1045,7 @@ function BulletList({
             options={options ?? []}
             used={items}
             disabled={disabled}
-            disabledReason={disabled ? NO_OPTIONS_CONFIGURED : undefined}
+            disabledReason={disabledReasonFor(disabled, categoriesLoading)}
             onSelect={onAdd}
           />
         </div>

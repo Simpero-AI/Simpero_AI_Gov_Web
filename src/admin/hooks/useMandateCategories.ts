@@ -28,7 +28,7 @@ export function useCreateMandateCategoryMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (category: string) => createMandateCategory({ category }),
+    mutationFn: (body: { category: string; slug?: string }) => createMandateCategory(body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.mandateCategories });
       toast.success("Category created");
