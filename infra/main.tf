@@ -18,7 +18,7 @@ resource "digitalocean_app" "web" {
       build_command    = "corepack enable && pnpm install --frozen-lockfile && pnpm build"
       output_dir       = "dist"
       environment_slug = "node-js"
-      # Without this, every deep link (wouter client-side route) 404s on a
+      # Without this, every deep link (client-side route) 404s on a
       # hard refresh — this is the entire reason App Platform (D1) was
       # chosen over Spaces+CDN, which cannot do a 200-status catch-all.
       catchall_document = "index.html"

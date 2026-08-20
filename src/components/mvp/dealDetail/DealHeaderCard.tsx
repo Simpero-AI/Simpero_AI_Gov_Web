@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link } from "react-router";
 import { ChevronLeft, Lock } from "lucide-react";
 import { STAGE_STYLES } from "@/components/mvp/deals/DealsTable";
 import { formatUsdShort } from "@/lib/dealMetricsFormat";
@@ -66,7 +66,7 @@ export function DealHeaderCard({
       className={`mb-5 flex items-center gap-5 rounded-xl border border-[color:var(--rev-border)] bg-[color:var(--rev-surface)] p-[18px_22px] shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${className ?? ""}`}
     >
       <Link
-        href="/"
+        to="/"
         className="flex shrink-0 items-center gap-1 text-[13px] text-[color:var(--rev-text-5)] no-underline hover:text-[color:var(--rev-primary)]"
       >
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />

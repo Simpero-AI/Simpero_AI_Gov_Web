@@ -3,7 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Building2 } from "lucide-react";
-import { Link } from "wouter";
+import { Link } from "react-router";
 import {
   Button,
   Dialog,
@@ -32,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/mvp/primitives";
+import { ADMIN_ROUTES } from "../adminRoutes";
 import { AdminLayout } from "../components/AdminLayout";
 import { DataState } from "../components/DataState";
 import { useCreateOrganizationMutation, useOrganizationsQuery } from "../hooks/useOrganizations";
@@ -192,7 +193,7 @@ export default function Organizations() {
                   </TableCell>
                   <TableCell className="flex justify-end gap-2 text-right">
                     <Button asChild size="sm" variant="ghost">
-                      <Link href={`/organizations/${org.clerkOrgId}`}>View members</Link>
+                      <Link to={ADMIN_ROUTES.orgDetail(org.clerkOrgId)}>View members</Link>
                     </Button>
                   </TableCell>
                 </TableRow>

@@ -1,4 +1,4 @@
-import { Redirect, Route, Switch } from "wouter";
+import { Navigate, Route, Routes } from "react-router";
 import AdminGuard from "./components/AdminGuard";
 import AdminHome from "./pages/AdminHome";
 import Invitations from "./pages/Invitations";
@@ -8,23 +8,25 @@ import OrgDetail from "./pages/OrgDetail";
 import Organizations from "./pages/Organizations";
 
 /**
- * Lazy entrypoint for the guarded portal subtree, mounted at /admin (nest)
- * in App.tsx's outer <Switch>. Child paths below are relative to /admin.
+ * Lazy entrypoint for the guarded portal subtree, mounted at the `/admin/*`
+ * splat route in src/routes.tsx. This is a descendant <Routes>, so the child
+ * paths below are relative to the splat (no leading slash) — but links and
+ * redirects elsewhere in src/admin/** use the absolute ADMIN_ROUTES paths,
+ * since a relative `to` resolves against the matched route, not the URL.
  */
 export default function AdminApp() {
   return (
     <AdminGuard>
-      <Switch>
-        <Route path="/" component={AdminHome} />
-        <Route path="/organizations" component={Organizations} />
-        <Route path="/organizations/:orgId" component={OrgDetail} />
-        <Route path="/mandate-taxonomy" component={MandateTaxonomy} />
-        <Route path="/members" component={Members} />
-        <Route path="/invitations" component={Invitations} />
-        <Route>
-          <Redirect to="~/" />
-        </Route>
-      </Switch>
+      <Routes>
+        <Route index element={<AdminHome />} />
+        <Route path="organizations" element={<Organizations />} />
+        <Route path="organizations/:orgId" element={<OrgDetail />} />
+        <Route path="mandate-taxonomy" element={<MandateTaxonomy />} />
+        <Route path="members" element={<Members />} />
+        <Route path="invitations" element={<Invitations />} />
+        {/* Unknown admin path falls back to the product root (wouter's `~/`). */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </AdminGuard>
   );
 }

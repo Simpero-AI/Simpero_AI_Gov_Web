@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams, useNavigate } from "react-router";
 import {
   Shield, CheckCircle2, AlertTriangle, FileText, Lock,
   ChevronDown, ChevronRight, Clock, Eye, ExternalLink, Flag, ListOrdered
@@ -20,7 +20,7 @@ import { getSectionConfidence } from "@shared/sectionConfidence";
  */
 export default function SharedMemo() {
   const params = useParams<{ token: string }>();
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
 
   const { data, isLoading, error } = trpc.share.get.useQuery(

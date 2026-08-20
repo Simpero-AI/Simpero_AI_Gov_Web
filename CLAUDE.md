@@ -97,13 +97,18 @@ orgs, invite members and org admins (own org or, for platform admins, an
 arbitrary client org), remove members, and change a member's role between
 `member`/`admin` — a separate application mounted in `App.tsx`'s outer
 `<Switch>`, **outside** `Router()`/`AuthGate`, lazy-loaded so its code never
-enters the main product bundle. Routes: `/admin/sign-up`, `/admin/sign-in`
-(must precede `/admin` itself or the nest swallows them), then `/admin`
-(nest) → `AdminApp.tsx`'s own child `<Switch>` (`/organizations`,
-`/organizations/:orgId` — the per-org detail page for platform admins,
-`/members`, `/invitations`). Guarded internally by `AdminGuard` (Clerk
+enters the main product bundle. Routes are declared in `src/routes.tsx`:
+`/admin/sign-up`, `/admin/sign-in` (each with a `/*` sibling for Clerk's
+sub-routes) and `/admin/*` → `AdminApp.tsx`, which owns a descendant
+`<Routes>` (`organizations`, `organizations/:orgId` — the per-org detail
+page for platform admins, `members`, `invitations`). react-router ranks
+matches by specificity, so declaration order between these is irrelevant.
+Admin links use absolute paths from `src/admin/adminRoutes.ts`
+(`ADMIN_ROUTES`), never relative `to` — a relative `to` in a descendant
+`<Routes>` resolves against the matched route, not the URL. Guarded
+internally by `AdminGuard` (Clerk
 signed-in + `GET /api/admin/context`, not `AuthGate`) — a signed-in user who
-isn't any kind of admin is redirected to `~/admin/sign-in?error=access_denied`
+isn't any kind of admin is redirected to `/admin/sign-in?error=access_denied`
 (not shown an in-place error), which offers sign-out if they're still
 holding a non-admin session. Full build history and gaps:
 `docs/implementations/2026-07-23-admin-portal.md`; original plan:
@@ -168,10 +173,9 @@ change here clearly requires a paired backend change. Instead:
 ## Gotchas (learned the hard way)
 
 - **pnpm config must live in `package.json`'s `"pnpm"` key** — pnpm 10.4.1 ignores
-  a standalone `pnpm.yaml`. The wouter patch (`patches/wouter@3.7.1.patch`,
-  `patchedDependencies`) and `onlyBuiltDependencies` are configured there. If the
-  patch stops applying, routing-dependent tests break subtly — check
-  `node_modules/wouter/esm/index.js` contains `__WOUTER_ROUTES__`.
+  a standalone `pnpm.yaml`, silently. `overrides` and `onlyBuiltDependencies` are
+  configured there; anything added later (patches, overrides) goes there too, and
+  a misplaced one fails quietly rather than erroring.
 - eslint enforces the **Carbon swap boundary**: shadcn primitives and `sonner` must
   be imported via `@/components/mvp/primitives`, never `@/components/ui/*` directly.
 - Number conventions from the monorepo hold everywhere: USD = integer **cents**,

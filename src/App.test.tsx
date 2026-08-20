@@ -1,13 +1,12 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { Router } from "wouter";
-import { memoryLocation } from "wouter/memory-location";
-import App from "./App";
+import { createMemoryRouter, RouterProvider } from "react-router";
+import { routes } from "./routes";
 
 // Focused routing test only (per plan §5 item 5) — mock everything except
-// wouter's own Switch/Route/Redirect tree in App.tsx, so this exercises the
-// real "/analysis/:dealId" -> "/deals/:dealId/analysis" permanent-redirect
-// route (NewDealWizard, frozen, still navigates to the old path on submit)
+// the real route table in routes.tsx, so this exercises the real
+// "/analysis/:dealId" -> "/deals/:dealId/analysis" permanent-redirect route
+// (NewDealWizard, frozen, still navigates to the old path on submit)
 // without paying for a full render of every product page.
 vi.mock("@/_core/hooks/useAuth", () => ({
   useAuth: () => ({ user: { id: 1, role: "user" }, loading: false }),
@@ -48,20 +47,16 @@ afterEach(() => {
 
 describe("App routing", () => {
   it("permanently redirects the legacy /analysis/:dealId route to /deals/:dealId/analysis", async () => {
-    const { hook, history } = memoryLocation({ path: "/analysis/deal-42", record: true });
+    const router = createMemoryRouter(routes, { initialEntries: ["/analysis/deal-42"] });
 
-    render(
-      <Router hook={hook}>
-        <App />
-      </Router>
-    );
+    render(<RouterProvider router={router} />);
 
     await waitFor(() => {
       const el = screen.getByTestId("deal-detail");
       expect(el).toHaveAttribute("data-deal-id", "deal-42");
       expect(el).toHaveAttribute("data-tab", "analysis");
     });
-    expect(history[history.length - 1]).toBe("/deals/deal-42/analysis");
+    expect(router.state.location.pathname).toBe("/deals/deal-42/analysis");
   });
 
   it.each([
@@ -69,16 +64,12 @@ describe("App routing", () => {
     ["/intelligence/decision-feed", "/intelligence/memory/decision-log"],
     ["/intelligence/institutional-memory", "/intelligence/memory/memory-search"],
   ])("permanently redirects the legacy %s route to %s", async (from, to) => {
-    const { hook, history } = memoryLocation({ path: from, record: true });
+    const router = createMemoryRouter(routes, { initialEntries: [from] });
 
-    render(
-      <Router hook={hook}>
-        <App />
-      </Router>
-    );
+    render(<RouterProvider router={router} />);
 
     await waitFor(() => {
-      expect(history[history.length - 1]).toBe(to);
+      expect(router.state.location.pathname).toBe(to);
     });
   });
 });

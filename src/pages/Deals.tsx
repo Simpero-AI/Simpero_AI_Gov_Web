@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router";
 import { BarChart3, CheckCircle2, GitBranch } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -27,7 +27,7 @@ import { formatUsdShort } from "@/lib/dealMetricsFormat";
 
 export default function Deals() {
   usePageTitle("Deals");
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const role: "user" | "admin" = (user?.role ?? "user") as "user" | "admin";

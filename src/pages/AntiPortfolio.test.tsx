@@ -1,8 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Route, Router } from "wouter";
-import { memoryLocation } from "wouter/memory-location";
+import { MemoryRouter, Route, Routes } from "react-router";
 import AntiPortfolio from "./AntiPortfolio";
 
 const useAuthMock = vi.fn();
@@ -22,11 +21,12 @@ afterEach(() => {
 });
 
 function renderAtPath(path: string) {
-  const { hook } = memoryLocation({ path, record: true });
   return render(
-    <Router hook={hook}>
-      <Route path="/anti-portfolio" component={AntiPortfolio} />
-    </Router>
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/anti-portfolio" element={<AntiPortfolio />} />
+      </Routes>
+    </MemoryRouter>
   );
 }
 

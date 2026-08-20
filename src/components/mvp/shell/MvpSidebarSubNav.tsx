@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation } from "react-router";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/mvp/primitives";
@@ -20,10 +20,10 @@ const STORAGE_PREFIX = "mvp.sidebar.subnav.";
  */
 export function MvpSidebarSubNav({ nav }: MvpSidebarSubNavProps) {
   const collapsed = useMvpSidebarCollapsed();
-  const [location] = useLocation();
+  const { pathname } = useLocation();
   const storageKey = STORAGE_PREFIX + nav.key;
   const hasActiveChild = nav.items.some(
-    (item) => !item.disabled && (location === item.href || location.startsWith(`${item.href}/`))
+    (item) => !item.disabled && (pathname === item.href || pathname.startsWith(`${item.href}/`))
   );
   const [open, setOpen] = useState<boolean>(() => {
     try {
@@ -86,8 +86,8 @@ export function MvpSidebarSubNav({ nav }: MvpSidebarSubNavProps) {
 }
 
 function MvpSidebarSubNavItem({ item }: { item: MvpNavSubNavItem }) {
-  const [location] = useLocation();
-  const isActive = !item.disabled && (location === item.href || location.startsWith(`${item.href}/`));
+  const { pathname } = useLocation();
+  const isActive = !item.disabled && (pathname === item.href || pathname.startsWith(`${item.href}/`));
   const Icon = item.icon;
 
   const content = (
@@ -125,7 +125,7 @@ function MvpSidebarSubNavItem({ item }: { item: MvpNavSubNavItem }) {
   }
 
   return (
-    <Link href={item.href} aria-current={isActive ? "page" : undefined} className={sharedClass}>
+    <Link to={item.href} aria-current={isActive ? "page" : undefined} className={sharedClass}>
       {content}
     </Link>
   );

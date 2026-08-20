@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link } from "react-router";
 import { ChevronDown, ChevronUp, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -187,7 +187,7 @@ export function DealsTable({ rows, nameQuery = "", className }: DealsTableProps)
                 return (
                   <DenseTableRow key={row.dealId}>
                     <DenseTableCell className="p-0">
-                      <Link href={`/deals/${row.dealId}/analysis`} className="flex items-center gap-3 px-5 py-3.5 no-underline">
+                      <Link to={`/deals/${row.dealId}/analysis`} className="flex items-center gap-3 px-5 py-3.5 no-underline">
                         <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[9px] bg-[color:var(--rev-tint-primary)] font-mono text-[13px] font-semibold text-[color:var(--rev-primary)]">
                           {initials(row.name)}
                         </div>

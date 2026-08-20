@@ -1,9 +1,11 @@
 // Shared render wrapper for admin component tests: QueryClientProvider +
-// wouter <Router base="/admin"> (mirrors the plan's Phase 5 test guidance).
+// react-router <MemoryRouter> pinned to the admin base path. Router context
+// only — tests that need a real `:param` register their own <Routes>/<Route>
+// (see OrgDetail.test.tsx).
 import type { ReactElement } from "react";
 import { render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Router } from "wouter";
+import { MemoryRouter } from "react-router";
 
 export function renderAdmin(ui: ReactElement) {
   const queryClient = new QueryClient({
@@ -11,7 +13,7 @@ export function renderAdmin(ui: ReactElement) {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <Router base="/admin">{ui}</Router>
+      <MemoryRouter initialEntries={["/admin"]}>{ui}</MemoryRouter>
     </QueryClientProvider>
   );
 }

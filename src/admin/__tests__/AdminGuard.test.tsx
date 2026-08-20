@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Router } from "wouter";
+import { MemoryRouter } from "react-router";
 import AdminGuard from "../components/AdminGuard";
 import { useAdminContext } from "../hooks/useAdminContext";
 
@@ -9,14 +9,14 @@ vi.mock("../hooks/useAdminContext", () => ({
   useAdminContext: vi.fn(),
 }));
 
-// Redirect performs a real navigation on mount; stub it so we can assert the
+// Navigate performs a real navigation on mount; stub it so we can assert the
 // intended target declaratively instead of asserting on final location.
 const redirectSpy = vi.fn();
-vi.mock("wouter", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("wouter")>();
+vi.mock("react-router", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router")>();
   return {
     ...actual,
-    Redirect: (props: { to: string }) => {
+    Navigate: (props: { to: string }) => {
       redirectSpy(props.to);
       return null;
     },
@@ -42,11 +42,11 @@ function renderGuard() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <Router base="/admin">
+      <MemoryRouter initialEntries={["/admin"]}>
         <AdminGuard>
           <div>protected content</div>
         </AdminGuard>
-      </Router>
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -67,10 +67,10 @@ describe("AdminGuard", () => {
     expect(screen.queryByText("protected content")).not.toBeInTheDocument();
   });
 
-  it("redirects to ~/admin/sign-in when signed out", () => {
+  it("redirects to /admin/sign-in when signed out", () => {
     mockedUseAdminContext.mockReturnValue(baseContext({ clerkLoaded: true, isSignedIn: false }));
     renderGuard();
-    expect(redirectSpy).toHaveBeenCalledWith("~/admin/sign-in");
+    expect(redirectSpy).toHaveBeenCalledWith("/admin/sign-in");
     expect(screen.queryByText("protected content")).not.toBeInTheDocument();
   });
 
@@ -94,7 +94,7 @@ describe("AdminGuard", () => {
       baseContext({ isPlatformAdmin: false, isOrgAdmin: false })
     );
     renderGuard();
-    expect(redirectSpy).toHaveBeenCalledWith("~/admin/sign-in?error=access_denied");
+    expect(redirectSpy).toHaveBeenCalledWith("/admin/sign-in?error=access_denied");
     expect(screen.queryByText(/access denied/i)).not.toBeInTheDocument();
     expect(screen.queryByText("protected content")).not.toBeInTheDocument();
   });

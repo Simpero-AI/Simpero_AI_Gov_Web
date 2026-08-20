@@ -31,7 +31,7 @@ const CLERK_APPEARANCE = {
  *
  * Also the landing spot when AdminGuard rejects a signed-in-but-not-admin
  * user (?error=access_denied) — read via window.location.search rather
- * than a wouter hook since this is a one-off flag, not routing state.
+ * than useSearchParams() since this is a one-off flag, not routing state.
  */
 export default function AdminSignIn() {
   const accessDenied = new URLSearchParams(window.location.search).get("error") === "access_denied";

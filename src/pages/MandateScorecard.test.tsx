@@ -3,8 +3,7 @@ import { useEffect } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Router } from "wouter";
-import { memoryLocation } from "wouter/memory-location";
+import { MemoryRouter } from "react-router";
 import MandateScorecard from "./MandateScorecard";
 import { fetchInvestmentProfile } from "@/api/investmentProfile";
 
@@ -65,12 +64,11 @@ afterEach(() => {
 
 function renderMandateScorecard(section: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const { hook } = memoryLocation({ path: `/mandate-scorecard/${section}` });
   return render(
     <QueryClientProvider client={queryClient}>
-      <Router hook={hook}>
+      <MemoryRouter initialEntries={[`/mandate-scorecard/${section}`]}>
         <MandateScorecard section={section} />
-      </Router>
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -109,8 +107,9 @@ describe("MandateScorecard — always-mounted sections", () => {
     vi.mocked(fetchInvestmentProfile).mockResolvedValue(null);
 
     // `section` is a literal render-time prop in this harness (real routing
-    // supplies it via a `:section` route param, not exercised here) — a
-    // fresh render per tab is how these tests switch tabs, not a Link click.
+    // supplies it via a `:section` route param — MemoryRouter here only
+    // provides router context, it doesn't feed the prop) — a fresh render
+    // per tab is how these tests switch tabs, not a Link click.
     const { unmount: unmountFirm } = renderMandateScorecard("firm");
     const saveOnFirm = await screen.findByRole("button", { name: /save configuration/i });
     expect(saveOnFirm).toBeDisabled();

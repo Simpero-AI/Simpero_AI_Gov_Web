@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Users } from "lucide-react";
-import { Link, useLocation, useParams } from "wouter";
+import { Link, useNavigate, useParams } from "react-router";
 import {
   Badge,
   Button,
@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/mvp/primitives";
+import { ADMIN_ROUTES } from "../adminRoutes";
 import { AdminLayout } from "../components/AdminLayout";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { DataState } from "../components/DataState";
@@ -36,8 +37,10 @@ import type { OrgMember } from "../types";
  * sensitive, already shown in the Organizations table).
  */
 export default function OrgDetail() {
-  const { orgId } = useParams<{ orgId: string }>();
-  const [, setLocation] = useLocation();
+  // react-router types every param as possibly-undefined (wouter didn't); the
+  // route only matches with an orgId present, so default and move on.
+  const { orgId = "" } = useParams<{ orgId: string }>();
+  const navigate = useNavigate();
   const { data: orgs } = useOrganizationsQuery();
   const org = orgs?.find((o) => o.clerkOrgId === orgId);
   const { data, isLoading, isError, error, refetch } = useOrgMembersQuery(orgId, true);
@@ -56,7 +59,7 @@ export default function OrgDetail() {
     deleteMutation.mutate(orgId, {
       onSuccess: () => {
         setConfirmDeleteOpen(false);
-        setLocation("/organizations");
+        void navigate(ADMIN_ROUTES.organizations);
       },
     });
   }
@@ -72,7 +75,10 @@ export default function OrgDetail() {
   return (
     <AdminLayout title={org?.name ?? "Organization"}>
       <div className="flex flex-col gap-4">
-        <Link href="/organizations" className="text-sm text-muted-foreground hover:underline">
+        <Link
+          to={ADMIN_ROUTES.organizations}
+          className="text-sm text-muted-foreground hover:underline"
+        >
           ← Back to organizations
         </Link>
 

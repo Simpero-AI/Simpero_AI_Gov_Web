@@ -1,8 +1,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Route, Router } from "wouter";
-import { memoryLocation } from "wouter/memory-location";
+import { MemoryRouter, Route, Routes, useLocation, useParams } from "react-router";
+import { useEffect } from "react";
 import InstitutionalMemoryPage from "./InstitutionalMemory";
 
 const useAuthMock = vi.fn();
@@ -21,16 +21,35 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-/** Mirrors the real `/intelligence/memory/:sub?` route registration in App.tsx
- * so pill clicks (real wouter <Link> navigation) actually re-render the page
- * with the new `:sub` param, instead of just changing the URL underneath a
- * component that never re-reads it. */
+/** Route-object equivalent of routes.tsx's `InstitutionalMemoryRoute` wrapper. */
+function MemoryRoute() {
+  const params = useParams();
+  return <InstitutionalMemoryPage sub={params.sub} />;
+}
+
+/** MemoryRouter has no recorded-history array (wouter's `memoryLocation({record:true})`
+ * did), so this probe rebuilds the same thing from `useLocation()`. */
+function LocationRecorder({ history }: { history: string[] }) {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (history[history.length - 1] !== pathname) history.push(pathname);
+  }, [history, pathname]);
+  return null;
+}
+
+/** Mirrors the real `/intelligence/memory/:sub?` route registration in routes.tsx
+ * so pill clicks (real <Link> navigation) actually re-render the page with the
+ * new `:sub` param, instead of just changing the URL underneath a component
+ * that never re-reads it. */
 function renderAtPath(path: string) {
-  const { hook, history } = memoryLocation({ path, record: true });
+  const history: string[] = [];
   const utils = render(
-    <Router hook={hook}>
-      <Route path="/intelligence/memory/:sub?">{(params) => <InstitutionalMemoryPage sub={params.sub} />}</Route>
-    </Router>
+    <MemoryRouter initialEntries={[path]}>
+      <LocationRecorder history={history} />
+      <Routes>
+        <Route path="/intelligence/memory/:sub?" element={<MemoryRoute />} />
+      </Routes>
+    </MemoryRouter>
   );
   return { ...utils, history };
 }

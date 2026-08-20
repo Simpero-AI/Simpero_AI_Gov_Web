@@ -1,8 +1,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Router } from "wouter";
-import { memoryLocation } from "wouter/memory-location";
+import { MemoryRouter, useLocation } from "react-router";
+import { useEffect } from "react";
 import DealDetail from "./DealDetail";
 import { dealStatusQueryKey, fetchDeal, fetchDealStatus } from "@/api/deals";
 import type { DealWithLatestMemo } from "@/api/deals";
@@ -65,17 +65,28 @@ function makeDealResponse(name: string): DealWithLatestMemo {
   };
 }
 
+/** MemoryRouter has no recorded-history array (wouter's `memoryLocation({record:true})`
+ * did), so this probe rebuilds the same thing from `useLocation()`. */
+function LocationRecorder({ history }: { history: string[] }) {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (history[history.length - 1] !== pathname) history.push(pathname);
+  }, [history, pathname]);
+  return null;
+}
+
 function renderDealDetail(
   dealId: string,
   tab: "screening" | "analysis",
   { queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }) } = {}
 ) {
-  const { hook, history } = memoryLocation({ path: `/deals/${dealId}/${tab}`, record: true });
+  const history: string[] = [];
   const utils = render(
     <QueryClientProvider client={queryClient}>
-      <Router hook={hook}>
+      <MemoryRouter initialEntries={[`/deals/${dealId}/${tab}`]}>
+        <LocationRecorder history={history} />
         <DealDetail dealId={dealId} tab={tab} />
-      </Router>
+      </MemoryRouter>
     </QueryClientProvider>
   );
   return { ...utils, queryClient, history };
@@ -156,12 +167,11 @@ describe("DealDetail — completion interstitial", () => {
     );
 
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { hook } = memoryLocation({ path: "/deals/deal-a/screening" });
     const { rerender } = render(
       <QueryClientProvider client={queryClient}>
-        <Router hook={hook}>
+        <MemoryRouter initialEntries={["/deals/deal-a/screening"]}>
           <DealDetail dealId="deal-a" tab="screening" />
-        </Router>
+        </MemoryRouter>
       </QueryClientProvider>
     );
 
@@ -186,9 +196,9 @@ describe("DealDetail — completion interstitial", () => {
     // into deal-b's still-mounted DealDetailInner instance).
     rerender(
       <QueryClientProvider client={queryClient}>
-        <Router hook={hook}>
+        <MemoryRouter initialEntries={["/deals/deal-a/screening"]}>
           <DealDetail dealId="deal-b" tab="screening" />
-        </Router>
+        </MemoryRouter>
       </QueryClientProvider>
     );
 

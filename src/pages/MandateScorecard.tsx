@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useUserDisplay } from "@/hooks/useUserDisplay";
-import { Link, Redirect, useLocation, useSearch } from "wouter";
+import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import { RotateCcw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -73,20 +73,19 @@ export default function MandateScorecard({ section }: Props) {
   // DealDetail's ?tab=) so a link into this tab (ScorecardTab.tsx's "Edit
   // scores") can pass which deal to preview, and the selection is
   // shareable/bookmarkable rather than living only in local state.
-  const search = useSearch();
-  const [location, navigate] = useLocation();
+  const { pathname, search } = useLocation();
+  const navigate = useNavigate();
   const dealId = new URLSearchParams(search).get("dealId");
   const setDealId = (id: string | null) => {
     const params = new URLSearchParams(search);
     if (id) params.set("dealId", id);
     else params.delete("dealId");
-    const path = location.split("?")[0];
     const qs = params.toString();
-    navigate(qs ? `${path}?${qs}` : path, { replace: true });
+    navigate(qs ? `${pathname}?${qs}` : pathname, { replace: true });
   };
 
   if (!section || !VALID_SECTIONS.includes(section as Section)) {
-    return <Redirect to={ROUTES.mandateScorecardFirm} />;
+    return <Navigate to={ROUTES.mandateScorecardFirm} replace />;
   }
   const active = section as Section;
 
@@ -192,7 +191,7 @@ export default function MandateScorecard({ section }: Props) {
             {TAB_SECTIONS.map((s) => (
               <Link
                 key={s}
-                href={`${ROUTES.mandateScorecard}/${s}`}
+                to={`${ROUTES.mandateScorecard}/${s}`}
                 role="tab"
                 aria-selected={active === s}
                 className={cn(
