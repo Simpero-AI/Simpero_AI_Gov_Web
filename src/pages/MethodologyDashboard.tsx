@@ -1,5 +1,5 @@
 
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/mvp/primitives/button";
@@ -92,7 +92,7 @@ function DismissRateBadge({ rate }: { rate: number }) {
 
 export default function MethodologyDashboard() {
   usePageTitle("Methodology");
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { isLoading: authLoading } = trpc.auth.me.useQuery();
 

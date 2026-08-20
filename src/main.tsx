@@ -4,7 +4,8 @@ import { UNAUTHED_ERR_MSG } from "@shared/const";
 import { QueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
-import App from "./App";
+import { createBrowserRouter, RouterProvider } from "react-router";
+import { routes } from "./routes";
 import "./index.css";
 
 const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -66,6 +67,12 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
+const router = createBrowserRouter(routes);
+
+// ClerkProvider deliberately keeps no routerPush/routerReplace override: it has
+// none today, so Clerk already hard-navigates its own path routing. Wiring them
+// to useNavigate() is the available upgrade to soft navigation, but that would
+// be a behavior change, not part of the router transport swap.
 createRoot(document.getElementById("root")!).render(
   <ClerkProvider
     publishableKey={CLERK_PUBLISHABLE_KEY}
@@ -75,7 +82,7 @@ createRoot(document.getElementById("root")!).render(
     signUpFallbackRedirectUrl="/"
   >
     <ClerkTrpcProvider queryClient={queryClient}>
-      <App />
+      <RouterProvider router={router} />
     </ClerkTrpcProvider>
   </ClerkProvider>
 );

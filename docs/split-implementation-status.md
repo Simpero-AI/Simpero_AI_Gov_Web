@@ -15,6 +15,12 @@
 | Sample HTML entry points (`carbon-sample`, `radix-*`) | **Dropped**, with their `*-main.tsx` bootstraps, `src/samples/`, and deps (`@carbon/react`, `@carbon/styles`, `@radix-ui/themes`). Re-addable from the monorepo archive in ~30 min if ever needed |
 | Package manager | pnpm kept (per playbook standing decision; wouter patch preserved) |
 
+> **Update 2026-08-20:** the wouter patch is gone — wouter was replaced by
+> `react-router@7.18.2` and both the patch and `pnpm.patchedDependencies` were
+> deleted (`docs/plans/2026-08-20-wouter-to-react-router.md`). pnpm itself is
+> unchanged. This retires the patch as a live concern in the two places below
+> (this table row and deviation 3) and in the deployment plan's R1.
+
 ## Done — FE-0…FE-5 (all gates green)
 
 | Step | Commit | Notes |
@@ -39,6 +45,8 @@
 3. **pnpm config moved from `pnpm.yaml` into `package.json`** — pnpm 10.4.1 silently
    ignores `pnpm.yaml`; the wouter patch was not applying until moved. (The monorepo
    has the same config duplicated in `package.json`, which is why it works there.)
+   *2026-08-20: the patch itself is now deleted along with wouter; the
+   config-location lesson still stands for `overrides`/`onlyBuiltDependencies`.*
 4. **`src/api/_legacy/` excluded from eslint** — 433 errors in machine-generated
    drizzle `.d.ts`; generated frozen code isn't lintable.
 5. **`@clerk/testing` added** as the e2e auth strategy (replaces the deleted

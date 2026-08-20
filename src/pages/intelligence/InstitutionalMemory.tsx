@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import { Brain } from "lucide-react";
-import { Link, Redirect } from "wouter";
+import { Link, Navigate } from "react-router";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useUserDisplay } from "@/hooks/useUserDisplay";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
@@ -79,7 +79,7 @@ export default function InstitutionalMemoryPage({ sub }: InstitutionalMemoryProp
   }
 
   if (!sub || !VALID_SUBS.has(sub)) {
-    return <Redirect to={`${ROUTES.intelligenceMemory}/${DEFAULT_SUB}`} />;
+    return <Navigate to={`${ROUTES.intelligenceMemory}/${DEFAULT_SUB}`} replace />;
   }
   const active = sub;
   const activeTab = INSTITUTIONAL_MEMORY_SUBTABS.find((t) => t.key === active)!;
@@ -117,7 +117,7 @@ export default function InstitutionalMemoryPage({ sub }: InstitutionalMemoryProp
             {INSTITUTIONAL_MEMORY_SUBTABS.map((t) => (
               <Link
                 key={t.key}
-                href={`${ROUTES.intelligenceMemory}/${t.key}`}
+                to={`${ROUTES.intelligenceMemory}/${t.key}`}
                 role="tab"
                 aria-selected={active === t.key}
                 className={cn(

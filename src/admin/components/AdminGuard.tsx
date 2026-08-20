@@ -1,6 +1,7 @@
 import { Spinner } from "@/components/mvp/primitives";
 import type { ReactNode } from "react";
-import { Redirect } from "wouter";
+import { Navigate } from "react-router";
+import { ADMIN_ROUTES } from "../adminRoutes";
 import { useAdminContext } from "../hooks/useAdminContext";
 
 /**
@@ -55,7 +56,7 @@ export default function AdminGuard({ children }: { children: ReactNode }) {
   // Signed-out visitors land on the admin sign-in entry, not the product
   // /sign-in — that would land them on `/` under the product AuthGate,
   // the exact admin-only bounce/JIT-provision problem F1 exists to avoid.
-  if (!isSignedIn) return <Redirect to="~/admin/sign-in" />;
+  if (!isSignedIn) return <Navigate to={ADMIN_ROUTES.signIn} replace />;
 
   if (isLoading) {
     return (
@@ -83,7 +84,7 @@ export default function AdminGuard({ children }: { children: ReactNode }) {
   // in, offer sign-out instead of re-rendering Clerk's <SignIn/> (which
   // would just bounce an active session straight back here).
   if (!isPlatformAdmin && !isOrgAdmin) {
-    return <Redirect to="~/admin/sign-in?error=access_denied" />;
+    return <Navigate to={`${ADMIN_ROUTES.signIn}?error=access_denied`} replace />;
   }
 
   return <>{children}</>;

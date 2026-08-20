@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render as rtlRender, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
+import type { ReactElement } from "react";
 import { ScorecardTab } from "./ScorecardTab";
 import { buildE2eDeliverableMemo } from "@shared/e2eUxMemoFixture";
 import type { ICMemoResult } from "@shared/simperoTypes";
@@ -21,6 +23,12 @@ vi.mock("@/lib/trpc", () => ({
     memo: { rescore: { useMutation: rescoreMutationMock } },
   },
 }));
+
+// ScorecardTab renders a react-router <Link>, which needs router context
+// (wouter's <Link> fell back to the browser location and needed no wrapper).
+function render(ui: ReactElement) {
+  return rtlRender(ui, { wrapper: MemoryRouter });
+}
 
 afterEach(() => {
   cleanup();

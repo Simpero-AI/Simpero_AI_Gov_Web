@@ -1,9 +1,9 @@
 import { EmptyState } from "@/components/mvp/common/EmptyState";
 import { AlertCircle } from "lucide-react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router";
 
 export default function NotFound() {
-  const [, setLocation] = useLocation();
+  const setLocation = useNavigate();
 
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-background px-4">

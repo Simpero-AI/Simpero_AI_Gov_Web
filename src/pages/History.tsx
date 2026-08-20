@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router";
 import { History as HistoryIcon, Lock, Trash2 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -58,7 +58,7 @@ function formatFrameworks(value: string | string[] | unknown): string {
 
 export default function History() {
   usePageTitle("Memo History");
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
 
   const role: "user" | "admin" = (user?.role ?? "user") as "user" | "admin";

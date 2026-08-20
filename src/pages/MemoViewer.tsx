@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { apiFetch } from "@/api/http";
 import { TRPCClientError } from "@trpc/client";
-import { useLocation, useParams } from "wouter";
+import { useNavigate, useParams } from "react-router";
 import { toast } from "@/components/mvp/primitives/sonner";
 import {
   Shield, Download, ArrowLeft, CheckCircle2, AlertTriangle,
@@ -220,7 +220,7 @@ const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
 
 export default function MemoViewer() {
   const params = useParams<{ sessionId: string }>();
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const [memo, setMemo] = useState<ICMemoResult | null>(null);
   const [activeCitation, setActiveCitation] = useState<CitationPanel | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());

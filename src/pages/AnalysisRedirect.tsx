@@ -1,5 +1,5 @@
 // client/src/pages/AnalysisRedirect.tsx
-import { Redirect } from "wouter";
+import { Navigate } from "react-router";
 import { Loader2, BarChart2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { DEALS_PIPELINE_QUERY_KEY, fetchDealsPipeline, pickMostRecentCompleteDeal } from "@/api/deals";
@@ -31,13 +31,13 @@ export default function AnalysisRedirect() {
   }
 
   if (!user || query.isError || !query.data) {
-    return <Redirect to="/" />;
+    return <Navigate to="/" replace />;
   }
 
   const mostRecent = pickMostRecentCompleteDeal(query.data);
 
   if (mostRecent) {
-    return <Redirect to={`/deals/${mostRecent.dealId}/analysis`} />;
+    return <Navigate to={`/deals/${mostRecent.dealId}/analysis`} replace />;
   }
 
   const userName = user.name ?? user.email ?? "User";

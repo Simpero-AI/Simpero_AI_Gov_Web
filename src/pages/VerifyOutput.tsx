@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { apiFetch } from "@/api/http";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router";
 import { useDropzone } from "react-dropzone";
 import { toast } from "@/components/mvp/primitives/sonner";
 import {
@@ -58,7 +58,7 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 export default function VerifyOutput() {
   usePageTitle("Verify AI Output");
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const role: "user" | "admin" = (user?.role ?? "user") as "user" | "admin";
   const nav = buildMvpNav({ id: user?.id ?? "anon", role, isPlatformAdmin: Boolean(user?.is_platform_admin) });

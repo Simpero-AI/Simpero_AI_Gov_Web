@@ -1,4 +1,5 @@
-import { Redirect } from "wouter";
+import { Navigate } from "react-router";
+import { ADMIN_ROUTES } from "../adminRoutes";
 import { useAdminContext } from "../hooks/useAdminContext";
 
 /**
@@ -9,10 +10,10 @@ import { useAdminContext } from "../hooks/useAdminContext";
 export default function AdminHome() {
   const { isPlatformAdmin, isOrgAdmin } = useAdminContext();
 
-  if (isPlatformAdmin) return <Redirect to="/organizations" />;
-  if (isOrgAdmin) return <Redirect to="/members" />;
+  if (isPlatformAdmin) return <Navigate to={ADMIN_ROUTES.organizations} replace />;
+  if (isOrgAdmin) return <Navigate to={ADMIN_ROUTES.members} replace />;
 
   // Unreachable in practice — AdminGuard already blocks non-admins from
   // reaching this route. Kept as a safe fallback rather than an assertion.
-  return <Redirect to="~/" />;
+  return <Navigate to="/" replace />;
 }

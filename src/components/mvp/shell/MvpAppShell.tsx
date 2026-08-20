@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type FC, type ReactNode } from "react";
-import { useLocation } from "wouter";
+import { useLocation } from "react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { findSlot, type SlotComponent } from "./slot";
@@ -52,11 +52,11 @@ export const MvpAppShell: FC<MvpAppShellProps> & {
   }, [collapsed]);
 
   // Reset main scroll on location change.
-  const [location] = useLocation();
+  const { pathname } = useLocation();
   useEffect(() => {
     const main = document.getElementById("main");
     if (main) main.scrollTo({ top: 0 });
-  }, [location]);
+  }, [pathname]);
 
   const sidebar = findSlot(children, "MvpAppShell.Sidebar");
   const topbar = findSlot(children, "MvpAppShell.Topbar");

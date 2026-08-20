@@ -7,7 +7,7 @@ source SHA); served as a static site on DigitalOcean App Platform, talking to th
 
 ## Stack
 
-React 19 · Vite · TypeScript · Tailwind v4 · wouter (patched) · TanStack Query ·
+React 19 · Vite · TypeScript · Tailwind v4 · react-router · TanStack Query ·
 Clerk (`@clerk/clerk-react`) · pnpm
 
 ## Getting started

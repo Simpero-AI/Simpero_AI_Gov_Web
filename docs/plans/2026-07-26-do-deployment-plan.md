@@ -506,6 +506,11 @@ Owned by `Simpero_AI_Gov_Alpha`; this repo neither designs nor implements them.
   (through `deploy.yml`, not a local apply — no manual deploys, see D5/Workflow structure) is where this
   surfaces; verify the deployed bundle behaves on deep links via the `smoke` job before trusting the
   pipeline further; escape hatch is the DOCR-image path.
+  *Update 2026-08-20 — the patch half of this risk is retired:* wouter was replaced by
+  `react-router@7.18.2` and `patches/wouter@3.7.1.patch` + `pnpm.patchedDependencies` were deleted
+  (`docs/plans/2026-08-20-wouter-to-react-router.md`), so no patch is applied at build time at all.
+  The `corepack` / `packageManager` / pnpm 10.4.1 half of R1 is unchanged, and deep links still depend
+  on `catchall_document`, not on the router library.
 - **R2 — App Platform builds a branch tip, not a SHA.** Under D5 this mostly stops being a problem: each App
   tracks a branch that only ever carries commits meant for that environment, so "tip" and "the thing we meant
   to ship" are the same commit by construction. The residual race is narrow — someone merges to the tracked

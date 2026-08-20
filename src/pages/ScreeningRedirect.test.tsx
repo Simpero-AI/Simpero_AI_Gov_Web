@@ -1,8 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Router } from "wouter";
-import { memoryLocation } from "wouter/memory-location";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import ScreeningRedirect from "./ScreeningRedirect";
 import { fetchDealsPipeline } from "@/api/deals";
 import type { LivePipelineRow } from "@shared/dealsListPipeline";
@@ -39,17 +38,24 @@ function makeRow(over: Partial<LivePipelineRow> = {}): LivePipelineRow {
   };
 }
 
+// Local two-route table (not the app's `routes`): the component under test at
+// /screening, plus a probe route at its redirect target so the <Navigate> has
+// somewhere real to land and `router.state.location.pathname` is meaningful.
 function renderScreeningRedirect() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const { hook, history } = memoryLocation({ path: "/screening", record: true });
+  const router = createMemoryRouter(
+    [
+      { path: "/screening", element: <ScreeningRedirect /> },
+      { path: "/deals/:dealId/screening", element: <div data-testid="screening-probe" /> },
+    ],
+    { initialEntries: ["/screening"] }
+  );
   render(
     <QueryClientProvider client={queryClient}>
-      <Router hook={hook}>
-        <ScreeningRedirect />
-      </Router>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   );
-  return { history };
+  return { router };
 }
 
 // jsdom doesn't implement Element.scrollTo — MvpAppShell calls it on every
@@ -70,9 +76,9 @@ describe("ScreeningRedirect", () => {
       makeRow({ dealId: "new", createdAt: "2024-06-01T00:00:00.000Z" }),
     ]);
 
-    const { history } = renderScreeningRedirect();
+    const { router } = renderScreeningRedirect();
 
-    await waitFor(() => expect(history[history.length - 1]).toBe("/deals/new/screening"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/deals/new/screening"));
   });
 
   it("shows the no-deals-to-screen empty state when there are no complete deals", async () => {

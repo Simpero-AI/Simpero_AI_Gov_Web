@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render as rtlRender, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
+import type { ReactElement } from "react";
 import { DealsTable } from "./DealsTable";
 import type { LivePipelineRow } from "@shared/dealsListPipeline";
+
+// DealsTable renders react-router <Link>s, which need router context (wouter's
+// <Link> fell back to the browser location and needed no wrapper).
+function render(ui: ReactElement) {
+  return rtlRender(ui, { wrapper: MemoryRouter });
+}
 
 function makeRow(over: Partial<LivePipelineRow> = {}): LivePipelineRow {
   return {

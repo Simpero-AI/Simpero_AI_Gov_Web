@@ -1,105 +1,12 @@
-import { Spinner } from "@/components/mvp/primitives";
 import { Toaster } from "@/components/mvp/primitives/sonner";
 import { TooltipProvider } from "@/components/mvp/primitives/tooltip";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useProfileSync } from "@/_core/hooks/useProfileSync";
-import NotFound from "@/pages/NotFound";
 import { RedirectToSignIn } from "@clerk/clerk-react";
-import { lazy, Suspense, type ReactNode } from "react";
-import { Redirect, Route, Switch } from "wouter";
+import { type ReactNode } from "react";
+import { Outlet } from "react-router";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Deals from "./pages/Deals";
-import StealthLanding from "./pages/StealthLanding";
-import History from "./pages/History";
-import MemoViewer from "./pages/MemoViewer";
-import MemoDeliverablePage from "./pages/MemoDeliverable";
-import SignInPage from "./pages/SignIn";
-import SignUpPage from "./pages/SignUp";
-import VerifyOutput from "./pages/VerifyOutput";
-import SharedMemo from "./pages/SharedMemo";
-import MethodologyDashboard from "./pages/MethodologyDashboard";
-import ProductUsage from "./pages/ProductUsage";
-import DealDetail from "./pages/DealDetail";
-import AnalysisRedirect from "./pages/AnalysisRedirect";
-import ScreeningRedirect from "./pages/ScreeningRedirect";
-import MandateScorecard from "./pages/MandateScorecard";
-import InstitutionalMemoryPage from "./pages/intelligence/InstitutionalMemory";
-import AntiPortfolio from "./pages/AntiPortfolio";
-import NewDealWizard from "@/pages/NewDealWizard";
-
-// Admin Portal — lazy so its code never enters the main product bundle
-// (docs/plans/admin-portal-frontend.md). Mounted in the outer <Switch>
-// below, NOT inside Router()/AuthGate — admins are an admin-only identity
-// (no product `users` row) and must never hit /auth/me.
-const AdminSignUp = lazy(() => import("@/admin/pages/AdminSignUp"));
-const AdminSignIn = lazy(() => import("@/admin/pages/AdminSignIn"));
-const AdminApp = lazy(() => import("@/admin/AdminApp"));
-
-/** Suspense fallback for the admin chunks — product-independent, matches the
- * admin sign-up/sign-in visual language (--mvp-sidebar-bg), deliberately
- * not the product shell's loader (AdminLayout doesn't exist until Phase 1). */
-function AdminBootFallback() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[color:var(--mvp-sidebar-bg)]">
-      <Spinner className="size-6 text-white" />
-    </div>
-  );
-}
-
-function Router() {
-  // make sure to consider if you need authentication for certain routes
-  return (
-    <Switch>
-      <Route path="/" component={Deals} />
-      <Route path="/mandate-scorecard/:section">{(params) => <MandateScorecard section={params.section} />}</Route>
-      <Route path="/mandate-scorecard"><Redirect to="/mandate-scorecard/firm" /></Route>
-      <Route path="/setup/investment-profile"><Redirect to="/mandate-scorecard/firm" /></Route>
-      <Route path="/new-deal/:step?">
-        {(params) => <NewDealWizard step={params.step} />}
-      </Route>
-      <Route path="/screening" component={ScreeningRedirect} />
-      <Route path="/deals/:dealId/screening">
-        {(params) => {
-          // dealId is an opaque UUID string now — no numeric coercion.
-          if (!params.dealId) return <NotFound />;
-          return <DealDetail dealId={params.dealId} tab="screening" />;
-        }}
-      </Route>
-      <Route path="/deals/:dealId/analysis/:sub?">
-        {(params) => {
-          if (!params.dealId) return <NotFound />;
-          return <DealDetail dealId={params.dealId} tab="analysis" />;
-        }}
-      </Route>
-      <Route path="/analysis" component={AnalysisRedirect} />
-      {/* Permanent redirect for the pre-Phase-4 route — NewDealWizard still
-          navigates here unconditionally on submit (frozen, not touched by
-          this redesign) and old bookmarked/shared links must keep working. */}
-      <Route path="/analysis/:dealId">
-        {(params) => {
-          if (!params.dealId) return <NotFound />;
-          return <Redirect to={`/deals/${params.dealId}/analysis`} />;
-        }}
-      </Route>
-      <Route path="/history" component={History} />
-      <Route path="/memo/:sessionId/ledger" component={MemoViewer} />
-      <Route path="/memo/:sessionId" component={MemoDeliverablePage} />
-      <Route path="/verify" component={VerifyOutput} />
-      <Route path="/methodology" component={MethodologyDashboard} />
-      <Route path="/product-usage" component={ProductUsage} />
-      {/* Permanent redirects for the pre-Phase-8 routes (plan §2) — old
-          bookmarked/shared links must keep working. */}
-      <Route path="/intelligence/decision-feed"><Redirect to="/intelligence/memory/decision-log" /></Route>
-      <Route path="/intelligence/ask-me"><Redirect to="/intelligence/memory/memory-search" /></Route>
-      <Route path="/intelligence/institutional-memory"><Redirect to="/intelligence/memory/memory-search" /></Route>
-      <Route path="/intelligence/memory/:sub?">{(params) => <InstitutionalMemoryPage sub={params.sub} />}</Route>
-      <Route path="/anti-portfolio" component={AntiPortfolio} />
-      <Route path="/404" component={NotFound} />
-      <Route component={NotFound} />
-    </Switch>
-  );
-}
 
 /**
  * "No user can log in without an organisation" is mostly enforced by Clerk
@@ -124,49 +31,28 @@ function AuthGate({ children }: { children: ReactNode }) {
   return <RedirectToSignIn />;
 }
 
+/** Pathless layout route wrapping every authenticated product route in AuthGate. */
+export function AuthGateLayout() {
+  return (
+    <AuthGate>
+      <Outlet />
+    </AuthGate>
+  );
+}
+
 // NOTE: About Theme
 // - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
 //   to keep consistent foreground/background color across components
 // - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
 
+/** Root layout route element — providers only; the route table lives in `src/routes.tsx`. */
 function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
-          <Switch>
-            <Route path="/landing" component={StealthLanding} />
-            <Route path="/shared/:token" component={SharedMemo} />
-            <Route path="/sign-in" component={SignInPage} />
-            <Route path="/sign-in/*" component={SignInPage} />
-            <Route path="/sign-up" component={SignUpPage} />
-            <Route path="/sign-up/*" component={SignUpPage} />
-            {/* Admin Portal (F1/F2) — outside AuthGate, guarded internally by
-                AdminGuard (Clerk signed-in + GET /api/admin/context). Ordering
-                matters: /admin/sign-up and /admin/sign-in must precede /admin,
-                or the /admin nest would swallow their sub-routes. */}
-            <Route path="/admin/sign-up" nest>
-              <Suspense fallback={<AdminBootFallback />}>
-                <AdminSignUp />
-              </Suspense>
-            </Route>
-            <Route path="/admin/sign-in" nest>
-              <Suspense fallback={<AdminBootFallback />}>
-                <AdminSignIn />
-              </Suspense>
-            </Route>
-            <Route path="/admin" nest>
-              <Suspense fallback={<AdminBootFallback />}>
-                <AdminApp />
-              </Suspense>
-            </Route>
-            <Route>
-              <AuthGate>
-                <Router />
-              </AuthGate>
-            </Route>
-          </Switch>
+          <Outlet />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

@@ -1,5 +1,5 @@
 import { useState, useMemo, Fragment, useEffect, useRef } from "react";
-import { useRoute } from "wouter";
+import { useParams } from "react-router";
 import {
   Sparkles, Download, Edit, CheckCircle,
   TrendingUp, DollarSign, Users, Target, Shield, Award,
@@ -139,8 +139,7 @@ export default function MemoDeliverablePage() {
 
 function MemoDeliverableInner() {
   usePageTitle("Memo History");
-  const [, params] = useRoute("/memo/:sessionId");
-  const sessionId = params?.sessionId ?? "";
+  const { sessionId = "" } = useParams();
   const { user } = useAuth();
   const role: "user" | "admin" = (user?.role ?? "user") as "user" | "admin";
   const nav = buildMvpNav({ id: user?.id ?? "anon", role, isPlatformAdmin: Boolean(user?.is_platform_admin) });

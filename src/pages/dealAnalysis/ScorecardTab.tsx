@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { Link } from "wouter";
+import { Link } from "react-router";
 import { AlertTriangle, Loader2, Shield, ShieldCheck, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/mvp/primitives/sonner";
@@ -238,7 +238,7 @@ export function ScorecardTab({ memoTyped, sessionId, dealId }: ScorecardTabProps
             {/* Deal Scorecard tab (Phase 7) — manual per-criterion scoring,
                 pre-selected to this deal via the ?dealId= query param. */}
             <Link
-              href={`${ROUTES.mandateScorecardScorecard}?dealId=${encodeURIComponent(dealId)}`}
+              to={`${ROUTES.mandateScorecardScorecard}?dealId=${encodeURIComponent(dealId)}`}
               className="rounded-lg border border-white/20 px-3 py-2.5 text-center text-[13px] text-white transition-colors hover:bg-white/10"
             >
               Edit scores in Mandate &amp; Scorecard →

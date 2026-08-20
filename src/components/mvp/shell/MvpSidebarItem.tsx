@@ -1,4 +1,4 @@
-import { Link, useLocation } from "wouter";
+import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/mvp/primitives";
 import { useMvpSidebarCollapsed } from "./MvpAppShell";
@@ -28,10 +28,10 @@ export function MvpSidebarItem({
   disabledReason,
   ...rest
 }: MvpSidebarItemProps) {
-  const [location] = useLocation();
+  const { pathname } = useLocation();
   const collapsed = useMvpSidebarCollapsed();
   const isActive =
-    !disabled && (href === "/" ? location === "/" : location === href || location.startsWith(`${href}/`));
+    !disabled && (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`));
 
   const content = (
     <>
@@ -91,7 +91,7 @@ export function MvpSidebarItem({
 
   return (
     <Link
-      href={href}
+      to={href}
       aria-label={rest["aria-label"] ?? label}
       aria-current={isActive ? "page" : undefined}
       className={sharedClass}

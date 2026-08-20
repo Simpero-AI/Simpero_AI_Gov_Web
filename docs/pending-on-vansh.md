@@ -183,7 +183,10 @@ mirroring the backend repo's own `-plan`/gated pair pattern exactly.
      jobs** (retries only `deploy`/`smoke`, not Terraform). Confirmed 2026-07-30 — see plan doc R8.
   4. **Status: done for staging** — `deploy`/`smoke` are passing, `app-staging.simpero.com` is live (D1).
      This is where you find out whether DO's Node buildpack handles pnpm 10.4.1 and the `wouter` patch
-     correctly (R1) — confirmed fine, the deep-link check passed.
+     correctly (R1) — confirmed fine, the deep-link check passed. **2026-08-20:** the patch half of R1 is
+     retired — wouter was replaced by `react-router@7.18.2` and the patch plus `pnpm.patchedDependencies`
+     were deleted, so the build no longer applies any patch. The pnpm 10.4.1 / `corepack` half still
+     applies, as does the deep-link (`catchall_document`) check.
   5. For every deploy after this one, use `run_terraform: false` (the default) — it skips Terraform
      entirely and just ships the latest `staging` branch tip. **Found and fixed 2026-07-30**: `smoke` was
      silently *skipped* (not failed) on a routine `run_terraform: false` deploy — GitHub's implicit `if`

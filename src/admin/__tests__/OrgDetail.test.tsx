@@ -3,8 +3,7 @@ import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Route, Router } from "wouter";
-import { memoryLocation } from "wouter/memory-location";
+import { MemoryRouter, Route, Routes } from "react-router";
 import OrgDetail from "../pages/OrgDetail";
 import { useAdminContext } from "../hooks/useAdminContext";
 import * as adminClient from "../api/adminClient";
@@ -65,18 +64,19 @@ function adminContext(overrides: Partial<ReturnType<typeof useAdminContext>> = {
 }
 
 // Pins the current route to /admin/organizations/org_1 (mirrors testUtils'
-// renderAdmin but with a fixed location so useParams()'s orgId is defined,
-// which the shared helper's real-browser-location Router can't provide).
+// renderAdmin but with a fixed location, and with a real :orgId route so
+// useParams()'s orgId is defined — which the shared helper can't provide).
 function renderOrgDetail() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  const { hook } = memoryLocation({ path: "/admin/organizations/org_1" });
   return render(
     <QueryClientProvider client={queryClient}>
-      <Router base="/admin" hook={hook}>
-        <Route path="/organizations/:orgId" component={OrgDetail} />
-      </Router>
+      <MemoryRouter initialEntries={["/admin/organizations/org_1"]}>
+        <Routes>
+          <Route path="/admin/organizations/:orgId" element={<OrgDetail />} />
+        </Routes>
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }

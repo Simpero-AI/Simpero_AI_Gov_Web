@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
-import { useLocation, useSearch } from "wouter";
+import { useLocation, useNavigate } from "react-router";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -56,8 +56,8 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
   // while inside the wizard specifically (docs/plans/2026-08-12-web-design-
   // revamp.md Phase 8 task) — a minor, known inconsistency, not a bug to fix.
   const nav = buildMvpNav({ id: authUser?.id ?? "anon", role });
-  const [, navigate] = useLocation();
-  const search = useSearch();
+  const navigate = useNavigate();
+  const { search } = useLocation();
 
   // Normalize the route param.
   const stepName: StepName = useMemo(() => {

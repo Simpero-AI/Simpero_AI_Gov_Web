@@ -1,5 +1,5 @@
 // client/src/pages/ScreeningRedirect.tsx
-import { Redirect } from "wouter";
+import { Navigate } from "react-router";
 import { Loader2, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { DEALS_PIPELINE_QUERY_KEY, fetchDealsPipeline, pickMostRecentCompleteDeal } from "@/api/deals";
@@ -40,13 +40,13 @@ export default function ScreeningRedirect() {
   }
 
   if (!user || query.isError || !query.data) {
-    return <Redirect to="/" />;
+    return <Navigate to="/" replace />;
   }
 
   const mostRecent = pickMostRecentCompleteDeal(query.data);
 
   if (mostRecent) {
-    return <Redirect to={`/deals/${mostRecent.dealId}/screening`} />;
+    return <Navigate to={`/deals/${mostRecent.dealId}/screening`} replace />;
   }
 
   const userName = user.name ?? user.email ?? "User";

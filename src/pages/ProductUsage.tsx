@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/mvp/primitives/button";
@@ -127,7 +127,7 @@ function ByModelTable({ rows }: { rows: LlmUsageByModelRow[] }) {
 
 export default function ProductUsage() {
   usePageTitle("Product Usage");
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { isLoading: authLoading } = trpc.auth.me.useQuery();
 

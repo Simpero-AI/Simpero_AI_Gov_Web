@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CitationProvider, useCitationSafe } from "@/contexts/CitationContext";
 import { CitationSidebar } from "@/components/mvp/primitives/CitationSidebar";
-import { Link, useSearch, useLocation } from "wouter";
+import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "@/components/mvp/primitives/sonner";
 import {
   ArrowRight,
@@ -288,8 +288,8 @@ function DealMetricsStrip({
 // ---------------------------------------------------------------------------
 
 function useTabFromUrl(): [TabKey, (t: TabKey) => void] {
-  const search = useSearch();
-  const [location, setLocation] = useLocation();
+  const { pathname, search } = useLocation();
+  const navigate = useNavigate();
   const tab = (() => {
     const params = new URLSearchParams(search);
     const t = params.get("tab");
@@ -300,8 +300,7 @@ function useTabFromUrl(): [TabKey, (t: TabKey) => void] {
     const params = new URLSearchParams(search);
     params.set("tab", t);
     // Replace search params, preserving the path
-    const path = location.split("?")[0];
-    setLocation(`${path}?${params.toString()}`, { replace: true });
+    navigate(`${pathname}?${params.toString()}`, { replace: true });
   };
   return [tab, setTab];
 }
@@ -463,7 +462,7 @@ function AnalysisTabs({
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" asChild>
-            <Link href="/history">
+            <Link to="/history">
               <ClipboardList className="mr-1.5 h-4 w-4" />
               Memo History
             </Link>
@@ -589,7 +588,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
   const role: "user" | "admin" = (user?.role ?? "user") as "user" | "admin";
   const nav = buildMvpNav({ id: user?.id ?? "anon", role, isPlatformAdmin: Boolean(user?.is_platform_admin) });
   const { userInitial, userName, userRoleLabel } = useUserDisplay();
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
 
   const dealQuery = useQuery({
     queryKey: dealQueryKey(dealId),
@@ -691,7 +690,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
       <div className="mx-auto max-w-md px-6 py-12 text-center text-sm text-muted-foreground">
         This deal doesn&apos;t exist or isn&apos;t accessible to you.
         <div className="mt-4">
-          <Link href="/" className="text-blue-600 hover:underline">
+          <Link to="/" className="text-blue-600 hover:underline">
             ← Back to Dashboard
           </Link>
         </div>
@@ -712,7 +711,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
           </p>
         </div>
         <Button asChild>
-          <Link href={`/new-deal?dealId=${dealId}`}>Upload documents</Link>
+          <Link to={`/new-deal?dealId=${dealId}`}>Upload documents</Link>
         </Button>
       </div>
     );
@@ -735,7 +734,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
         </div>
         <div className="mt-6 text-center">
           <Button asChild>
-            <Link href={`/new-deal?dealId=${dealId}`}>Re-upload documents</Link>
+            <Link to={`/new-deal?dealId=${dealId}`}>Re-upload documents</Link>
           </Button>
         </div>
       </div>
@@ -868,7 +867,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
                   verification rate.
                 </div>
                 <Link
-                  href={`/memo/${latestMemoSession.sessionId}/ledger`}
+                  to={`/memo/${latestMemoSession.sessionId}/ledger`}
                   className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900"
                 >
                   <ShieldCheck className="h-3.5 w-3.5" />
