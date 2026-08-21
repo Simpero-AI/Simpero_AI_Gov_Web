@@ -389,18 +389,6 @@ export function EditableMandateBlock({ profile, saveRef, resetRef, onStateChange
     onStateChange?.({ dirty: isDirty, saving: putMandateMutation.isPending });
   }, [isDirty, putMandateMutation.isPending, onStateChange]);
 
-  // Show native browser "leave page?" dialog when user has unsaved changes.
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    if (isDirty) {
-      window.addEventListener("beforeunload", handler);
-    }
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [isDirty]);
-
   const addToList = (
     val: string,
     list: string[],

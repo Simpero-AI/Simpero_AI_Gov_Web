@@ -1,12 +1,22 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useUserDisplay } from "@/hooks/useUserDisplay";
-import { Link, Navigate, useLocation, useNavigate } from "react-router";
+import { Link, Navigate, useBlocker, useLocation, useNavigate } from "react-router";
 import { RotateCcw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { INVESTMENT_PROFILE_QUERY_KEY, fetchInvestmentProfile } from "@/api/investmentProfile";
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/mvp/primitives/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/mvp/primitives/alert-dialog";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
 import { MvpSidebar } from "@/components/mvp/shell/MvpSidebar";
 import { MvpNavRenderer } from "@/components/mvp/shell/MvpNavRenderer";
@@ -84,6 +94,32 @@ export default function MandateScorecard({ section }: Props) {
     navigate(qs ? `${pathname}?${qs}` : pathname, { replace: true });
   };
 
+  // Guards in-app navigation away from the page while any of the three
+  // editable tabs is dirty — distinct from `activeState`/`dirty` above,
+  // which only drives the topbar indicator for the *active* tab. The
+  // pathname-prefix check is load-bearing: tab switches are real <Link>
+  // navigations to /mandate-scorecard/:section (must never be blocked), and
+  // setDealId's replace-navigation above only adds ?dealId= on the same
+  // path (must also pass through silently).
+  const anyDirty = firmState.dirty || mandateState.dirty || frameworkState.dirty;
+  const blocker = useBlocker(
+    ({ nextLocation }) => anyDirty && !nextLocation.pathname.startsWith(ROUTES.mandateScorecard)
+  );
+
+  // Covers the browser tab close/reload case — lifted from
+  // EditableMandateBlock.tsx, which only watched its own tab's dirty state
+  // and missed a dirty Firm Profile or Scoring Framework.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    if (anyDirty) {
+      window.addEventListener("beforeunload", handler);
+    }
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [anyDirty]);
+
   if (!section || !VALID_SECTIONS.includes(section as Section)) {
     return <Navigate to={ROUTES.mandateScorecardFirm} replace />;
   }
@@ -118,6 +154,14 @@ export default function MandateScorecard({ section }: Props) {
       : undefined;
   const resetDisabled = active !== "mandate";
   const resetDisabledReason = resetDisabled ? "Reset is only available for Mandate Builder" : undefined;
+
+  // Named tabs for the navigation-guard dialog body, so "discard" is an
+  // informed choice rather than a guess.
+  const dirtyTabLabels = [
+    firmState.dirty && SECTION_LABELS.firm.long,
+    mandateState.dirty && SECTION_LABELS.mandate.long,
+    frameworkState.dirty && SECTION_LABELS.framework.long,
+  ].filter((label): label is string => Boolean(label));
 
   const handleSaveConfiguration = () => {
     if (active === "mandate") mandateSaveRef.current?.();
@@ -282,6 +326,33 @@ export default function MandateScorecard({ section }: Props) {
           </div>
         </div>
       )}
+
+    {/* Unsaved-changes navigation guard — same sibling-of-MvpAppShell
+        placement as the drawer/modal above. Controlled by the blocker
+        itself rather than local state: any dismissal path (Escape, overlay
+        click, Cancel) routes through AlertDialog's onOpenChange, and
+        blocker.reset() is safe to call more than once. */}
+    <AlertDialog
+      open={blocker.state === "blocked"}
+      onOpenChange={(open) => {
+        if (!open) blocker.reset?.();
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Leave this page?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {dirtyTabLabels.length > 0
+              ? `You have unsaved changes in: ${dirtyTabLabels.join(", ")}. Leaving now will discard them.`
+              : "You have unsaved changes. Leaving now will discard them."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => blocker.reset?.()}>Stay on this page</AlertDialogCancel>
+          <AlertDialogAction onClick={() => blocker.proceed?.()}>Leave and discard changes</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }
