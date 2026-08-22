@@ -640,28 +640,27 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
 
   const citationCtxOuter = useCitationSafe();
 
-  // Race-window guard: if the job just became complete but the memo session
-  // hasn't arrived yet (persist was slower than the client poll), retry
-  // dealQuery with exponential backoff (1s, 2s, 4s, 8s, 16s, 30s, 30s…)
-  // up to ~2 minutes total wait, or 30 retries maximum.
+  // Background race-window guard for a memo that persists slightly after the
+  // status flips to "complete": refetch dealQuery a few times so the
+  // analysis/memo tab picks it up without a manual refresh. This deliberately
+  // runs in the BACKGROUND and never blocks the completed view -- the pipeline
+  // currently ends at screening and no stage produces a memo (the
+  // governance/drafting tail has no job behind it yet), so a blocking wait
+  // here spun forever on "retrieving your memo" for every finished deal.
+  // Completed deals now render immediately (the screening-first completion
+  // flow below); if/when a memo-generation stage lands, this still catches a
+  // late-persisting memo the same way. Backoff doubles each retry, capped at
+  // 30s; ~8 attempts (~2 min) is ample for a real persist race.
   const retryCountRef = useRef(0);
-  const [isWaitingForMemo, setIsWaitingForMemo] = useState(false);
-
-  // Backoff schedule: doubles each retry, capped at 30s
   const getBackoffMs = (attempt: number) =>
     Math.min(1000 * Math.pow(2, attempt), 30_000);
 
   useEffect(() => {
     if (jobStatus !== "complete" || latestMemoSession != null) {
       retryCountRef.current = 0;
-      setIsWaitingForMemo(false);
       return;
     }
-    if (retryCountRef.current >= 30) {
-      setIsWaitingForMemo(false);
-      return;
-    }
-    setIsWaitingForMemo(true);
+    if (retryCountRef.current >= 8) return;
     const delay = getBackoffMs(retryCountRef.current);
     const timer = setTimeout(() => {
       retryCountRef.current += 1;
@@ -752,18 +751,6 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
         stepDurations={status.stepDurations}
         jobComments={status.jobComments}
       />
-    );
-  } else if (isWaitingForMemo) {
-    body = (
-      <div className="flex flex-col items-center gap-3 py-16 text-center">
-        <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
-        <p className="text-sm font-semibold text-slate-700">
-          Still loading results…
-        </p>
-        <p className="text-xs text-slate-500">
-          The analysis finished — retrieving your memo. This may take a moment.
-        </p>
-      </div>
     );
   } else if (justCompleted) {
     // One-shot completion interstitial (plan §5 Q3) — replaces the old

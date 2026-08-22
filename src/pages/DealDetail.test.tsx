@@ -65,6 +65,14 @@ function makeDealResponse(name: string): DealWithLatestMemo {
   };
 }
 
+/** The real production shape: the pipeline ends at screening and no stage
+ * produces a memo yet, so latestMemoSession is null on every finished deal.
+ * This is the path the memo-wait used to hang on ("retrieving your memo"
+ * forever). */
+function makeDealResponseNoMemo(name: string): DealWithLatestMemo {
+  return { ...makeDealResponse(name), latestMemoSession: null };
+}
+
 /** MemoryRouter has no recorded-history array (wouter's `memoryLocation({record:true})`
  * did), so this probe rebuilds the same thing from `useLocation()`. */
 function LocationRecorder({ history }: { history: string[] }) {
@@ -136,6 +144,51 @@ describe("DealDetail — completion interstitial", () => {
     fireEvent.click(screen.getByRole("button", { name: /View Initial Screening/i }));
 
     expect(history[history.length - 1]).toBe("/deals/deal-1/screening");
+  });
+
+  it("does NOT hang on 'retrieving your memo' when a completed deal has no memo (the real pipeline shape) — shows the completion flow and lands on screening", async () => {
+    // Regression for the staging hang: no pipeline stage produces a memo, so
+    // latestMemoSession is null. The old memo-wait blocked the completed view
+    // on an exponential-backoff spinner ("The analysis finished — retrieving
+    // your memo") for ~13 min. It must render the completion flow instead.
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponseNoMemo("Acme Corp"));
+    vi.mocked(fetchDealStatus)
+      .mockResolvedValueOnce(processingStatus)
+      .mockResolvedValue(completeStatus);
+
+    const { queryClient, history } = renderDealDetail("deal-3", "screening");
+
+    await waitFor(() =>
+      expect(screen.getByText("Analyzing your document")).toBeInTheDocument()
+    );
+
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: dealStatusQueryKey("deal-3") });
+    });
+
+    // The completion interstitial appears (which routes to screening) — NOT the
+    // old "retrieving your memo" spinner.
+    await waitFor(() =>
+      expect(screen.getByText(/Analysis complete/i)).toBeInTheDocument()
+    );
+    expect(screen.queryByText(/retrieving your memo/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /View Initial Screening/i }));
+    expect(history[history.length - 1]).toBe("/deals/deal-3/screening");
+  });
+
+  it("renders the screening tab directly (no memo-wait spinner) on a fresh visit to an already-complete deal with no memo", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponseNoMemo("Acme Corp"));
+    vi.mocked(fetchDealStatus).mockResolvedValue(completeStatus);
+
+    renderDealDetail("deal-4", "screening");
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Quick fit check against the investment mandate/i)
+      ).toBeInTheDocument()
+    );
+    expect(screen.queryByText(/retrieving your memo/i)).not.toBeInTheDocument();
   });
 
   it("does not show the interstitial on a fresh mount that's already complete — renders the tab shell directly", async () => {
