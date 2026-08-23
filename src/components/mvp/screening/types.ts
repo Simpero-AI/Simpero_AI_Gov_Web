@@ -25,6 +25,9 @@ export interface ScreeningVerdict {
 }
 
 export interface ScreeningCriterion {
+  /** Stable unique id for React keys (the backend rule_id when available); the
+   * label is not guaranteed unique across rules. */
+  id?: string;
   label: string;
   status: ScreeningTone;
   detail: string;

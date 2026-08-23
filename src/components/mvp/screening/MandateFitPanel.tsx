@@ -27,10 +27,9 @@ function CriterionRow({ criterion }: { criterion: ScreeningCriterion }) {
 }
 
 /**
- * Mockup's mandate-fit sidebar card (fit bar + pass/review/fail counts,
- * Investment Fit criteria, Financial Thresholds criteria). No mandate-fit
- * scoring exists for Initial Screening yet (plan §4c), so `fit` is always
- * `null` today.
+ * Mandate-fit sidebar card (fit bar + pass/review/fail counts, Investment Fit
+ * criteria = green signals, Deal Breakers criteria). Fed by mapScreening from
+ * GET /deals/{id}/screening; `fit` is `null` until the deal has been screened.
  */
 export function MandateFitPanel({ fit, className }: MandateFitPanelProps) {
   if (!fit) {
@@ -89,16 +88,16 @@ export function MandateFitPanel({ fit, className }: MandateFitPanelProps) {
           Investment Fit
         </div>
         {fit.fitCriteria.map((c) => (
-          <CriterionRow key={c.label} criterion={c} />
+          <CriterionRow key={c.id ?? c.label} criterion={c} />
         ))}
       </div>
 
       <div className="px-5 py-4">
         <div className="mb-3 font-mono text-[10px] font-semibold uppercase tracking-wider text-[color:var(--rev-text-4)]">
-          Financial Thresholds
+          Deal Breakers
         </div>
         {fit.thresholdCriteria.map((c) => (
-          <CriterionRow key={c.label} criterion={c} />
+          <CriterionRow key={c.id ?? c.label} criterion={c} />
         ))}
       </div>
     </div>

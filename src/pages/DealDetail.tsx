@@ -60,6 +60,7 @@ import { CitationRef } from "@/components/mvp/primitives/CitationRef";
 import { FinancialGridRenderer } from "@/components/mvp/icMemo/FinancialGridRenderer";
 import { TeamMemberCard } from "@/components/mvp/icMemo/TeamMemberCard";
 import { DealHeaderCard } from "@/components/mvp/dealDetail/DealHeaderCard";
+import { screeningQueryKey } from "@/api/screening";
 import { ScreeningTab } from "./dealDetail/ScreeningTab";
 import {
   formatUsdShort,
@@ -631,6 +632,9 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
       jobStatus === "complete"
     ) {
       void queryClient.invalidateQueries({ queryKey: dealQueryKey(dealId) });
+      // Screening lands as part of the same pipeline; refetch it too so a user
+      // parked on the Screening tab sees the verdict without a manual reload.
+      void queryClient.invalidateQueries({ queryKey: screeningQueryKey(dealId) });
       setJustCompleted(true);
     }
   }, [jobStatus, dealId, queryClient]);
@@ -823,7 +827,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
           onChange={t => navigate(`/deals/${dealId}/${t}`)}
         />
         {tab === "screening" ? (
-          <ScreeningTab fileName={latestMemoSession?.fileName ?? null} />
+          <ScreeningTab dealId={dealId} fileName={latestMemoSession?.fileName ?? null} />
         ) : (
           <>
             {showPass3FailedBanner && (
