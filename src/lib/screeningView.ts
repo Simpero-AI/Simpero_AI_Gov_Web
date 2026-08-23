@@ -21,11 +21,31 @@ function toneFor(rule: ScreeningRuleResult): ScreeningTone {
   return dealBreaker ? "pass" : "fail";
 }
 
+// One clean answer per row -- deliberately NOT the raw backend `reason`, which
+// carries internal diagnostics ("customer_concentration not extracted",
+// "hq_geography not set on the deal", "monthly_burn claim not available"). A row
+// either has an answer (Met / Not met) or it has none (No evidence); the
+// internal why-it's-unknown stays in the audit trail, off the screening card.
 const DETAIL_DEFAULT: Record<ScreeningTone, string> = {
   pass: "Met",
   fail: "Not met",
-  review: "Not evaluated — sent to human review",
+  review: "No evidence",
 };
+
+/**
+ * The row's answer. `review` (verdict unknown) always reads "No evidence". A
+ * determinate verdict reads "Met"/"Not met"; when it was decided from a deal
+ * field (sector/geography) the value is appended so the answer is concrete
+ * (e.g. "Met — Enterprise SaaS"). Claim-backed verdicts carry only a reference
+ * in evidenceRef (no raw figure), so those stay "Met"/"Not met".
+ */
+function detailFor(rule: ScreeningRuleResult, status: ScreeningTone): string {
+  const base = DETAIL_DEFAULT[status];
+  if (status === "review") return base;
+  const ev = rule.evidenceRef;
+  const value = ev && ev["kind"] === "deal_field" ? ev["value"] : null;
+  return value != null && value !== "" ? `${base} — ${String(value)}` : base;
+}
 
 function toCriterion(rule: ScreeningRuleResult): ScreeningCriterion {
   const status = toneFor(rule);
@@ -33,7 +53,7 @@ function toCriterion(rule: ScreeningRuleResult): ScreeningCriterion {
     id: rule.ruleId,
     label: rule.question ?? rule.ruleId,
     status,
-    detail: rule.reason ?? DETAIL_DEFAULT[status],
+    detail: detailFor(rule, status),
   };
 }
 
@@ -67,6 +87,13 @@ export function mapScreening(result: ScreeningResult): ScreeningView {
   const fitCriteria: ScreeningCriterion[] = [];
   const thresholdCriteria: ScreeningCriterion[] = [];
   for (const rule of result.ruleResults) {
+    // Show only the finalized, assessable questions. Rules with no built
+    // evaluator (evaluator === "none" in track_b.yaml) are placeholders that can
+    // only ever return "unknown" -- 13 of the 21, e.g. "Product/IP fully owned",
+    // "Sanctioned country or individual involved". Rendering them adds a wall of
+    // permanent "No evidence" rows and skews the fit% denominator; hide them and
+    // score fit% over the questions the screener can actually answer.
+    if (rule.evaluator === "none") continue;
     // Section by the backend's kind; an unclassified (null-kind) row groups with
     // the green-signals rather than being guessed into the deal-breakers.
     (rule.kind === "deal_breaker" ? thresholdCriteria : fitCriteria).push(toCriterion(rule));

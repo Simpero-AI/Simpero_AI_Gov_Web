@@ -128,3 +128,55 @@ describe("mapScreening — structure", () => {
     expect(verdict.fitPct).toBe(0);
   });
 });
+
+describe("mapScreening — finalized questions only", () => {
+  it("hides placeholder rules with no built evaluator, keeping only the assessable questions", () => {
+    // 13 of the 21 track_b rules are evaluator: "none" placeholders that can
+    // only ever return unknown ("Product/IP fully owned", "Sanctioned country",
+    // ...). They must not render, and must not skew the fit% denominator.
+    const { fit } = mapScreening(
+      result([
+        rule({ ruleId: "gs_03", verdict: "Y", kind: "green_signal", evaluator: "deterministic" }),
+        rule({ ruleId: "gs_01", verdict: "unknown", kind: "green_signal", evaluator: "none" }),
+        rule({ ruleId: "db_08", verdict: "unknown", kind: "deal_breaker", evaluator: "none" }),
+        rule({ ruleId: "db_04", verdict: "N", kind: "deal_breaker", evaluator: "deterministic" }),
+      ]),
+    );
+    expect(fit.fitCriteria.map((c) => c.id)).toEqual(["gs_03"]);
+    expect(fit.thresholdCriteria.map((c) => c.id)).toEqual(["db_04"]);
+    // fit% is over the 2 assessable rows (both pass), not diluted by the 2 hidden placeholders.
+    expect(fit.fitPct).toBe(100);
+  });
+});
+
+describe("mapScreening — answer display", () => {
+  it("shows 'No evidence' for an unknown row, never the raw internal reason", () => {
+    const { fit } = mapScreening(
+      result([
+        rule({
+          ruleId: "gs_04",
+          verdict: "unknown",
+          kind: "green_signal",
+          reason: "customer_concentration not extracted",
+        }),
+      ]),
+    );
+    expect(fit.fitCriteria[0].detail).toBe("No evidence");
+  });
+
+  it("shows the answer for a determinate row, appending a deal-field value when present", () => {
+    const { fit } = mapScreening(
+      result([
+        rule({ ruleId: "gs_03", verdict: "Y", kind: "green_signal", reason: null }),
+        rule({
+          ruleId: "gs_08",
+          verdict: "Y",
+          kind: "green_signal",
+          evidenceRef: { kind: "deal_field", field: "sector", value: "Enterprise SaaS" },
+        }),
+      ]),
+    );
+    expect(fit.fitCriteria[0].detail).toBe("Met"); // claim-backed: no raw value in evidenceRef
+    expect(fit.fitCriteria[1].detail).toBe("Met — Enterprise SaaS"); // deal-field value appended
+  });
+});
