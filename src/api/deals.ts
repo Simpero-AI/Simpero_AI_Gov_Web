@@ -64,6 +64,10 @@ export type Deal = {
   state: string;
   createdAt: string; // ISO
   updatedAt: string; // ISO
+  leadUserId: number | null;
+  /** Live join against the org's members — null if the referenced user was removed. */
+  leadName: string | null;
+  referredBy: string | null;
 };
 
 export type LatestMemoSession = {
@@ -95,6 +99,8 @@ export type CreateDealRequest = {
   dealSizeMinUsd: number | null;
   dealSizeMaxUsd: number | null;
   sectorTags: string[];
+  leadUserId?: number | null;
+  referredBy?: string | null;
 };
 
 export type CreateDealResponse = {
@@ -112,6 +118,18 @@ export async function createDeal(
   });
   if (!res.ok) throw new Error(`POST /deals failed: ${res.status}`);
   return (await res.json()) as CreateDealResponse;
+}
+
+/** GET /org-members row — org-scoped. `name` is null for a JIT-provisioned user who hasn't completed profile sync. */
+export type OrgMember = { id: number; name: string | null };
+
+export const ORG_MEMBERS_QUERY_KEY = ["orgMembers"] as const;
+
+/** GET /org-members — no params, org-scoped server-side. */
+export async function fetchOrgMembers(): Promise<OrgMember[]> {
+  const res = await apiFetch("/api/org-members");
+  if (!res.ok) throw new Error(`GET /org-members failed: ${res.status}`);
+  return (await res.json()) as OrgMember[];
 }
 
 export type { DealStatusPayload };

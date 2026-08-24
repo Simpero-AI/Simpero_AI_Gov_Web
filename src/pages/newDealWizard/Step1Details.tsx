@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import { SECTOR_TAGS } from "./sectorTags";
+import { fetchOrgMembers, ORG_MEMBERS_QUERY_KEY } from "@/api/deals";
 import type { WizardAction, WizardState } from "./newDealWizardReducer";
 
 interface Step1DetailsProps {
@@ -20,6 +22,13 @@ interface Errors {
 export function Step1Details({ state, dispatch, onContinue, attached, attachedViaUrl }: Step1DetailsProps) {
   const [errors, setErrors] = useState<Errors>({});
   const [showErrors, setShowErrors] = useState(false);
+
+  // No `enabled` gate — attach mode also needs the list to resolve a hydrated id into a name.
+  const orgMembersQuery = useQuery({
+    queryKey: ORG_MEMBERS_QUERY_KEY,
+    queryFn: fetchOrgMembers,
+  });
+  const orgMembers = orgMembersQuery.data ?? [];
 
   const inp =
     "w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition";
@@ -101,6 +110,51 @@ export function Step1Details({ state, dispatch, onContinue, attached, attachedVi
             {showErrors && errors.gpSource && (
               <p className="text-xs text-red-600 mt-1">{errors.gpSource}</p>
             )}
+          </div>
+
+          <div>
+            <label className={lbl} htmlFor="wizard-lead">Lead</label>
+            <select
+              id="wizard-lead"
+              data-testid="wizard-lead"
+              value={state.leadUserId}
+              onChange={(e) => dispatch({ type: "set_field", key: "leadUserId", value: e.target.value })}
+              className={inp}
+              disabled={attached || orgMembersQuery.isPending || orgMembers.length === 0}
+            >
+              {orgMembersQuery.isPending ? (
+                <option>Loading team…</option>
+              ) : orgMembersQuery.isError || orgMembers.length === 0 ? (
+                <option>No team members available</option>
+              ) : (
+                <>
+                  <option value="">Unassigned</option>
+                  {orgMembers.map((m) => (
+                    <option key={m.id} value={String(m.id)}>
+                      {m.name ?? `User #${m.id}`}
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
+            {!orgMembersQuery.isPending && (orgMembersQuery.isError || orgMembers.length === 0) && (
+              <p className="text-xs text-gray-400 mt-1">
+                Team member list is unavailable right now — Lead can be assigned later from the deal page.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className={lbl} htmlFor="wizard-referred-by">Referred by</label>
+            <input
+              id="wizard-referred-by"
+              data-testid="wizard-referred-by"
+              value={state.referredBy}
+              onChange={(e) => dispatch({ type: "set_field", key: "referredBy", value: e.target.value })}
+              placeholder="e.g. Jane Doe, Acme Advisors"
+              className={inp}
+              disabled={attached}
+            />
           </div>
         </div>
       </div>

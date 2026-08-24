@@ -109,6 +109,8 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
         dealSizeMinM: state.dealSizeMinM,
         dealSizeMaxM: state.dealSizeMaxM,
         sectorTags: state.sectorTags,
+        leadUserId: state.leadUserId,
+        referredBy: state.referredBy,
       };
       saveDraft(authUser.id, draft);
     }, 300);
@@ -120,6 +122,8 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     state.dealSizeMinM,
     state.dealSizeMaxM,
     state.sectorTags,
+    state.leadUserId,
+    state.referredBy,
     state.attachDealId,
   ]);
 
@@ -145,6 +149,8 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
         dealSizeMinUsd: d.dealSizeMinUsd ?? null,
         dealSizeMaxUsd: d.dealSizeMaxUsd ?? null,
         sectorTags: parseSectorTags(d.sectorTags),
+        leadUserId: d.leadUserId ?? null,
+        referredBy: d.referredBy ?? null,
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -234,6 +240,8 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
         dealSizeMinUsd,
         dealSizeMaxUsd,
         sectorTags: state.sectorTags,
+        leadUserId: state.leadUserId === "" ? null : Number(state.leadUserId),
+        referredBy: state.referredBy.trim() === "" ? null : state.referredBy.trim(),
       });
       dispatch({ type: "deal_created", dealId: created.id });
       navigate("/new-deal/upload-files");

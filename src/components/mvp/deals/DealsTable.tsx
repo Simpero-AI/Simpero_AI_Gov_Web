@@ -61,7 +61,8 @@ function findingsCount(row: LivePipelineRow): number {
   return row.metricDiscrepancyFields?.length ?? 0;
 }
 
-function initials(name: string): string {
+/** Exported for reuse by `DealHeroCard` — one initials convention, not two. */
+export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "—";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();

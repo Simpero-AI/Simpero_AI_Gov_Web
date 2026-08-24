@@ -9,6 +9,12 @@ import {
   type CorroborationSourceItem,
 } from "@/components/mvp/analysis/CorroborationPanel";
 import type { ICMemoResult, Sourced } from "@shared/simperoTypes";
+import {
+  ALL_DD_CATEGORIES,
+  computeDiligenceProgress,
+  computeRiskProfile,
+  type DdCategory,
+} from "../dealAnalysisUtils";
 
 interface OverviewPaneProps {
   memoTyped: Partial<ICMemoResult> | null;
@@ -51,29 +57,6 @@ function SectionCard({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// dueDiligenceSummary.categories is a fixed 6-category UI scaffold per
-// simperoTypes.ts §10 (see ICMemoDueDiligence.tsx's own comment) — the
-// composer only ever populates the inner Sourced fields for whichever
-// categories it produced findings for, so `categories` itself can be a
-// subset of these 6. Any of the 6 literals absent from the array is
-// genuinely "not started" (no synthesis has happened for it at all), not a
-// fabricated status — this uses the real, fixed taxonomy from the type
-// itself rather than inventing one.
-// ---------------------------------------------------------------------------
-
-const ALL_DD_CATEGORIES = [
-  "Legal & Corporate",
-  "Financial",
-  "Technology & IP",
-  "Commercial",
-  "Team & HR",
-  "Market & Strategy",
-] as const;
-
-type DdCategory = (typeof ALL_DD_CATEGORIES)[number];
-type DdCategoryRow = NonNullable<ICMemoResult["deliverable"]>["dueDiligenceSummary"]["categories"][number];
 
 const SEVERITY_BAR_COLOR: Record<"H" | "M" | "L", string> = {
   H: "var(--rev-danger)",
@@ -133,65 +116,16 @@ function fileExt(fileName: string): string {
  * differently-styled empty state.
  */
 export function OverviewPane({ memoTyped }: OverviewPaneProps) {
-  const dd = memoTyped?.deliverable?.dueDiligenceSummary;
-  const riskRegister = memoTyped?.deliverable?.riskRegister;
   const corroboration = useMemo(() => collectOverviewCorroboration(memoTyped), [memoTyped]);
 
-  const categories: DdCategoryRow[] = useMemo(() => dd?.categories ?? [], [dd]);
-
-  // Diligence progress — completion counts per real status.value, plus a
-  // progress ring computed as the average completenessPct across all 6
-  // categories (categories absent from the array contribute 0%, since no
-  // synthesis has run for them at all — not a fabricated number, just an
-  // honest average over the fixed 6-category universe).
-  const { completeCount, inReviewCount, notStartedCount, progressPct } = useMemo(() => {
-    let complete = 0;
-    let inReview = 0;
-    let completenessSum = 0;
-    for (const cat of categories) {
-      if (cat.status.provenance !== "missing") {
-        if (cat.status.value === "complete") complete += 1;
-        else if (cat.status.value === "in_progress") inReview += 1;
-      }
-      if (cat.completenessPct.provenance !== "missing" && cat.completenessPct.value != null) {
-        completenessSum += cat.completenessPct.value;
-      }
-    }
-    const presentCategories = new Set(categories.map((c) => c.category));
-    const notStarted = ALL_DD_CATEGORIES.filter((c) => !presentCategories.has(c)).length;
-    return {
-      completeCount: complete,
-      inReviewCount: inReview,
-      notStartedCount: notStarted,
-      progressPct: Math.round(completenessSum / ALL_DD_CATEGORIES.length),
-    };
-  }, [categories]);
-
-  // Risk profile — severity counts from the same riskRegister the Summary
-  // tab's Risk Assessment table and Draft Memo's Key Deal Risks both read.
-  const riskRows = useMemo(
-    () =>
-      (riskRegister?.provenance !== "missing" ? riskRegister?.value : []) as
-        | Array<{ risk: string; severity: "H" | "M" | "L" }>
-        | undefined,
-    [riskRegister]
+  const { categories, completeCount, inReviewCount, notStartedCount, progressPct } = useMemo(
+    () => computeDiligenceProgress(memoTyped),
+    [memoTyped]
   );
-  const riskCounts = useMemo(() => {
-    const counts: Record<"H" | "M" | "L", number> = { H: 0, M: 0, L: 0 };
-    (riskRows ?? []).forEach((r) => {
-      counts[r.severity] += 1;
-    });
-    return counts;
-  }, [riskRows]);
-  const totalRisks = riskCounts.H + riskCounts.M + riskCounts.L;
-  const overallRiskLevel: "High" | "Medium" | "Low" | null =
-    riskCounts.H > 0 ? "High" : riskCounts.M > 0 ? "Medium" : riskCounts.L > 0 ? "Low" : null;
-  const overallRiskColor =
-    overallRiskLevel === "High"
-      ? "var(--rev-danger)"
-      : overallRiskLevel === "Medium"
-        ? "var(--rev-warning)"
-        : "var(--rev-text-4)";
+  const { riskCounts, totalRisks, overallRiskLevel, overallRiskColor } = useMemo(
+    () => computeRiskProfile(memoTyped),
+    [memoTyped]
+  );
 
   // Recent documents — a deal has at most one tracked source file today (no
   // `GET /deals/{id}/documents` listing endpoint exists yet), same

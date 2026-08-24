@@ -74,6 +74,8 @@ describe("newDealWizardReducer", () => {
         dealSizeMinUsd: 300_000_000,
         dealSizeMaxUsd: 700_000_000,
         sectorTags: ["SaaS"],
+        leadUserId: 7,
+        referredBy: "Broker X",
       },
     });
     expect(s1.attachDealId).toBe("17");
@@ -83,6 +85,63 @@ describe("newDealWizardReducer", () => {
     expect(s1.dealSizeMinM).toBe("3");
     expect(s1.dealSizeMaxM).toBe("7");
     expect(s1.sectorTags).toEqual(["SaaS"]);
+    expect(s1.leadUserId).toBe("7");
+    expect(s1.referredBy).toBe("Broker X");
+  });
+
+  it("set_attach_deal_id hydrates a null leadUserId/referredBy to empty strings", () => {
+    const s0 = initialWizardState();
+    const s1 = newDealWizardReducer(s0, {
+      type: "set_attach_deal_id",
+      dealId: "18",
+      deal: {
+        name: "Existing Deal",
+        gpSource: "Sequoia",
+        dealSizeMinUsd: null,
+        dealSizeMaxUsd: null,
+        sectorTags: [],
+        leadUserId: null,
+        referredBy: null,
+      },
+    });
+    expect(s1.leadUserId).toBe("");
+    expect(s1.referredBy).toBe("");
+  });
+
+  it("set_field updates leadUserId and referredBy", () => {
+    const s0 = initialWizardState();
+    const s1 = newDealWizardReducer(s0, {
+      type: "set_field",
+      key: "leadUserId",
+      value: "12",
+    });
+    expect(s1.leadUserId).toBe("12");
+    const s2 = newDealWizardReducer(s1, {
+      type: "set_field",
+      key: "referredBy",
+      value: "Jane Doe",
+    });
+    expect(s2.referredBy).toBe("Jane Doe");
+  });
+
+  it("rehydrate restores leadUserId and referredBy when present", () => {
+    const s0 = initialWizardState();
+    const s1 = newDealWizardReducer(s0, {
+      type: "rehydrate",
+      partial: { leadUserId: "9", referredBy: "Acme Advisors" },
+    });
+    expect(s1.leadUserId).toBe("9");
+    expect(s1.referredBy).toBe("Acme Advisors");
+  });
+
+  it("rehydrate leaves leadUserId and referredBy untouched when absent", () => {
+    const s0 = initialWizardState();
+    const s1 = newDealWizardReducer(s0, {
+      type: "rehydrate",
+      partial: { dealName: "Restored" },
+    });
+    expect(s1.leadUserId).toBe("");
+    expect(s1.referredBy).toBe("");
   });
 
   it("deal_created sets attachDealId and clears submitting", () => {

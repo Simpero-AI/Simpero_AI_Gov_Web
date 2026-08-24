@@ -14,6 +14,9 @@ export type PersistedStep1 = {
   dealSizeMinM: string;
   dealSizeMaxM: string;
   sectorTags: string[];
+  /** Optional on purpose: a draft saved before this deploy still validates and loads instead of failing the guard and being silently discarded whole. */
+  leadUserId?: string;
+  referredBy?: string;
 };
 
 export function storageKey(
@@ -74,6 +77,8 @@ function isPersistedStep1(v: unknown): v is PersistedStep1 {
     typeof o.dealSizeMinM === "string" &&
     typeof o.dealSizeMaxM === "string" &&
     Array.isArray(o.sectorTags) &&
-    o.sectorTags.every(t => typeof t === "string")
+    o.sectorTags.every(t => typeof t === "string") &&
+    (o.leadUserId === undefined || typeof o.leadUserId === "string") &&
+    (o.referredBy === undefined || typeof o.referredBy === "string")
   );
 }
