@@ -1,6 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle, Info, Sparkles, Zap } from "lucide-react";
 import { PIPELINE_STEPS } from "@shared/pipelineSteps";
 import { Switch } from "@/components/mvp/primitives/switch";
+import { fetchOrgMembers, ORG_MEMBERS_QUERY_KEY } from "@/api/deals";
 import type { WizardState, WizardAction } from "./newDealWizardReducer";
 
 interface Step3ConfirmProps {
@@ -16,13 +18,33 @@ export function Step3Confirm({
   onBack,
   onSubmit,
 }: Step3ConfirmProps) {
+  // Shares Step 1's cache entry — byte-identical queryKey/queryFn. `enabled`
+  // is the one intentional difference: no request at all when unassigned.
+  const { data: orgMembers } = useQuery({
+    queryKey: ORG_MEMBERS_QUERY_KEY,
+    queryFn: fetchOrgMembers,
+    enabled: state.leadUserId !== "",
+  });
   const dealSizeLabel = formatDealSize(state.dealSizeMinM, state.dealSizeMaxM);
   const sectorsLabel =
     state.sectorTags.length > 0 ? state.sectorTags.join(", ") : "—";
+  // Fallback semantics are exhaustive by design: unassigned → dash; found
+  // with a name → name; found with a null name, still loading, fetch failed,
+  // or id not in the list → `User #<id>` — a Lead IS assigned in all of
+  // those cases, so the row must never show a dash there.
+  const leadLabel =
+    state.leadUserId === ""
+      ? "—"
+      : (orgMembers?.find(m => String(m.id) === state.leadUserId)?.name ??
+        `User #${state.leadUserId}`);
+  const referredByLabel =
+    state.referredBy.trim() === "" ? "—" : state.referredBy;
 
   const summaryRows: { label: string; value: string }[] = [
     { label: "Deal Name", value: state.dealName },
     { label: "GP / Source", value: state.gpSource },
+    { label: "Lead", value: leadLabel },
+    { label: "Referred by", value: referredByLabel },
     { label: "Deal Size", value: dealSizeLabel },
     { label: "Sectors", value: sectorsLabel },
     {

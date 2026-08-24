@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router";
 import { useEffect } from "react";
@@ -60,6 +60,9 @@ function makeDealResponse(name: string): DealWithLatestMemo {
       state: "diligence",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      leadUserId: null,
+      leadName: null,
+      referredBy: null,
     },
     // Non-null so the "complete" branch doesn't fall into the isWaitingForMemo
     // retry loop (that guards against the memo session persisting slower
@@ -269,5 +272,44 @@ describe("DealDetail — completion interstitial", () => {
       ).toBeInTheDocument()
     );
     expect(screen.queryByText(/Analysis complete/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("DealDetail — DealHeroCard", () => {
+  it("renders '—' for Lead and Referred by when both are null", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealStatus).mockResolvedValue(completeStatus);
+
+    renderDealDetail("deal-5", "screening");
+
+    const hero = await screen.findByRole("region", { name: "Deal summary" });
+    expect(within(hero).getByText("Lead").nextElementSibling).toHaveTextContent("—");
+    expect(within(hero).getByText("Referred by").nextElementSibling).toHaveTextContent("—");
+  });
+
+  it("renders the real lead name and referredBy strings when set", async () => {
+    const base = makeDealResponse("Acme Corp");
+    vi.mocked(fetchDeal).mockResolvedValue({
+      ...base,
+      deal: { ...base.deal, leadName: "Jane Partner", referredBy: "John Scout" },
+    });
+    vi.mocked(fetchDealStatus).mockResolvedValue(completeStatus);
+
+    renderDealDetail("deal-6", "screening");
+
+    const hero = await screen.findByRole("region", { name: "Deal summary" });
+    expect(within(hero).getByText("Lead").nextElementSibling).toHaveTextContent("Jane Partner");
+    expect(within(hero).getByText("Referred by").nextElementSibling).toHaveTextContent("John Scout");
+  });
+
+  it("renders the dash-variant donut and neutral 'Risk · —' badge when memoJson is '{}' (no diligence data) — no fabricated 0% or severity", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealStatus).mockResolvedValue(completeStatus);
+
+    renderDealDetail("deal-7", "screening");
+
+    await screen.findByRole("img", { name: "Diligence progress not available" });
+    expect(screen.getByText("Risk · —")).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /% complete/ })).not.toBeInTheDocument();
   });
 });

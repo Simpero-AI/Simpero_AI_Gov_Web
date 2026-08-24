@@ -7,6 +7,9 @@ export type WizardState = {
   dealSizeMinM: string;
   dealSizeMaxM: string;
   sectorTags: string[];
+  /** Raw `<select>` value — `""` means unassigned, coerced to `number | null` at submit. Same string-until-submit convention as dealSizeMinM/dealSizeMaxM. */
+  leadUserId: string;
+  referredBy: string;
 
   // Step 2
   /** Set once `DealDocumentUpload` reports at least one successful upload this session — gates the Step 3 guard. */
@@ -25,7 +28,7 @@ export type WizardState = {
 export type WizardAction =
   | {
       type: "set_field";
-      key: "dealName" | "gpSource" | "dealSizeMinM" | "dealSizeMaxM";
+      key: "dealName" | "gpSource" | "dealSizeMinM" | "dealSizeMaxM" | "leadUserId" | "referredBy";
       value: string;
     }
   | { type: "toggle_sector"; tag: string }
@@ -44,6 +47,8 @@ export type WizardAction =
         dealSizeMinUsd: number | null;
         dealSizeMaxUsd: number | null;
         sectorTags: string[];
+        leadUserId: number | null;
+        referredBy: string | null;
       };
     }
   | { type: "deal_created"; dealId: string }
@@ -56,6 +61,8 @@ export function initialWizardState(): WizardState {
     dealSizeMinM: "",
     dealSizeMaxM: "",
     sectorTags: [],
+    leadUserId: "",
+    referredBy: "",
 
     hasUploadedDocument: false,
 
@@ -114,6 +121,8 @@ export function newDealWizardReducer(
         ...(p.dealSizeMinM !== undefined && { dealSizeMinM: p.dealSizeMinM }),
         ...(p.dealSizeMaxM !== undefined && { dealSizeMaxM: p.dealSizeMaxM }),
         ...(p.sectorTags !== undefined && { sectorTags: p.sectorTags }),
+        ...(p.leadUserId !== undefined && { leadUserId: p.leadUserId }),
+        ...(p.referredBy !== undefined && { referredBy: p.referredBy }),
       };
     }
 
@@ -126,6 +135,9 @@ export function newDealWizardReducer(
         dealSizeMinM: centsToM(action.deal.dealSizeMinUsd),
         dealSizeMaxM: centsToM(action.deal.dealSizeMaxUsd),
         sectorTags: action.deal.sectorTags,
+        leadUserId:
+          action.deal.leadUserId == null ? "" : String(action.deal.leadUserId),
+        referredBy: action.deal.referredBy ?? "",
       };
 
     // Deal was created in-session on the Step 1 → Step 2 transition. Unlike

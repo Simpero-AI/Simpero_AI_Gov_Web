@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import { ChevronLeft, Lock } from "lucide-react";
 import { STAGE_STYLES } from "@/components/mvp/deals/DealsTable";
-import { formatUsdShort } from "@/lib/dealMetricsFormat";
+import { formatDealSizeRange } from "@/lib/dealMetricsFormat";
 import { DEAL_STATES, type DealState } from "@shared/dealsLifecycle";
 
 const FALLBACK_STAGE = { bg: "var(--rev-tint-neutral)", fg: "var(--rev-text-4)", label: "Draft" };
@@ -29,13 +29,6 @@ export interface DealHeaderCardProps {
    */
   confidential?: boolean;
   className?: string;
-}
-
-function formatDealSizeRange(minUsd: number | null, maxUsd: number | null): string {
-  if (minUsd == null && maxUsd == null) return "—";
-  if (minUsd != null && maxUsd == null) return `${formatUsdShort(minUsd)}+`;
-  if (minUsd == null && maxUsd != null) return `Up to ${formatUsdShort(maxUsd)}`;
-  return `${formatUsdShort(minUsd!)} – ${formatUsdShort(maxUsd!)}`;
 }
 
 /**

@@ -28,3 +28,10 @@ export function formatBpAsPct(bp: number): string {
 export function formatRatio(r: number): string {
   return `${r.toFixed(1)}×`;
 }
+
+export function formatDealSizeRange(minUsd: number | null, maxUsd: number | null): string {
+  if (minUsd == null && maxUsd == null) return "—";
+  if (minUsd != null && maxUsd == null) return `${formatUsdShort(minUsd)}+`;
+  if (minUsd == null && maxUsd != null) return `Up to ${formatUsdShort(maxUsd)}`;
+  return `${formatUsdShort(minUsd!)} – ${formatUsdShort(maxUsd!)}`;
+}

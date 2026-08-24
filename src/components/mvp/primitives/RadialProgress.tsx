@@ -18,6 +18,8 @@ export interface RadialProgressProps {
   valueLabel?: ReactNode;
   /** Small caption under the value — only meaningful at size="lg" (mockup shows it there only). */
   caption?: ReactNode;
+  /** Overrides the default `${Math.round(value)}% complete` aria-label. */
+  label?: string;
   className?: string;
 }
 
@@ -26,7 +28,7 @@ export interface RadialProgressProps {
  * overview, deal-header progress). Net-new — `primitives/progress.tsx` only
  * re-exports the linear shadcn `<Progress>`.
  */
-export function RadialProgress({ value, size = "sm", valueLabel, caption, className }: RadialProgressProps) {
+export function RadialProgress({ value, size = "sm", valueLabel, caption, label, className }: RadialProgressProps) {
   const clamped = Math.min(100, Math.max(0, value));
   const { outer, inner, valueFont } = SIZES[size];
 
@@ -39,7 +41,7 @@ export function RadialProgress({ value, size = "sm", valueLabel, caption, classN
   return (
     <div
       role="img"
-      aria-label={`${Math.round(clamped)}% complete`}
+      aria-label={label ?? `${Math.round(clamped)}% complete`}
       className={cn("flex shrink-0 items-center justify-center rounded-full", className)}
       style={ringStyle}
     >

@@ -60,6 +60,7 @@ import { CitationRef } from "@/components/mvp/primitives/CitationRef";
 import { FinancialGridRenderer } from "@/components/mvp/icMemo/FinancialGridRenderer";
 import { TeamMemberCard } from "@/components/mvp/icMemo/TeamMemberCard";
 import { DealHeaderCard } from "@/components/mvp/dealDetail/DealHeaderCard";
+import { DealHeroCard } from "@/components/mvp/dealDetail/DealHeroCard";
 import { screeningQueryKey } from "@/api/screening";
 import { ScreeningTab } from "./dealDetail/ScreeningTab";
 import {
@@ -808,6 +809,16 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
           state={deal.state}
           dealSizeMinUsd={deal.dealSizeMinUsd ?? null}
           dealSizeMaxUsd={deal.dealSizeMaxUsd ?? null}
+        />
+        <DealHeroCard
+          name={deal.name}
+          sectorTags={sectorTags}
+          dealSizeMinUsd={deal.dealSizeMinUsd ?? null}
+          dealSizeMaxUsd={deal.dealSizeMaxUsd ?? null}
+          leadName={deal.leadName}
+          referredBy={deal.referredBy}
+          createdAt={deal.createdAt}
+          memoTyped={memoTypedOuter}
         />
         <DealDetailTabSwitcher
           tab={tab}
