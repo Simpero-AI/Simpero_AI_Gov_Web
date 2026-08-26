@@ -60,6 +60,7 @@ import { CitationRef } from "@/components/mvp/primitives/CitationRef";
 import { FinancialGridRenderer } from "@/components/mvp/icMemo/FinancialGridRenderer";
 import { TeamMemberCard } from "@/components/mvp/icMemo/TeamMemberCard";
 import { DealHeaderCard } from "@/components/mvp/dealDetail/DealHeaderCard";
+import { apiFetch } from "@/api/http";
 import { screeningQueryKey } from "@/api/screening";
 import { ScreeningTab } from "./dealDetail/ScreeningTab";
 import {
@@ -529,11 +530,31 @@ function DealDetailTabSwitcher({
  */
 function CompletionInterstitial({
   dealName,
+  dealId,
   onViewScreening,
 }: {
   dealName: string;
+  dealId: string;
   onViewScreening: () => void;
 }) {
+  // The Pipeline Inspector is a standalone, backend-rendered diagnostic page
+  // (GET /api/inspector/{dealId}). It is Bearer-authed, so a raw tab would 401:
+  // fetch it with the session token, then open the returned HTML in a new tab as
+  // a blob. Runs on a real click, so it is never popup-blocked. Best-effort — a
+  // failure here must never affect the completion screen.
+  async function openInspector() {
+    try {
+      const res = await apiFetch(`/api/inspector/${dealId}`);
+      if (!res.ok) return;
+      const html = await res.text();
+      const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+      window.open(url, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      /* diagnostic only — swallow */
+    }
+  }
+
   return (
     <div className="mx-auto max-w-md px-6 py-16 text-center space-y-4">
       <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 flex items-center justify-center">
@@ -549,6 +570,15 @@ function CompletionInterstitial({
         </p>
       </div>
       <Button onClick={onViewScreening}>View Initial Screening</Button>
+      <div>
+        <button
+          type="button"
+          onClick={openInspector}
+          className="text-sm text-slate-500 underline underline-offset-2 hover:text-slate-700"
+        >
+          See how the pipeline read the documents →
+        </button>
+      </div>
     </div>
   );
 }
@@ -765,6 +795,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
     body = (
       <CompletionInterstitial
         dealName={deal.name}
+        dealId={dealId}
         onViewScreening={() => navigate(`/deals/${dealId}/screening`)}
       />
     );
