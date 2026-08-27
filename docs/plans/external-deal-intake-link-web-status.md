@@ -21,7 +21,7 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
 | P5-09 | mocked | done | b0be51f (test), c3a152b (fix) | RED at b0be51f on the assertion (toast.error "Attach a primary document first"), GREEN 6/6 at c3a152b; independently re-verified. | |
 | P5-03 | mocked+real | done | db6a1ee (API clients) + c3a152b (gate) | real GET /deals/{id}/documents contract (P3-04); intake-link half mocked behind INTAKE_ENDPOINTS_MOCKED. | P3-04 half real, P3-02 half mocked |
 | P5-01 | mocked | pending | | | |
-| P5-02 | mocked | pending | | | |
+| P5-02 | mocked | done | de57ab1 | unit tests in `NewDealWizard.test.tsx` (share-link describe block): token displayed on first arrival, not re-displayed after navigate-away-and-back (`queryByText`/DOM-innerHTML/`sessionStorage`/`localStorage` all checked empty of it), copy-success and copy-failure paths, progress-bar step-2 mapping unchanged for the three pre-existing steps. | |
 | P5-04 | mocked | pending | | | |
 | P5-05 | mocked+real | pending | | | P3-04 half real, P3-05 half mocked |
 | P5-07 | mocked | pending | | | |
@@ -80,6 +80,14 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
   built, so the contract does not guarantee it. P5-04's waiting panel must
   render "—" when absent, never a fabricated date. Revisit when P3-02
   ships.
+- P5-02 share URL composition. The brief never specifies whether the share
+  URL (`{origin}/intake/{token}`) is composed client-side or returned
+  full-formed by `POST /api/deals/{dealId}/intake-link`. Chose client-side
+  composition (`intakeLinkUrl()` in `src/api/intakeLink.ts`, already landed
+  under P5-01) — the P3-01 response type only documents `{ token,
+  expiresAt }` (brief §3.2), and composing from `window.location.origin`
+  avoids needing a backend base-URL config. Revisit if Alpha's actual P3-01
+  response returns a full URL instead of a bare token.
 
 ## Blocked on Alpha (do not attempt to fully close until the corresponding PR merges)
 
