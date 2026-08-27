@@ -81,3 +81,27 @@ export async function completeUpload(uploadId: string, body: CompleteUploadReque
   }
   return (await res.json()) as CompletedUpload;
 }
+
+/** GET /api/deals/{dealId}/documents output — one row per uploaded document (P3-04). */
+export type DealDocument = {
+  id: string;
+  filename: string;
+  // Five possible values today (pending/verified/quarantined/ocr_needed/mismatch,
+  // brief §3.4) and more may be added server-side — kept as `string` (not a
+  // closed union) for the same reason as `CompletedUpload.status` above: a new
+  // status must never fail to typecheck here.
+  status: string;
+  createdAt: string; // ISO
+};
+
+export const dealDocumentsQueryKey = (dealId: string) =>
+  ["deals", "documents", dealId] as const;
+
+/** GET /api/deals/{dealId}/documents — real endpoint, PR #109. */
+export async function fetchDealDocuments(dealId: string): Promise<DealDocument[]> {
+  const res = await apiFetch(`/api/deals/${dealId}/documents`);
+  if (!res.ok) {
+    throw new Error(`GET /api/deals/${dealId}/documents failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as DealDocument[];
+}
