@@ -109,3 +109,51 @@ export async function revokeIntakeLink(dealId: string): Promise<void> {
 export function intakeLinkUrl(token: string): string {
   return `${window.location.origin}/intake/${token}`;
 }
+
+export type IntakeAnswerRow = {
+  questionKey: string;
+  prompt: string;
+  answer: string;
+  answered: boolean;
+};
+
+/** GET /api/deals/{dealId}/intake-response output (brief §3.2, not built yet — P3-05). 404 if nothing submitted yet. */
+export type IntakeResponse = {
+  id: string;
+  dealId: string;
+  respondentEmail: string;
+  submittedAt: string;
+  answers: IntakeAnswerRow[];
+};
+
+export const intakeResponseQueryKey = (dealId: string) =>
+  ["deals", "intakeResponse", dealId] as const;
+
+/**
+ * Exported only so a future intakeLink.test.ts case can exercise the
+ * real-endpoint parsing (null-on-404, throw-on-5xx, camelCase passthrough)
+ * without flipping the production `INTAKE_ENDPOINTS_MOCKED` switch — same
+ * idiom as `parseIntakeLinkResponse` above.
+ */
+export async function parseIntakeResponseResponse(res: Response): Promise<IntakeResponse | null> {
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`GET /api/deals/{dealId}/intake-response failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as IntakeResponse;
+}
+
+// P3-05 doesn't exist yet, so there's no real answer data to back a mock
+// store with — never fabricate answer text (CLAUDE.md). Callers only enable
+// this query once intakeStatus === "submitted", so in mocked mode the
+// reissue-prompt branch (not this panel) is what actually exercises today.
+async function mockFetchIntakeResponse(_dealId: string): Promise<IntakeResponse | null> {
+  return null;
+}
+
+/** GET /api/deals/{dealId}/intake-response — null on 404 (nothing submitted yet), mirrors `fetchIntakeLink`'s idiom. */
+export async function fetchIntakeResponse(dealId: string): Promise<IntakeResponse | null> {
+  if (INTAKE_ENDPOINTS_MOCKED) return mockFetchIntakeResponse(dealId);
+  const res = await apiFetch(`/api/deals/${dealId}/intake-response`);
+  return parseIntakeResponseResponse(res);
+}

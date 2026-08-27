@@ -10,7 +10,13 @@ import {
   startDealAnalysis,
 } from "@/api/deals";
 import { dealDocumentsQueryKey, fetchDealDocuments } from "@/api/documents";
-import { createIntakeLink, fetchIntakeLink, intakeLinkQueryKey } from "@/api/intakeLink";
+import {
+  createIntakeLink,
+  fetchIntakeLink,
+  fetchIntakeResponse,
+  intakeLinkQueryKey,
+  intakeResponseQueryKey,
+} from "@/api/intakeLink";
 import { evaluateConfirmGate } from "./newDealWizard/confirmStepGate";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
@@ -158,6 +164,13 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     queryKey: intakeLinkQueryKey(state.attachDealId ?? ""),
     queryFn: () => fetchIntakeLink(state.attachDealId as string),
     enabled: state.attachDealId != null,
+  });
+  // P5-05: the response 404s (by contract, §3.2) unless a link has actually
+  // been submitted, so there's no point calling it any earlier.
+  const intakeResponseQuery = useQuery({
+    queryKey: intakeResponseQueryKey(state.attachDealId ?? ""),
+    queryFn: () => fetchIntakeResponse(state.attachDealId as string),
+    enabled: state.attachDealId != null && intakeLinkQuery.data?.status === "submitted",
   });
 
   useEffect(() => {
@@ -389,6 +402,27 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     navigate(`/analysis/${dealId}`);
   };
 
+  // P5-05 (F10 fix): regenerate a link when a submitted response left no
+  // usable documents. Reuses P5-01's exact token mechanism — same
+  // `createIntakeLink` call, same ref-only token handoff, same destination —
+  // deliberately not a second token path. Prefers the fetched link's
+  // recipientEmail (attach mode never populates `state.recipientEmail`,
+  // since `set_attach_deal_id` doesn't carry it) over local wizard state.
+  const handleReissueIntakeLink = async () => {
+    if (state.attachDealId == null) return;
+    const recipientEmail = intakeLinkQuery.data?.recipientEmail ?? state.recipientEmail;
+    try {
+      const link = await createIntakeLink(state.attachDealId, { recipientEmail });
+      rawTokenRef.current = link.token;
+      queryClient.invalidateQueries({ queryKey: intakeLinkQueryKey(state.attachDealId) });
+      navigate("/new-deal/share-link");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Could not generate a new link";
+      toast.error("Could not generate a new link", { description: message });
+    }
+  };
+
   // P5-02: consume-once read of the ref-held raw token. Passed to
   // ShareLinkStep, which calls it inside a lazy useState initializer, so it
   // runs exactly once per mount — after that first read the ref is null and
@@ -548,6 +582,11 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
               dispatch={dispatch}
               onBack={() => navigate("/new-deal/upload-files")}
               onSubmit={handleSubmit}
+              documents={documentsQuery.data ?? []}
+              documentsLoading={documentsQuery.isLoading}
+              intakeStatus={intakeStatus}
+              intakeResponse={intakeResponseQuery.data ?? null}
+              onReissue={handleReissueIntakeLink}
             />
           )}
         </PageContainer>
