@@ -16,8 +16,8 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
 | P4-05 | mocked | done | c168064 | unit test: required-field block, no network call | |
 | P4-06 | mocked | done | c168064 | unit tests: submit gated on completed upload, 21st file rejected | see flagged item below re: DuplicateUploadError |
 | P4-07 | mocked | done | c168064 | unit test: sessionStorage flag keeps thank-you on refresh | see flagged item below |
-| P5-00 | build now | pending | | | **must be Vansh-approved before any ticket below** |
-| P5-06 | build now | pending | | | |
+| P5-00 | build now | done | 70dfc2a | CLAUDE.md "Second exception (2026-08-27)" paragraph present | **must be Vansh-approved before any ticket below** |
+| P5-06 | build now | done | 22e616e | step2Label prop + WizardProgressBar.test.tsx | done (component); call site wired in P5-01 |
 | P5-09 | mocked | pending | | | |
 | P5-03 | mocked+real | pending | | | P3-04 half real, P3-02 half mocked |
 | P5-01 | mocked | pending | | | |
