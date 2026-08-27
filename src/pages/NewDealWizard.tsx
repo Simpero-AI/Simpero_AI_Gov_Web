@@ -27,6 +27,7 @@ import { getLoginUrl } from "@/const";
 
 import { WizardProgressBar } from "./newDealWizard/WizardProgressBar";
 import { Step1Details } from "./newDealWizard/Step1Details";
+import { ShareLinkStep } from "./newDealWizard/ShareLinkStep";
 import { Step3Confirm } from "./newDealWizard/Step3Confirm";
 import { DealDocumentUpload } from "@/components/deals/DealDocumentUpload";
 import {
@@ -42,8 +43,8 @@ import {
   type PersistedStep1,
 } from "./newDealWizard/storage";
 
-const VALID_STEPS = new Set(["details", "upload-files", "confirm"]);
-type StepName = "details" | "upload-files" | "confirm";
+const VALID_STEPS = new Set(["details", "upload-files", "share-link", "confirm"]);
+type StepName = "details" | "upload-files" | "share-link" | "confirm";
 
 interface NewDealWizardProps {
   step?: string;
@@ -70,8 +71,10 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     return step as StepName;
   }, [step]);
 
+  // "share-link" is the external-collection branch's own step 2 (alongside
+  // "upload-files") — it maps to the same progress-bar index.
   const currentStepIdx: 1 | 2 | 3 =
-    stepName === "details" ? 1 : stepName === "upload-files" ? 2 : 3;
+    stepName === "details" ? 1 : stepName === "confirm" ? 3 : 2;
 
   // Parse `?dealId=` for attach mode. dealId is an opaque UUID string
   // (Deal.id in the backend) — no numeric coercion, same idiom as DealAnalysis.tsx.
@@ -207,6 +210,14 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
         navigate("/new-deal");
       } else if (state.attachDealId == null) {
         // Steps 2 and 3 need a real dealId (DealDocumentUpload can't render without one).
+        toast.error("Create the deal first");
+        navigate("/new-deal");
+      }
+    } else if (stepName === "share-link") {
+      // Guard on the deal, never on the token — the token being absent (already
+      // consumed, or a reload) is a legitimate render state for this step, not
+      // an error condition to bounce out of.
+      if (state.attachDealId == null) {
         toast.error("Create the deal first");
         navigate("/new-deal");
       }
@@ -377,6 +388,16 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     navigate(`/analysis/${dealId}`);
   };
 
+  // P5-02: consume-once read of the ref-held raw token. Passed to
+  // ShareLinkStep, which calls it inside a lazy useState initializer, so it
+  // runs exactly once per mount — after that first read the ref is null and
+  // the token exists only in that component instance's local state.
+  const takeToken = () => {
+    const t = rawTokenRef.current;
+    rawTokenRef.current = null;
+    return t;
+  };
+
   // P5-06: which WizardProgressBar step-2 label to show. `intakeLinkQuery.data`
   // is non-null once a link has ever been generated for this deal (any status),
   // which covers reloads/back-navigation after Step 1, not just the in-session flag.
@@ -488,6 +509,13 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
                 </button>
               </div>
             </div>
+          )}
+          {stepName === "share-link" && (
+            <ShareLinkStep
+              takeToken={takeToken}
+              recipientEmail={state.recipientEmail}
+              onContinue={() => navigate("/new-deal/upload-files")}
+            />
           )}
           {stepName === "confirm" && (
             <Step3Confirm

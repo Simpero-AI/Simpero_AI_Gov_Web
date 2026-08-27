@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes, useLocation, useParams } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { useEffect } from "react";
 import NewDealWizard from "./NewDealWizard";
 import { createDeal, fetchDeal } from "@/api/deals";
@@ -330,5 +330,164 @@ describe("NewDealWizard — Step 1 external collection checkbox (P5-01)", () => 
 
     expect(createDeal).not.toHaveBeenCalled();
     expect(createIntakeLink).not.toHaveBeenCalled();
+  });
+});
+
+describe("NewDealWizard — share-link step (P5-02)", () => {
+  // Test-only stand-in for the browser back button — MemoryRouter keeps its
+  // own history stack, so `navigate(-1)` inside that same router is the
+  // faithful way to exercise a real "go back" from inside the test.
+  function HistoryBackButton() {
+    const navigate = useNavigate();
+    return (
+      <button type="button" data-testid="test-history-back" onClick={() => navigate(-1)}>
+        back (test only)
+      </button>
+    );
+  }
+
+  function renderWithBack(initialPath: string) {
+    const history: string[] = [];
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const utils = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[initialPath]}>
+          <LocationRecorder history={history} />
+          <HistoryBackButton />
+          <Routes>
+            <Route path="/new-deal/:step?" element={<NewDealWizardRoute />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    return { ...utils, queryClient, history };
+  }
+
+  async function createDealViaExternalCollection() {
+    vi.mocked(createDeal).mockResolvedValue({ id: "deal-1" });
+    vi.mocked(createIntakeLink).mockResolvedValue({
+      token: "raw-token-xyz",
+      expiresAt: new Date().toISOString(),
+    });
+    vi.mocked(fetchDealDocuments).mockResolvedValue([]);
+    vi.mocked(fetchIntakeLink).mockResolvedValue(null);
+
+    const rendered = renderWithBack("/new-deal");
+    fireEvent.change(screen.getByTestId("wizard-deal-name"), {
+      target: { value: "CloudMed" },
+    });
+    fireEvent.change(screen.getByTestId("wizard-gp-source"), {
+      target: { value: "Sequoia" },
+    });
+    fireEvent.click(screen.getByTestId("wizard-collect-externally"));
+    fireEvent.change(screen.getByTestId("wizard-recipient-email"), {
+      target: { value: "gp@example.com" },
+    });
+    fireEvent.click(screen.getByTestId("wizard-continue-step-1"));
+    await waitFor(() => expect(rendered.history).toContain("/new-deal/share-link"));
+    return rendered;
+  }
+
+  it("token is displayed on first arrival at share-link", async () => {
+    await createDealViaExternalCollection();
+    const input = await screen.findByTestId("wizard-intake-link-url");
+    expect(input).toHaveValue(`${window.location.origin}/intake/raw-token-xyz`);
+  });
+
+  it("AC: navigating away and back never re-displays the token, nor leaks it into storage or the DOM", async () => {
+    await createDealViaExternalCollection();
+    await screen.findByTestId("wizard-intake-link-url");
+
+    fireEvent.click(screen.getByTestId("wizard-continue-share-link"));
+    await waitFor(() => expect(screen.getByTestId("wizard-step-2")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("test-history-back"));
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard-step-share-link")).toBeInTheDocument()
+    );
+
+    expect(screen.queryByText("raw-token-xyz")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("wizard-intake-link-url")).not.toBeInTheDocument();
+    expect(screen.getByTestId("wizard-intake-link-unavailable")).toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain("raw-token-xyz");
+
+    expect(sessionStorage.length).toBe(0);
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i) as string;
+      expect(localStorage.getItem(key)).not.toContain("raw-token-xyz");
+    }
+  });
+
+  it("copy button writes the full origin+/intake/<token> URL", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    await createDealViaExternalCollection();
+    await screen.findByTestId("wizard-intake-link-url");
+    fireEvent.click(screen.getByTestId("wizard-copy-intake-link"));
+
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/intake/raw-token-xyz`)
+    );
+    expect(toast.success).toHaveBeenCalledWith("Link copied");
+  });
+
+  it("copy failure (rejected clipboard write) shows an error toast instead of an unhandled rejection", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    await createDealViaExternalCollection();
+    await screen.findByTestId("wizard-intake-link-url");
+    fireEvent.click(screen.getByTestId("wizard-copy-intake-link"));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Couldn't copy automatically",
+        expect.anything()
+      )
+    );
+  });
+
+  it("progress bar: share-link maps to step-2 active, and the pre-existing steps are unchanged", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([]);
+    vi.mocked(fetchIntakeLink).mockResolvedValue(null);
+
+    renderWizard("/new-deal");
+    expect(screen.getByTestId("wizard-step-indicator-1")).toHaveAttribute(
+      "data-state",
+      "active"
+    );
+    cleanup();
+
+    renderWizard("/new-deal/upload-files?dealId=deal-1");
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard-step-indicator-2")).toHaveAttribute(
+        "data-state",
+        "active"
+      )
+    );
+    cleanup();
+
+    renderWizard("/new-deal/confirm?dealId=deal-1");
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard-step-indicator-3")).toHaveAttribute(
+        "data-state",
+        "active"
+      )
+    );
+    cleanup();
+
+    await createDealViaExternalCollection();
+    expect(screen.getByTestId("wizard-step-indicator-2")).toHaveAttribute(
+      "data-state",
+      "active"
+    );
   });
 });
