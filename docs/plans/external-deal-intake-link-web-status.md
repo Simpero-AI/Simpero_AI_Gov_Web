@@ -24,7 +24,7 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
 | P5-02 | mocked | done | de57ab1 | unit tests in `NewDealWizard.test.tsx` (share-link describe block): token displayed on first arrival, not re-displayed after navigate-away-and-back (`queryByText`/DOM-innerHTML/`sessionStorage`/`localStorage` all checked empty of it), copy-success and copy-failure paths, progress-bar step-2 mapping unchanged for the three pre-existing steps. | |
 | P5-04 | mocked | done | 32ca2eb | unit tests in `NewDealWizard.test.tsx` (P5-04 describe block): pending status hides the dropzone/disables Continue, null status renders the byte-identical (no `disabled`/`title`) non-intake DOM, two-click revoke calls `revokeIntakeLink` exactly once and the dropzone reappears once the mocked GET flips, `createdAt` absent/present render "—"/formatted, and a source-string assertion that `Step2WaitingPanel.tsx` names no TODO/"coming soon". | see flagged item below re: `dealId` prop |
 | P5-05 | mocked+real | done | 311bf3c | unit tests in `Step3Confirm.test.tsx` (9 cases): 6 documents by filename not count, all 5 statuses render distinctly, unknown status falls back without crashing, submitted+all-quarantined and submitted+zero-documents both show the reissue panel and fire `onReissue`, submitted+one-verified shows no reissue panel, `answered: false` renders "Not answered", and the `intakeStatus: null` byte-identity case for the frozen non-intake row. | Document half real via P3-04 (`GET /deals/{id}/documents`); answers panel (P3-05) and the reissue trigger's "submitted" condition are exercised against mocked `intakeStatus`/`intakeResponse` pending P3-05/P3-02. |
-| P5-07 | mocked | pending | | | |
+| P5-07 | mocked | done | e8d8fb9 | unit tests in `DealsTable.test.tsx`: absent-field and `'none'` cases route to `/deals/{id}/analysis` (real, fully verifiable today, no P3-06 needed); `'pending'`→`/new-deal/upload-files?dealId=` and `'submitted'`→`/new-deal/confirm?dealId=` are mocked pending P3-06. | |
 | P5-08 | real | pending | | | fully real via PR #108's branch |
 
 ## Flagged (deviations from this brief, or judgment calls made where the brief was ambiguous)
@@ -121,6 +121,17 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
   expiresAt }` (brief §3.2), and composing from `window.location.origin`
   avoids needing a backend base-URL config. Revisit if Alpha's actual P3-01
   response returns a full URL instead of a bare token.
+
+- P5-07 shared-type option not taken. Section 2.6 offers two options: add
+  `intakeStatus` to `LivePipelineRow` in `src/shared/dealsListPipeline.ts`,
+  or use the local overlay pattern already established by `confidential`.
+  Used the overlay (`RowWithIntakeStatus` in `DealsTable.tsx`) instead,
+  because CLAUDE.md's 2026-08-27 exception explicitly puts `src/shared/`
+  "out of scope" of the intake exception, and the `confidential` precedent
+  exists specifically to avoid editing that frozen contract ahead of the
+  backend. Revisit once P3-06 ships and `intakeStatus` becomes a real field
+  on `LivePipelineRow` — the overlay type can then be deleted in favor of
+  the real one.
 
 ## Blocked on Alpha (do not attempt to fully close until the corresponding PR merges)
 
