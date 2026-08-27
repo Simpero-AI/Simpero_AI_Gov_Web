@@ -22,7 +22,7 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
 | P5-03 | mocked+real | done | db6a1ee (API clients) + c3a152b (gate) | real GET /deals/{id}/documents contract (P3-04); intake-link half mocked behind INTAKE_ENDPOINTS_MOCKED. | P3-04 half real, P3-02 half mocked |
 | P5-01 | mocked | pending | | | |
 | P5-02 | mocked | done | de57ab1 | unit tests in `NewDealWizard.test.tsx` (share-link describe block): token displayed on first arrival, not re-displayed after navigate-away-and-back (`queryByText`/DOM-innerHTML/`sessionStorage`/`localStorage` all checked empty of it), copy-success and copy-failure paths, progress-bar step-2 mapping unchanged for the three pre-existing steps. | |
-| P5-04 | mocked | pending | | | |
+| P5-04 | mocked | done | 32ca2eb | unit tests in `NewDealWizard.test.tsx` (P5-04 describe block): pending status hides the dropzone/disables Continue, null status renders the byte-identical (no `disabled`/`title`) non-intake DOM, two-click revoke calls `revokeIntakeLink` exactly once and the dropzone reappears once the mocked GET flips, `createdAt` absent/present render "—"/formatted, and a source-string assertion that `Step2WaitingPanel.tsx` names no TODO/"coming soon". | see flagged item below re: `dealId` prop |
 | P5-05 | mocked+real | pending | | | P3-04 half real, P3-05 half mocked |
 | P5-07 | mocked | pending | | | |
 | P5-08 | real | pending | | | fully real via PR #108's branch |
@@ -80,6 +80,15 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
   built, so the contract does not guarantee it. P5-04's waiting panel must
   render "—" when absent, never a fabricated date. Revisit when P3-02
   ships.
+- P5-04 `Step2WaitingPanel` props. The brief lists `{ link, onRevoked }` only,
+  but the revoke mutation it also specifies (`useMutation({ mutationFn: () =>
+  revokeIntakeLink(dealId) })`) needs a `dealId` — `IntakeLink` (§3.2) carries
+  no `dealId` field of its own. Added `dealId: string` as a third required
+  prop (the caller already holds `state.attachDealId`); kept `onRevoked` as a
+  post-success hook the parent can use, in addition to the panel's own
+  invalidation of `intakeLinkQueryKey(dealId)` (which is what actually makes
+  the dropzone reappear). NewDealWizard.tsx's `onRevoked` is a no-op today —
+  nothing else needed reacting to it.
 - P5-02 share URL composition. The brief never specifies whether the share
   URL (`{origin}/intake/{token}`) is composed client-side or returned
   full-formed by `POST /api/deals/{dealId}/intake-link`. Chose client-side
