@@ -97,9 +97,13 @@ function NewDealWizardRoute() {
   return <NewDealWizard step={params.step} />;
 }
 
-function renderWizard(initialPath: string) {
+function renderWizard(
+  initialPath: string,
+  {
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  }: { queryClient?: QueryClient } = {}
+) {
   const history: string[] = [];
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const utils = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
@@ -134,6 +138,115 @@ describe("NewDealWizard — Step 3 confirm guard (attach mode)", () => {
 
     expect(screen.getByTestId("wizard-step-3")).toBeInTheDocument();
     expect(toast.error).not.toHaveBeenCalledWith("Attach a primary document first");
+    expect(history).not.toContain("/new-deal/upload-files");
+  });
+
+  it("fail-closed: an intake-link fetch that keeps erroring (through the retry policy) bounces to Step 2, never rendering Step 3", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([
+      makeDealDocument({ id: "d1" }),
+      makeDealDocument({ id: "d2" }),
+    ]);
+    vi.mocked(fetchIntakeLink).mockRejectedValue(new Error("network down"));
+
+    // Real retry policy (main.tsx's), not `retry: false` — the whole point of
+    // this case is that the guard must not resolve to "error" (and block)
+    // until the query has actually exhausted its retries, and must not read
+    // an in-flight retry as "loading forever" either.
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: (failureCount: number) => failureCount < 2,
+          retryDelay: (i: number) => Math.min(1000 * 2 ** i, 10_000),
+        },
+      },
+    });
+
+    renderWizard("/new-deal/confirm?dealId=deal-1", { queryClient });
+
+    // The global retry policy means this needs to cover retry attempts (two
+    // retries, ~1s + ~2s of backoff), not a single synchronous tick.
+    await waitFor(
+      () => expect(screen.queryByTestId("wizard-step-3")).not.toBeInTheDocument(),
+      { timeout: 8_000 }
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard-step-2")).toBeInTheDocument()
+    );
+  }, 15_000);
+
+  it("zero documents and no intake link still bounces to Step 2 (guard not merely deleted)", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([]);
+    vi.mocked(fetchIntakeLink).mockResolvedValue(null);
+
+    renderWizard("/new-deal/confirm?dealId=deal-1");
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Attach a primary document first",
+        expect.anything()
+      )
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard-step-2")).toBeInTheDocument()
+    );
+  });
+
+  it("intake link 'pending' bounces even with documents attached (early-analysis block)", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([
+      makeDealDocument({ id: "d1" }),
+      makeDealDocument({ id: "d2" }),
+    ]);
+    vi.mocked(fetchIntakeLink).mockResolvedValue({
+      status: "pending",
+      recipientEmail: "gp@example.com",
+      expiresAt: new Date().toISOString(),
+      submittedAt: null,
+    });
+
+    renderWizard("/new-deal/confirm?dealId=deal-1");
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Waiting on the external party",
+        expect.anything()
+      )
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard-step-2")).toBeInTheDocument()
+    );
+  });
+
+  it("intake link 'submitted' with one document lands on Step 3", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([makeDealDocument({ id: "d1" })]);
+    vi.mocked(fetchIntakeLink).mockResolvedValue({
+      status: "submitted",
+      recipientEmail: "gp@example.com",
+      expiresAt: new Date().toISOString(),
+      submittedAt: new Date().toISOString(),
+    });
+
+    renderWizard("/new-deal/confirm?dealId=deal-1");
+
+    await waitFor(() => expect(screen.getByText("Acme Corp")).toBeInTheDocument());
+    expect(screen.getByTestId("wizard-step-3")).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("does not navigate or toast while the documents query is still unresolved", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockReturnValue(new Promise(() => {})); // never resolves
+    vi.mocked(fetchIntakeLink).mockResolvedValue(null);
+
+    const { history } = renderWizard("/new-deal/confirm?dealId=deal-1");
+
+    await waitFor(() => expect(screen.getByText("Acme Corp")).toBeInTheDocument());
+
+    expect(screen.getByTestId("wizard-step-3")).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
     expect(history).not.toContain("/new-deal/upload-files");
   });
 });

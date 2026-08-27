@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AnalysisApiError,
   createDeal,
@@ -9,6 +9,9 @@ import {
   fetchDeal,
   startDealAnalysis,
 } from "@/api/deals";
+import { dealDocumentsQueryKey, fetchDealDocuments } from "@/api/documents";
+import { fetchIntakeLink, intakeLinkQueryKey } from "@/api/intakeLink";
+import { evaluateConfirmGate } from "./newDealWizard/confirmStepGate";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
 import { MvpSidebar } from "@/components/mvp/shell/MvpSidebar";
@@ -58,6 +61,7 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
   const nav = buildMvpNav({ id: authUser?.id ?? "anon", role });
   const navigate = useNavigate();
   const { search } = useLocation();
+  const queryClient = useQueryClient();
 
   // Normalize the route param.
   const stepName: StepName = useMemo(() => {
@@ -131,6 +135,22 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     queryFn: () => fetchDeal(attachDealIdFromUrl as string),
     enabled: attachDealIdFromUrl != null,
   });
+
+  // P5-03: the Step 3 guard is server-driven, not `state.hasUploadedDocument`
+  // (which only ever reflects a fresh in-session upload — see
+  // confirmStepGate.ts). Neither query overrides the global retry policy
+  // (no `retry: false`): a transient blip must not read as a hard block.
+  const documentsQuery = useQuery({
+    queryKey: dealDocumentsQueryKey(state.attachDealId ?? ""),
+    queryFn: () => fetchDealDocuments(state.attachDealId as string),
+    enabled: state.attachDealId != null,
+  });
+  const intakeLinkQuery = useQuery({
+    queryKey: intakeLinkQueryKey(state.attachDealId ?? ""),
+    queryFn: () => fetchIntakeLink(state.attachDealId as string),
+    enabled: state.attachDealId != null,
+  });
+
   useEffect(() => {
     if (attachDealIdFromUrl == null) return;
     if (!dealQuery.data) return;
@@ -189,9 +209,31 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
       if (state.attachDealId == null) {
         toast.error("Create the deal first");
         navigate("/new-deal");
-      } else if (!state.hasUploadedDocument) {
-        toast.error("Attach a primary document first");
-        navigate("/new-deal/upload-files");
+        return;
+      }
+      const gate = evaluateConfirmGate({
+        documents: documentsQuery.isLoading
+          ? { kind: "loading" }
+          : documentsQuery.isError
+            ? { kind: "error" }
+            : {
+                kind: "ready",
+                count:
+                  (documentsQuery.data?.length ?? 0) +
+                  (state.hasUploadedDocument ? 1 : 0),
+              },
+        intakeLink: intakeLinkQuery.isLoading
+          ? { kind: "loading" }
+          : intakeLinkQuery.isError
+            ? { kind: "error" }
+            : { kind: "ready", status: intakeLinkQuery.data?.status ?? null },
+      });
+      if (gate.kind === "block") {
+        toast.error(gate.title, {
+          id: "new-deal-step-gate",
+          description: gate.description,
+        });
+        navigate(gate.to);
       }
     }
   }, [
@@ -202,6 +244,12 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     state.hasUploadedDocument,
     state.attachDealId,
     navigate,
+    documentsQuery.isLoading,
+    documentsQuery.isError,
+    documentsQuery.data,
+    intakeLinkQuery.isLoading,
+    intakeLinkQuery.isError,
+    intakeLinkQuery.data,
   ]);
 
   // Step 1 → Step 2: the deal is created here (not at final submit) so that
@@ -382,7 +430,18 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
                   </h2>
                   <DealDocumentUpload
                     dealId={state.attachDealId}
-                    onUploaded={() => dispatch({ type: "document_uploaded" })}
+                    onUploaded={() => {
+                      dispatch({ type: "document_uploaded" });
+                      // `state.attachDealId` is narrowed for the JSX above by the
+                      // surrounding `!= null` check, but TS can't carry that
+                      // narrowing into this closure (the captured binding could
+                      // theoretically change before the callback fires) — same
+                      // idiom as `attachDealIdFromUrl as string` in dealQuery's
+                      // queryFn above.
+                      queryClient.invalidateQueries({
+                        queryKey: dealDocumentsQueryKey(state.attachDealId as string),
+                      });
+                    }}
                   />
                 </div>
               )}
