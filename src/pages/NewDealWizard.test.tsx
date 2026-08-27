@@ -8,8 +8,11 @@ import { createDeal, fetchDeal } from "@/api/deals";
 import type { DealWithLatestMemo } from "@/api/deals";
 import { fetchDealDocuments } from "@/api/documents";
 import type { DealDocument } from "@/api/documents";
-import { createIntakeLink, fetchIntakeLink } from "@/api/intakeLink";
+import { createIntakeLink, fetchIntakeLink, revokeIntakeLink } from "@/api/intakeLink";
+import type { IntakeLink } from "@/api/intakeLink";
 import { toast } from "@/components/mvp/primitives/sonner";
+import fs from "node:fs";
+import path from "node:path";
 
 // Real fetchDeal hits the network via apiFetch — mock the module's data
 // function while keeping the real (pure) query-key helpers, same convention
@@ -26,7 +29,12 @@ vi.mock("@/api/documents", async importOriginal => {
 
 vi.mock("@/api/intakeLink", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/intakeLink")>();
-  return { ...actual, fetchIntakeLink: vi.fn(), createIntakeLink: vi.fn() };
+  return {
+    ...actual,
+    fetchIntakeLink: vi.fn(),
+    createIntakeLink: vi.fn(),
+    revokeIntakeLink: vi.fn(),
+  };
 });
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -83,6 +91,16 @@ function makeDealDocument(overrides: Partial<DealDocument> = {}): DealDocument {
     filename: "deck.pdf",
     status: "verified",
     createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+function makePendingIntakeLink(overrides: Partial<IntakeLink> = {}): IntakeLink {
+  return {
+    status: "pending",
+    recipientEmail: "gp@example.com",
+    expiresAt: new Date().toISOString(),
+    submittedAt: null,
     ...overrides,
   };
 }
@@ -489,5 +507,103 @@ describe("NewDealWizard — share-link step (P5-02)", () => {
       "data-state",
       "active"
     );
+  });
+});
+
+describe("NewDealWizard — Step 2 external-collection waiting panel (P5-04)", () => {
+  it("intakeStatus 'pending': dropzone does not render, panel shows the recipient email, Continue disabled", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([]);
+    vi.mocked(fetchIntakeLink).mockResolvedValue(makePendingIntakeLink());
+
+    renderWizard("/new-deal/upload-files?dealId=deal-1");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard-step2-waiting-panel")).toBeInTheDocument()
+    );
+    expect(screen.queryByTestId("deal-document-dropzone")).not.toBeInTheDocument();
+    expect(screen.getByTestId("wizard-intake-recipient")).toHaveTextContent(
+      "gp@example.com"
+    );
+    expect(screen.getByTestId("wizard-continue-step-2")).toBeDisabled();
+  });
+
+  it("intakeStatus null: dropzone renders, Continue carries neither `disabled` nor `title` (byte-identical non-intake DOM)", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([]);
+    vi.mocked(fetchIntakeLink).mockResolvedValue(null);
+
+    renderWizard("/new-deal/upload-files?dealId=deal-1");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("deal-document-dropzone")).toBeInTheDocument()
+    );
+    const btn = screen.getByTestId("wizard-continue-step-2");
+    expect(btn).not.toHaveAttribute("disabled");
+    expect(btn).not.toHaveAttribute("title");
+  });
+
+  it("revoke: two clicks call revokeIntakeLink exactly once with the dealId; the dropzone reappears once the mocked GET flips status", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([]);
+    // First GET (initial render) is pending; the second (after invalidation
+    // fires the refetch) mocks the link having flipped to revoked/gone.
+    vi.mocked(fetchIntakeLink)
+      .mockResolvedValueOnce(makePendingIntakeLink())
+      .mockResolvedValueOnce(null);
+    vi.mocked(revokeIntakeLink).mockResolvedValue(undefined);
+
+    renderWizard("/new-deal/upload-files?dealId=deal-1");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard-revoke-link")).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByTestId("wizard-revoke-link"));
+    expect(revokeIntakeLink).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("wizard-confirm-revoke-link"));
+
+    await waitFor(() => expect(revokeIntakeLink).toHaveBeenCalledTimes(1));
+    expect(revokeIntakeLink).toHaveBeenCalledWith("deal-1");
+
+    // Dropzone reappearing after a revoke is the ordinary non-intake path
+    // resuming, not a violation (see Step2WaitingPanel.tsx's comment).
+    await waitFor(() =>
+      expect(screen.getByTestId("deal-document-dropzone")).toBeInTheDocument()
+    );
+  });
+
+  it("createdAt absent renders '—', never a fabricated or 'Invalid Date' value (flagged risk: §3.2 doesn't list this field — delete this case if P3-02 ships without it)", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([]);
+    vi.mocked(fetchIntakeLink).mockResolvedValue(makePendingIntakeLink()); // no createdAt
+
+    renderWizard("/new-deal/upload-files?dealId=deal-1");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard-intake-sent-date")).toHaveTextContent("—")
+    );
+  });
+
+  it("createdAt present renders the formatted send date (flagged risk: §3.2 doesn't list this field — delete this case if P3-02 ships without it)", async () => {
+    const createdAt = "2026-01-15T00:00:00.000Z";
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([]);
+    vi.mocked(fetchIntakeLink).mockResolvedValue(makePendingIntakeLink({ createdAt }));
+
+    renderWizard("/new-deal/upload-files?dealId=deal-1");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard-intake-sent-date")).toHaveTextContent(
+        new Date(createdAt).toLocaleDateString()
+      )
+    );
+  });
+
+  it("Step2WaitingPanel.tsx names no TODO or 'coming soon' hinting org-side upload is arriving (deliberately out of v1 scope)", () => {
+    const filePath = path.resolve(__dirname, "newDealWizard", "Step2WaitingPanel.tsx");
+    const source = fs.readFileSync(filePath, "utf-8");
+    expect(source).not.toMatch(/TODO/i);
+    expect(source).not.toMatch(/coming soon/i);
   });
 });

@@ -91,6 +91,20 @@ export async function createIntakeLink(
   return (await res.json()) as CreateIntakeLinkResponse;
 }
 
+async function mockRevokeIntakeLink(dealId: string): Promise<void> {
+  const existing = mockIntakeLinks.get(dealId);
+  if (existing) mockIntakeLinks.set(dealId, { ...existing, status: "revoked" });
+}
+
+/** DELETE /api/deals/{dealId}/intake-link — revokes a live link (brief §3.2, not built yet — P3-03). */
+export async function revokeIntakeLink(dealId: string): Promise<void> {
+  if (INTAKE_ENDPOINTS_MOCKED) return mockRevokeIntakeLink(dealId);
+  const res = await apiFetch(`/api/deals/${dealId}/intake-link`, { method: "DELETE" });
+  if (!res.ok) {
+    throw new Error(`DELETE /api/deals/${dealId}/intake-link failed: ${res.status} ${await res.text()}`);
+  }
+}
+
 /** Public URL a recipient uses to open the intake flow — never persist the raw token elsewhere. */
 export function intakeLinkUrl(token: string): string {
   return `${window.location.origin}/intake/${token}`;

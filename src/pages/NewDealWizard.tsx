@@ -28,6 +28,7 @@ import { getLoginUrl } from "@/const";
 import { WizardProgressBar } from "./newDealWizard/WizardProgressBar";
 import { Step1Details } from "./newDealWizard/Step1Details";
 import { ShareLinkStep } from "./newDealWizard/ShareLinkStep";
+import { Step2WaitingPanel } from "./newDealWizard/Step2WaitingPanel";
 import { Step3Confirm } from "./newDealWizard/Step3Confirm";
 import { DealDocumentUpload } from "@/components/deals/DealDocumentUpload";
 import {
@@ -403,6 +404,10 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
   // which covers reloads/back-navigation after Step 1, not just the in-session flag.
   const externalBranch = state.collectExternally || intakeLinkQuery.data != null;
 
+  // P5-04: effective status per §3.4 — the server already resolves a stale
+  // `pending` row to `expired`, so this is a direct read, not a re-derivation.
+  const intakeStatus = intakeLinkQuery.data?.status ?? null;
+
   return (
     <MvpAppShell>
       <MvpAppShell.Sidebar>
@@ -464,31 +469,45 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
           )}
           {stepName === "upload-files" && (
             <div className="space-y-5" data-testid="wizard-step-2">
-              {/* `state.attachDealId != null` narrows for the DealDocumentUpload
-                  prop below — the step guard effect above redirects away from
-                  this step once attachDealId is null, but that redirect is async,
-                  so this narrowing check covers the brief window before it fires. */}
-              {state.attachDealId != null && (
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
-                    Upload Files
-                  </h2>
-                  <DealDocumentUpload
-                    dealId={state.attachDealId}
-                    onUploaded={() => {
-                      dispatch({ type: "document_uploaded" });
-                      // `state.attachDealId` is narrowed for the JSX above by the
-                      // surrounding `!= null` check, but TS can't carry that
-                      // narrowing into this closure (the captured binding could
-                      // theoretically change before the callback fires) — same
-                      // idiom as `attachDealIdFromUrl as string` in dealQuery's
-                      // queryFn above.
-                      queryClient.invalidateQueries({
-                        queryKey: dealDocumentsQueryKey(state.attachDealId as string),
-                      });
-                    }}
-                  />
-                </div>
+              {intakeStatus === "pending" ? (
+                <Step2WaitingPanel
+                  link={intakeLinkQuery.data!}
+                  dealId={state.attachDealId as string}
+                  onRevoked={() => {
+                    // Nothing extra needed here — Step2WaitingPanel already
+                    // invalidates the intake-link query itself; once that
+                    // resolves, `intakeStatus` stops being "pending" and the
+                    // dropzone branch below renders on the next paint. This is
+                    // the ordinary non-intake path resuming, not a regression.
+                  }}
+                />
+              ) : (
+                /* `state.attachDealId != null` narrows for the DealDocumentUpload
+                   prop below — the step guard effect above redirects away from
+                   this step once attachDealId is null, but that redirect is async,
+                   so this narrowing check covers the brief window before it fires. */
+                state.attachDealId != null && (
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
+                      Upload Files
+                    </h2>
+                    <DealDocumentUpload
+                      dealId={state.attachDealId}
+                      onUploaded={() => {
+                        dispatch({ type: "document_uploaded" });
+                        // `state.attachDealId` is narrowed for the JSX above by the
+                        // surrounding `!= null` check, but TS can't carry that
+                        // narrowing into this closure (the captured binding could
+                        // theoretically change before the callback fires) — same
+                        // idiom as `attachDealIdFromUrl as string` in dealQuery's
+                        // queryFn above.
+                        queryClient.invalidateQueries({
+                          queryKey: dealDocumentsQueryKey(state.attachDealId as string),
+                        });
+                      }}
+                    />
+                  </div>
+                )
               )}
               <div className="flex justify-between">
                 <button
@@ -503,6 +522,12 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
                   type="button"
                   onClick={() => navigate("/new-deal/confirm")}
                   data-testid="wizard-continue-step-2"
+                  disabled={intakeStatus === "pending"}
+                  title={
+                    intakeStatus === "pending"
+                      ? "Waiting for the external party to submit"
+                      : undefined
+                  }
                   className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition"
                 >
                   Continue <ArrowRight className="w-4 h-4" />
