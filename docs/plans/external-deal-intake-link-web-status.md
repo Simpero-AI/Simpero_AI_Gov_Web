@@ -1,0 +1,61 @@
+# External Deal Intake Link — Web (P4/P5) implementation status
+
+Started: 2026-08-27
+Implementing session: local Claude Code CLI, Simpero_AI_Gov_Web
+Source spec: docs/plans/external-deal-intake-link-implementation-brief.md
+Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md and its status file (Alpha repo)
+
+## Tickets
+
+| Ticket | Track | Status | Commit(s) | Verified against | Notes |
+|---|---|---|---|---|---|
+| P4-01 | mocked | done | a5541bd | unit test (Clerk-header leak assertion) | |
+| P4-02 | build now | done | c168064 | route present, lazy-loaded | |
+| P4-03 | build now | done | c168064 | import-graph walk test (no dep-cruiser installed; hand-rolled) | |
+| P4-04 | mocked | done | c168064 | unit test: wrong-email vs expired render identical output | |
+| P4-05 | mocked | done | c168064 | unit test: required-field block, no network call | |
+| P4-06 | mocked | done | c168064 | unit tests: submit gated on completed upload, 21st file rejected | see flagged item below re: DuplicateUploadError |
+| P4-07 | mocked | done | c168064 | unit test: sessionStorage flag keeps thank-you on refresh | see flagged item below |
+| P5-00 | build now | pending | | | **must be Vansh-approved before any ticket below** |
+| P5-06 | build now | pending | | | |
+| P5-09 | mocked | pending | | | |
+| P5-03 | mocked+real | pending | | | P3-04 half real, P3-02 half mocked |
+| P5-01 | mocked | pending | | | |
+| P5-02 | mocked | pending | | | |
+| P5-04 | mocked | pending | | | |
+| P5-05 | mocked+real | pending | | | P3-04 half real, P3-05 half mocked |
+| P5-07 | mocked | pending | | | |
+| P5-08 | real | pending | | | fully real via PR #108's branch |
+
+## Flagged (deviations from this brief, or judgment calls made where the brief was ambiguous)
+
+- Intake session token transport: section 3.1 doesn't name a header for
+  the session token on `GET /api/public/intake/questions` and friends.
+  Chose `Authorization: Bearer <token>` to match the rest of the app's
+  existing convention (`apiFetch`) — no other header name is implied
+  anywhere in the contract. Flag back if Alpha's actual implementation
+  uses something else (e.g. a custom `X-Intake-Session` header).
+- P4-07's refresh-after-submit ambiguity (section 4, P4-07) — resolved as:
+  a `sessionStorage` flag `intake-submitted-{token}` set right before the
+  successful-submit transition, keyed by the URL token (already visible in
+  the address bar — not a secret). Read on mount to choose between the
+  submitted and unavailable terminal screens. See IntakePage.tsx's comment.
+- P4-06's DuplicateUploadError transfer to the public path (section 2.5) —
+  resolved as: NOT special-cased. The public presigned-url/complete routes
+  (P3-10/P3-11) don't exist yet, so their real 409 shape is unverifiable;
+  `publicIntake.ts`'s `ok()` helper treats any non-ok response uniformly as
+  `IntakeUnavailableError`, consistent with the public contract's
+  already-undifferentiated-failure design. Revisit once P3-10/P3-11 ship —
+  if the real 409 carries a reusable existing-upload id the way the
+  authenticated route's does, `runPublicDocumentUpload` should short-circuit
+  the same way `runDocumentUpload` does.
+- Intake questions screen (P4-05): "match the copy, not just the fact of
+  blocking" (brief's AC) can't be verified against real backend copy since
+  P2-03's actual validation-error message isn't visible from this repo.
+  Used a generic "This question is required." — revisit once P2-03's PR
+  #110 diff is checked directly, or the endpoint is live.
+
+## Blocked on Alpha (do not attempt to fully close until the corresponding PR merges)
+
+- P3-01, 02, 03, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15 — none exist yet. Re-check
+  `gh pr list` in Simpero_AI_Gov_Alpha before assuming this list is still accurate.

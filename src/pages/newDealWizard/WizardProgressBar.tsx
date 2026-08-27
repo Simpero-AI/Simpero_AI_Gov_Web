@@ -2,19 +2,24 @@ import { CheckCircle } from "lucide-react";
 
 interface WizardProgressBarProps {
   currentStep: 1 | 2 | 3;
+  /** P5-06 — step 2's label on the external-collection branch (checkbox checked in Step 1). Defaults to the normal "Upload Materials" label. */
+  step2Label?: string;
 }
 
-const STEPS = [
+const DEFAULT_STEPS = [
   { num: 1 as const, label: "Deal Details" },
   { num: 2 as const, label: "Upload Materials" },
   { num: 3 as const, label: "Confirm & Start" },
 ];
 
-export function WizardProgressBar({ currentStep }: WizardProgressBarProps) {
+export function WizardProgressBar({ currentStep, step2Label }: WizardProgressBarProps) {
+  const steps = step2Label
+    ? DEFAULT_STEPS.map((s) => (s.num === 2 ? { ...s, label: step2Label } : s))
+    : DEFAULT_STEPS;
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex items-center gap-0">
-        {STEPS.map((step, i) => {
+        {steps.map((step, i) => {
           const done = currentStep > step.num;
           const active = currentStep === step.num;
           return (
@@ -41,7 +46,7 @@ export function WizardProgressBar({ currentStep }: WizardProgressBarProps) {
                   {step.label}
                 </span>
               </div>
-              {i < STEPS.length - 1 && (
+              {i < steps.length - 1 && (
                 <div
                   className={`flex-1 h-0.5 mx-4 ${
                     currentStep > step.num ? "bg-emerald-400" : "bg-gray-200"
