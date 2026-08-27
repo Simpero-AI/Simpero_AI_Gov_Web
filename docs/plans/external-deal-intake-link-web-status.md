@@ -23,7 +23,7 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
 | P5-01 | mocked | pending | | | |
 | P5-02 | mocked | done | de57ab1 | unit tests in `NewDealWizard.test.tsx` (share-link describe block): token displayed on first arrival, not re-displayed after navigate-away-and-back (`queryByText`/DOM-innerHTML/`sessionStorage`/`localStorage` all checked empty of it), copy-success and copy-failure paths, progress-bar step-2 mapping unchanged for the three pre-existing steps. | |
 | P5-04 | mocked | done | 32ca2eb | unit tests in `NewDealWizard.test.tsx` (P5-04 describe block): pending status hides the dropzone/disables Continue, null status renders the byte-identical (no `disabled`/`title`) non-intake DOM, two-click revoke calls `revokeIntakeLink` exactly once and the dropzone reappears once the mocked GET flips, `createdAt` absent/present render "—"/formatted, and a source-string assertion that `Step2WaitingPanel.tsx` names no TODO/"coming soon". | see flagged item below re: `dealId` prop |
-| P5-05 | mocked+real | pending | | | P3-04 half real, P3-05 half mocked |
+| P5-05 | mocked+real | done | 311bf3c | unit tests in `Step3Confirm.test.tsx` (9 cases): 6 documents by filename not count, all 5 statuses render distinctly, unknown status falls back without crashing, submitted+all-quarantined and submitted+zero-documents both show the reissue panel and fire `onReissue`, submitted+one-verified shows no reissue panel, `answered: false` renders "Not answered", and the `intakeStatus: null` byte-identity case for the frozen non-intake row. | Document half real via P3-04 (`GET /deals/{id}/documents`); answers panel (P3-05) and the reissue trigger's "submitted" condition are exercised against mocked `intakeStatus`/`intakeResponse` pending P3-05/P3-02. |
 | P5-07 | mocked | pending | | | |
 | P5-08 | real | pending | | | fully real via PR #108's branch |
 
@@ -89,6 +89,30 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
   invalidation of `intakeLinkQueryKey(dealId)` (which is what actually makes
   the dropzone reappear). NewDealWizard.tsx's `onRevoked` is a no-op today —
   nothing else needed reacting to it.
+- P5-05 scope: Option A, not the brief's literal AC. The brief's P5-05 AC
+  reads as if the per-document list replaces "Documents attached"/"No
+  documents attached" for any deal. It does not — CLAUDE.md's 2026-08-27
+  exception narrows the New Deal freeze exemption to content "shown only on
+  the external-intake branch," and states the pre-existing three-step path
+  "is unaffected and keeps the obligation unchanged." Implemented as: the
+  per-document list, statuses, and answers panel render only when
+  `intakeStatus != null`; the non-intake path keeps the exact existing
+  two-string summary row (same DOM structure, same strings, same classes,
+  same position), with the one permitted change being that its value now
+  reads from the real documents query (`documents.length > 0`) instead of
+  `state.hasUploadedDocument` — the other half of the bug P5-03 fixed.
+  Rendering the document list for all deals would require its own CLAUDE.md
+  amendment; not made here.
+- P5-05 reissue-button 409 risk. The reissue prompt's "Generate a new link"
+  button calls the same `createIntakeLink` path as P5-01, which per brief
+  §3.2 returns 409 if "a live link already exists." A `submitted` link is
+  arguably still "live" until revoked/expired, so reissuing after a bad
+  submission may 409 against the real P3-01 once it ships — untestable today
+  since P3-01 doesn't exist and the mock store has no 409 branch. Must be
+  confirmed against the real endpoint when P3-01 lands; if it does 409 on a
+  submitted-but-not-revoked link, the reissue flow needs either an implicit
+  revoke-then-create or a distinct backend affordance — flag back to Alpha
+  rather than guessing.
 - P5-02 share URL composition. The brief never specifies whether the share
   URL (`{origin}/intake/{token}`) is composed client-side or returned
   full-formed by `POST /api/deals/{dealId}/intake-link`. Chose client-side
