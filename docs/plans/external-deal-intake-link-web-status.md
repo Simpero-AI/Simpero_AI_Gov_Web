@@ -25,7 +25,8 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
 | P5-04 | mocked | done | 32ca2eb | unit tests in `NewDealWizard.test.tsx` (P5-04 describe block): pending status hides the dropzone/disables Continue, null status renders the byte-identical (no `disabled`/`title`) non-intake DOM, two-click revoke calls `revokeIntakeLink` exactly once and the dropzone reappears once the mocked GET flips, `createdAt` absent/present render "—"/formatted, and a source-string assertion that `Step2WaitingPanel.tsx` names no TODO/"coming soon". | see flagged item below re: `dealId` prop |
 | P5-05 | mocked+real | done | 311bf3c | unit tests in `Step3Confirm.test.tsx` (9 cases): 6 documents by filename not count, all 5 statuses render distinctly, unknown status falls back without crashing, submitted+all-quarantined and submitted+zero-documents both show the reissue panel and fire `onReissue`, submitted+one-verified shows no reissue panel, `answered: false` renders "Not answered", and the `intakeStatus: null` byte-identity case for the frozen non-intake row. | Document half real via P3-04 (`GET /deals/{id}/documents`); answers panel (P3-05) and the reissue trigger's "submitted" condition are exercised against mocked `intakeStatus`/`intakeResponse` pending P3-05/P3-02. |
 | P5-07 | mocked | done | e8d8fb9 | unit tests in `DealsTable.test.tsx`: absent-field and `'none'` cases route to `/deals/{id}/analysis` (real, fully verifiable today, no P3-06 needed); `'pending'`→`/new-deal/upload-files?dealId=` and `'submitted'`→`/new-deal/confirm?dealId=` are mocked pending P3-06. | |
-| P5-08 | real | pending | | | fully real via PR #108's branch |
+| P5-08 | real | done | c27fb11 | built against the frozen PR #108 contract (section 3.3) with the network mocked in `IntakeQuestions.test.tsx`; NOT integration-tested against a live Alpha instance — no local Alpha checkout was run | see flagged items below re: 403-on-direct-access, reorder body shape, `inputType` enum, `questionKey` PATCH mutability |
+| P5-10 | n/a | skipped | | brief (line 299): "Deferred, not v1... Do not build." Recorded here only so the backlog target exists; no code written. | |
 
 ## Flagged (deviations from this brief, or judgment calls made where the brief was ambiguous)
 
@@ -132,6 +133,38 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
   backend. Revisit once P3-06 ships and `intakeStatus` becomes a real field
   on `LivePipelineRow` — the overlay type can then be deleted in favor of
   the real one.
+
+- P5-08's "403 on direct route access" AC (brief line 297) is unmet by
+  design, not by oversight. `AdminGuard` has a single mode that admits
+  either `isPlatformAdmin` or `isOrgAdmin` and has no platform-only variant
+  — an org admin who navigates to `/admin/intake-questions` directly gets
+  the page chrome and an empty state (the query is gated on
+  `isPlatformAdmin` client-side, per `useIntakeQuestionsQuery`), not a
+  redirect. The real backend still 403s the underlying
+  `/api/admin/intake-questions` calls, so no data leaks. Adding a
+  platform-only guard mode would change the shared `AdminGuard` pattern also
+  used by Organizations and Mandate Taxonomy, which neither enforce this
+  AC today — out of scope for this ticket; would need its own decision and
+  ticket if the AC is to be met literally.
+- `PUT /admin/intake-questions/reorder`'s request body shape is not
+  specified anywhere in the frozen contract (brief section 3.3 names only
+  the route and method). Assumed: the full reordered set as a JSON array of
+  `{ id: string, displayOrder: number }` pairs (1-indexed), reusing the
+  `displayOrder` field name already present in the GET response — see
+  `reorderIntakeQuestions` in `src/admin/api/adminClient.ts`. Revisit if
+  Alpha's real implementation expects something else (e.g. a bare ordered
+  array of ids with server-assigned order).
+- `AdminIntakeQuestion.inputType`'s enum of allowed values is not specified
+  in the contract. Kept as a plain `string` in `types.ts` and rendered
+  read-only in the table; deliberately not offered as a field in the
+  create/edit form (no way to guess a safe default or validate against an
+  unknown enum). Revisit once the real value set is confirmed.
+- `questionKey` mutability via `PATCH /admin/intake-questions/{id}` is not
+  specified. Treated as create-only: the edit dialog's Key field is
+  `disabled` and `updateIntakeQuestion`'s body type has no `questionKey`
+  field, on the assumption the public snapshot's validation keys off it (an
+  inference, not a confirmed contract detail). Revisit if Alpha's PATCH
+  actually accepts a key rename.
 
 ## Blocked on Alpha (do not attempt to fully close until the corresponding PR merges)
 
