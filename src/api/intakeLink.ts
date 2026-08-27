@@ -51,3 +51,47 @@ export async function fetchIntakeLink(dealId: string): Promise<IntakeLink | null
   const res = await apiFetch(`/api/deals/${dealId}/intake-link`);
   return parseIntakeLinkResponse(res);
 }
+
+/** POST /api/deals/{dealId}/intake-link output (brief §3.2, not built yet — P3-01). Raw token, returned exactly once. */
+export type CreateIntakeLinkResponse = {
+  token: string;
+  expiresAt: string;
+};
+
+async function mockCreateIntakeLink(
+  dealId: string,
+  body: { recipientEmail: string }
+): Promise<CreateIntakeLinkResponse> {
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  // Mirror the real endpoint's "never retain the raw token" contract (§3.2) —
+  // the mock store below deliberately excludes it (P5-02 depends on this).
+  mockIntakeLinks.set(dealId, {
+    status: "pending",
+    recipientEmail: body.recipientEmail,
+    expiresAt,
+    submittedAt: null,
+  });
+  return { token: crypto.randomUUID(), expiresAt };
+}
+
+/** POST /api/deals/{dealId}/intake-link — generates a link, returns the raw token exactly once. */
+export async function createIntakeLink(
+  dealId: string,
+  body: { recipientEmail: string }
+): Promise<CreateIntakeLinkResponse> {
+  if (INTAKE_ENDPOINTS_MOCKED) return mockCreateIntakeLink(dealId, body);
+  const res = await apiFetch(`/api/deals/${dealId}/intake-link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`POST /api/deals/${dealId}/intake-link failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as CreateIntakeLinkResponse;
+}
+
+/** Public URL a recipient uses to open the intake flow — never persist the raw token elsewhere. */
+export function intakeLinkUrl(token: string): string {
+  return `${window.location.origin}/intake/${token}`;
+}

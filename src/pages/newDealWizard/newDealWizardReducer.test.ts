@@ -27,6 +27,47 @@ describe("newDealWizardReducer", () => {
     expect(s1.gpSource).toBe("");
   });
 
+  it("set_collect_externally toggles and touches nothing else", () => {
+    const s0 = initialWizardState();
+    const s1 = newDealWizardReducer(s0, {
+      type: "set_collect_externally",
+      enabled: true,
+    });
+    expect(s1).toEqual({ ...s0, collectExternally: true });
+    const s2 = newDealWizardReducer(s1, {
+      type: "set_collect_externally",
+      enabled: false,
+    });
+    expect(s2).toEqual({ ...s0, collectExternally: false });
+  });
+
+  it("set_field with recipientEmail updates a single slot", () => {
+    const s0 = initialWizardState();
+    const s1 = newDealWizardReducer(s0, {
+      type: "set_field",
+      key: "recipientEmail",
+      value: "gp@example.com",
+    });
+    expect(s1.recipientEmail).toBe("gp@example.com");
+    expect(s1).toEqual({ ...s0, recipientEmail: "gp@example.com" });
+  });
+
+  it("rehydrate still ignores collectExternally and recipientEmail", () => {
+    const s0 = initialWizardState();
+    const action = {
+      type: "rehydrate",
+      partial: {
+        dealName: "Restored",
+        collectExternally: true,
+        recipientEmail: "gp@example.com",
+      } as unknown as Partial<PersistedStep1>,
+    } as const;
+    const s1 = newDealWizardReducer(s0, action as any);
+    expect(s1.dealName).toBe("Restored");
+    expect(s1.collectExternally).toBe(false); // unchanged
+    expect(s1.recipientEmail).toBe(""); // unchanged
+  });
+
   it("toggle_sector adds and removes a tag", () => {
     const s0 = initialWizardState();
     const s1 = newDealWizardReducer(s0, { type: "toggle_sector", tag: "SaaS" });

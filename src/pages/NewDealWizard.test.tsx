@@ -1,14 +1,14 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation, useParams } from "react-router";
 import { useEffect } from "react";
 import NewDealWizard from "./NewDealWizard";
-import { fetchDeal } from "@/api/deals";
+import { createDeal, fetchDeal } from "@/api/deals";
 import type { DealWithLatestMemo } from "@/api/deals";
 import { fetchDealDocuments } from "@/api/documents";
 import type { DealDocument } from "@/api/documents";
-import { fetchIntakeLink } from "@/api/intakeLink";
+import { createIntakeLink, fetchIntakeLink } from "@/api/intakeLink";
 import { toast } from "@/components/mvp/primitives/sonner";
 
 // Real fetchDeal hits the network via apiFetch — mock the module's data
@@ -16,7 +16,7 @@ import { toast } from "@/components/mvp/primitives/sonner";
 // as DealDetail.test.tsx.
 vi.mock("@/api/deals", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/deals")>();
-  return { ...actual, fetchDeal: vi.fn() };
+  return { ...actual, fetchDeal: vi.fn(), createDeal: vi.fn() };
 });
 
 vi.mock("@/api/documents", async importOriginal => {
@@ -26,7 +26,7 @@ vi.mock("@/api/documents", async importOriginal => {
 
 vi.mock("@/api/intakeLink", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/intakeLink")>();
-  return { ...actual, fetchIntakeLink: vi.fn() };
+  return { ...actual, fetchIntakeLink: vi.fn(), createIntakeLink: vi.fn() };
 });
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -248,5 +248,87 @@ describe("NewDealWizard — Step 3 confirm guard (attach mode)", () => {
     expect(screen.getByTestId("wizard-step-3")).toBeInTheDocument();
     expect(toast.error).not.toHaveBeenCalled();
     expect(history).not.toContain("/new-deal/upload-files");
+  });
+});
+
+describe("NewDealWizard — Step 1 external collection checkbox (P5-01)", () => {
+  it("AC: checkbox unchecked (default) — createDeal called with an identical body, createIntakeLink not called, navigates to upload-files", async () => {
+    vi.mocked(createDeal).mockResolvedValue({ id: "deal-1" });
+
+    const { history } = renderWizard("/new-deal");
+
+    fireEvent.change(screen.getByTestId("wizard-deal-name"), {
+      target: { value: "CloudMed" },
+    });
+    fireEvent.change(screen.getByTestId("wizard-gp-source"), {
+      target: { value: "Sequoia" },
+    });
+
+    expect(screen.queryByTestId("wizard-recipient-email")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("wizard-continue-step-1"));
+
+    await waitFor(() => expect(createDeal).toHaveBeenCalledWith({
+      name: "CloudMed",
+      gpSource: "Sequoia",
+      dealSizeMinUsd: null,
+      dealSizeMaxUsd: null,
+      sectorTags: [],
+    }));
+    expect(createIntakeLink).not.toHaveBeenCalled();
+    await waitFor(() => expect(history).toContain("/new-deal/upload-files"));
+    expect(screen.getByText("Upload Materials")).toBeInTheDocument();
+  });
+
+  it("checked + valid email — createIntakeLink called with {recipientEmail}, navigates to share-link", async () => {
+    vi.mocked(createDeal).mockResolvedValue({ id: "deal-1" });
+    vi.mocked(createIntakeLink).mockResolvedValue({
+      token: "raw-token",
+      expiresAt: new Date().toISOString(),
+    });
+
+    const { history } = renderWizard("/new-deal");
+
+    fireEvent.change(screen.getByTestId("wizard-deal-name"), {
+      target: { value: "CloudMed" },
+    });
+    fireEvent.change(screen.getByTestId("wizard-gp-source"), {
+      target: { value: "Sequoia" },
+    });
+    fireEvent.click(screen.getByTestId("wizard-collect-externally"));
+    fireEvent.change(screen.getByTestId("wizard-recipient-email"), {
+      target: { value: "gp@example.com" },
+    });
+
+    expect(screen.getByTestId("wizard-continue-step-1")).toHaveTextContent("Generate Link");
+
+    fireEvent.click(screen.getByTestId("wizard-continue-step-1"));
+
+    await waitFor(() =>
+      expect(createIntakeLink).toHaveBeenCalledWith("deal-1", {
+        recipientEmail: "gp@example.com",
+      })
+    );
+    await waitFor(() => expect(history).toContain("/new-deal/share-link"));
+  });
+
+  it("checked + blank email — Continue disabled, no network call", async () => {
+    vi.mocked(createDeal).mockResolvedValue({ id: "deal-1" });
+
+    renderWizard("/new-deal");
+
+    fireEvent.change(screen.getByTestId("wizard-deal-name"), {
+      target: { value: "CloudMed" },
+    });
+    fireEvent.change(screen.getByTestId("wizard-gp-source"), {
+      target: { value: "Sequoia" },
+    });
+    fireEvent.click(screen.getByTestId("wizard-collect-externally"));
+
+    expect(screen.getByTestId("wizard-continue-step-1")).toBeDisabled();
+    fireEvent.click(screen.getByTestId("wizard-continue-step-1"));
+
+    expect(createDeal).not.toHaveBeenCalled();
+    expect(createIntakeLink).not.toHaveBeenCalled();
   });
 });

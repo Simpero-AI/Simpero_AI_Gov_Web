@@ -10,7 +10,7 @@ import {
   startDealAnalysis,
 } from "@/api/deals";
 import { dealDocumentsQueryKey, fetchDealDocuments } from "@/api/documents";
-import { fetchIntakeLink, intakeLinkQueryKey } from "@/api/intakeLink";
+import { createIntakeLink, fetchIntakeLink, intakeLinkQueryKey } from "@/api/intakeLink";
 import { evaluateConfirmGate } from "./newDealWizard/confirmStepGate";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
@@ -85,6 +85,11 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     newDealWizardReducer,
     initialWizardState()
   );
+  // Holds the raw intake-link token between creation (P5-01) and the share-link
+  // step's display (P5-02) — deliberately a ref, never query/reducer state, so it
+  // never lands in the QueryClient cache or gets serialized anywhere.
+  const rawTokenRef = useRef<string | null>(null);
+
   // localStorage rehydrate on mount (skip in attach mode).
   const rehydratedRef = useRef(false);
   useEffect(() => {
@@ -284,6 +289,17 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
         sectorTags: state.sectorTags,
       });
       dispatch({ type: "deal_created", dealId: created.id });
+      if (state.collectExternally) {
+        // Direct await, not useMutation — matches createDeal's idiom above and,
+        // critically, keeps the raw token out of the MutationCache (P5-02).
+        const link = await createIntakeLink(created.id, {
+          recipientEmail: state.recipientEmail.trim(),
+        });
+        rawTokenRef.current = link.token;
+        queryClient.invalidateQueries({ queryKey: intakeLinkQueryKey(created.id) });
+        navigate("/new-deal/share-link");
+        return;
+      }
       navigate("/new-deal/upload-files");
     } catch (err) {
       const message =
@@ -361,6 +377,11 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     navigate(`/analysis/${dealId}`);
   };
 
+  // P5-06: which WizardProgressBar step-2 label to show. `intakeLinkQuery.data`
+  // is non-null once a link has ever been generated for this deal (any status),
+  // which covers reloads/back-navigation after Step 1, not just the in-session flag.
+  const externalBranch = state.collectExternally || intakeLinkQuery.data != null;
+
   return (
     <MvpAppShell>
       <MvpAppShell.Sidebar>
@@ -406,7 +427,10 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
             className="mb-6"
           />
 
-          <WizardProgressBar currentStep={currentStepIdx} />
+          <WizardProgressBar
+            currentStep={currentStepIdx}
+            step2Label={externalBranch ? "External Collection" : undefined}
+          />
 
           {stepName === "details" && (
             <Step1Details
