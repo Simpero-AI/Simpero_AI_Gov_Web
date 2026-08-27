@@ -87,3 +87,16 @@ export interface AdminMandateCategory {
   category: string;
   options: AdminMandateOption[];
 }
+
+// Intake questions (GET/POST/PATCH /admin/intake-questions,
+// PUT .../reorder, PATCH .../{id}/activate|deactivate).
+export interface AdminIntakeQuestion {
+  id: string;
+  questionKey: string;
+  prompt: string;
+  helpText: string | null;
+  inputType: string; // enum not specified in the contract — kept as string, never offered in the form
+  required: boolean;
+  displayOrder: number;
+  isActive: boolean;
+}
