@@ -20,7 +20,7 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
 | P5-06 | build now | done | 22e616e | step2Label prop + WizardProgressBar.test.tsx | done (component); call site wired in P5-01 |
 | P5-09 | mocked | done | b0be51f (test), c3a152b (fix) | RED at b0be51f on the assertion (toast.error "Attach a primary document first"), GREEN 6/6 at c3a152b; independently re-verified. | |
 | P5-03 | mocked+real | done | db6a1ee (API clients) + c3a152b (gate) | real GET /deals/{id}/documents contract (P3-04); intake-link half mocked behind INTAKE_ENDPOINTS_MOCKED. | P3-04 half real, P3-02 half mocked |
-| P5-01 | mocked | pending | | | |
+| P5-01 | mocked | done | c688081 | unit tests in `newDealWizardReducer.test.ts` (`set_collect_externally` toggle, `set_field` recipientEmail, rehydrate still ignores both) and `NewDealWizard.test.tsx` (the AC: checkbox present but unchecked → `createDeal` called with identical body, `createIntakeLink` NOT called, navigation to `/new-deal/upload-files`; checked+valid email → `createIntakeLink` called and navigation to `/new-deal/share-link`; checked+blank email → Continue disabled, no network call; progress-bar label "Upload Materials" vs "External Collection"). | P5-06's call site (the `step2Label` prop) was wired here — see P5-06 row's note. |
 | P5-02 | mocked | done | de57ab1 | unit tests in `NewDealWizard.test.tsx` (share-link describe block): token displayed on first arrival, not re-displayed after navigate-away-and-back (`queryByText`/DOM-innerHTML/`sessionStorage`/`localStorage` all checked empty of it), copy-success and copy-failure paths, progress-bar step-2 mapping unchanged for the three pre-existing steps. | |
 | P5-04 | mocked | done | 32ca2eb | unit tests in `NewDealWizard.test.tsx` (P5-04 describe block): pending status hides the dropzone/disables Continue, null status renders the byte-identical (no `disabled`/`title`) non-intake DOM, two-click revoke calls `revokeIntakeLink` exactly once and the dropzone reappears once the mocked GET flips, `createdAt` absent/present render "—"/formatted, and a source-string assertion that `Step2WaitingPanel.tsx` names no TODO/"coming soon". | see flagged item below re: `dealId` prop |
 | P5-05 | mocked+real | done | 311bf3c | unit tests in `Step3Confirm.test.tsx` (9 cases): 6 documents by filename not count, all 5 statuses render distinctly, unknown status falls back without crashing, submitted+all-quarantined and submitted+zero-documents both show the reissue panel and fire `onReissue`, submitted+one-verified shows no reissue panel, `answered: false` renders "Not answered", and the `intakeStatus: null` byte-identity case for the frozen non-intake row. | Document half real via P3-04 (`GET /deals/{id}/documents`); answers panel (P3-05) and the reissue trigger's "submitted" condition are exercised against mocked `intakeStatus`/`intakeResponse` pending P3-05/P3-02. |
@@ -122,6 +122,18 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
   expiresAt }` (brief §3.2), and composing from `window.location.origin`
   avoids needing a backend base-URL config. Revisit if Alpha's actual P3-01
   response returns a full URL instead of a bare token.
+- `POST /deals/{deal_id}/intake-link` request/response shape is never
+  stated in the brief. Assumed request `{ recipientEmail: string }` and
+  response `{ token: string, expiresAt: string }`, mirroring the field
+  names already used in `IntakeLink`. Must be confirmed against Alpha's
+  actual P3-01 schema once built.
+- Step 1's recipient-email validation uses a basic client-side shape check
+  (`/^[^\s@]+@[^\s@]+\.[^\s@]+$/`); the brief specifies no pattern. The
+  server is the real validator.
+- `recipientEmail` and `collectExternally` are deliberately NOT persisted
+  to localStorage — `isPersistedStep1` is a strict validator, so adding a
+  field would silently invalidate every existing saved draft, and the
+  email is PII.
 
 - P5-07 shared-type option not taken. Section 2.6 offers two options: add
   `intakeStatus` to `LivePipelineRow` in `src/shared/dealsListPipeline.ts`,
