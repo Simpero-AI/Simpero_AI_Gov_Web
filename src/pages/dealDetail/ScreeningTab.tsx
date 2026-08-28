@@ -8,6 +8,7 @@ import { MandateFitPanel } from "@/components/mvp/screening/MandateFitPanel";
 import { ScreeningDecisionBar } from "@/components/mvp/screening/ScreeningDecisionBar";
 import { fetchScreening, screeningQueryKey } from "@/api/screening";
 import { fetchScreeningMaterials, screeningMaterialsQueryKey } from "@/api/screeningMaterials";
+import { fetchScreeningInsights, screeningInsightsQueryKey } from "@/api/screeningInsights";
 import { mapScreening } from "@/lib/screeningView";
 
 export interface ScreeningTabProps {
@@ -23,13 +24,15 @@ export interface ScreeningTabProps {
  * MandateFitPanel. Until a deal has been screened the endpoint 404s -> null and
  * those panels render their coming-soon state.
  *
- * ExtractedGrid, HighlightsPanel and RiskFlagsPanel are fed from
- * GET /deals/{id}/screening-materials, which derives them from the deal's
- * claims spine (the ground-truth field-level extraction with citations). That
- * populates as soon as a deal is parsed, independent of whether it has been
- * screened. highlights/riskFlags come back empty until their LLM pass lands, so
- * those two panels show their empty state for now. ScreeningDecisionBar stays
- * null — a recorded advance/reject human decision has no backend surface yet.
+ * The three materials panels are fed by TWO independent queries, on purpose:
+ * - ExtractedGrid <- GET /deals/{id}/screening-materials (claims-derived,
+ *   deterministic, fast) -- shows for any parsed deal, never blocked by the LLM.
+ * - HighlightsPanel / RiskFlagsPanel <- GET /deals/{id}/screening-insights (the
+ *   LLM pass). A slow or failed model call only affects these two panels; the
+ *   extracted grid is unaffected. Both render their empty state until (or if)
+ *   the insights arrive.
+ * ScreeningDecisionBar stays null -- a recorded advance/reject human decision
+ * has no backend surface yet.
  */
 export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
   const screeningQuery = useQuery({
@@ -52,6 +55,14 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
         citation: f.citation ?? undefined,
       }))
     : null;
+
+  // Separate query: the LLM insights can be slow or fail without touching the
+  // extracted grid above.
+  const insightsQuery = useQuery({
+    queryKey: screeningInsightsQueryKey(dealId),
+    queryFn: () => fetchScreeningInsights(dealId),
+  });
+  const insights = insightsQuery.data ?? null;
 
   return (
     <div>
@@ -88,8 +99,8 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
             <div className="flex flex-col gap-5">
               <ExtractedGrid fields={extractedFields} />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <HighlightsPanel items={materials?.highlights ?? null} />
-                <RiskFlagsPanel items={materials?.riskFlags ?? null} />
+                <HighlightsPanel items={insights?.highlights ?? null} />
+                <RiskFlagsPanel items={insights?.riskFlags ?? null} />
               </div>
             </div>
             <MandateFitPanel fit={view?.fit ?? null} />
