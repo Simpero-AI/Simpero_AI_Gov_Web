@@ -845,7 +845,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
           onChange={t => navigate(`/deals/${dealId}/${t}`)}
         />
         {tab === "screening" ? (
-          <ScreeningTab dealId={dealId} fileName={latestMemoSession?.fileName ?? null} />
+          <ScreeningTab dealId={dealId} fileName={latestMemoSession?.fileName ?? null} memo={memoTypedOuter} />
         ) : (
           <>
             {showPass3FailedBanner && (
