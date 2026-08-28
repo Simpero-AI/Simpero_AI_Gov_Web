@@ -158,19 +158,21 @@ Companion (Alpha): docs/plans/external-deal-intake-link-implementation-brief.md 
   used by Organizations and Mandate Taxonomy, which neither enforce this
   AC today — out of scope for this ticket; would need its own decision and
   ticket if the AC is to be met literally.
-- `PUT /admin/intake-questions/reorder`'s request body shape is not
-  specified anywhere in the frozen contract (brief section 3.3 names only
-  the route and method). Assumed: the full reordered set as a JSON array of
-  `{ id: string, displayOrder: number }` pairs (1-indexed), reusing the
-  `displayOrder` field name already present in the GET response — see
-  `reorderIntakeQuestions` in `src/admin/api/adminClient.ts`. Revisit if
-  Alpha's real implementation expects something else (e.g. a bare ordered
-  array of ids with server-assigned order).
-- `AdminIntakeQuestion.inputType`'s enum of allowed values is not specified
-  in the contract. Kept as a plain `string` in `types.ts` and rendered
-  read-only in the table; deliberately not offered as a field in the
-  create/edit form (no way to guess a safe default or validate against an
-  unknown enum). Revisit once the real value set is confirmed.
+- `PUT /admin/intake-questions/reorder`'s request body shape was originally
+  assumed (brief section 3.3 names only the route and method) as a JSON
+  array of `{ id: string, displayOrder: number }` pairs. Now confirmed
+  against Alpha's `ReorderIntakeQuestionsRequest` schema and fixed: the real
+  shape is `{ questionIds: string[] }`, a bare ordered id array with no
+  `displayOrder` values — order is implied by position. See
+  `reorderIntakeQuestions` in `src/admin/api/adminClient.ts`.
+- `AdminIntakeQuestion.inputType`'s enum was originally kept as a plain
+  `string` (no allowed-value list in the contract) and left out of the
+  create/edit form. Now confirmed against Alpha's
+  `IntakeQuestionInputType = Literal["text", "textarea"]` (and the matching
+  DB CHECK constraint) and fixed: `types.ts` now types it as
+  `"text" | "textarea"`, and the create/edit form in `IntakeQuestions.tsx`
+  offers it as a `Select` (Text / Paragraph), defaulting to `"text"` on
+  create.
 - `questionKey` mutability via `PATCH /admin/intake-questions/{id}` is not
   specified. Treated as create-only: the edit dialog's Key field is
   `disabled` and `updateIntakeQuestion`'s body type has no `questionKey`

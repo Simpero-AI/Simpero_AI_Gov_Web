@@ -132,10 +132,46 @@ describe("IntakeQuestions — create", () => {
         questionKey: "deal_thesis",
         prompt: "What is the investment thesis?",
         helpText: "Keep it to one paragraph",
+        inputType: "text",
         required: true,
       })
     );
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Question created"));
+  });
+
+  it("offers both answer-type options and defaults to text", async () => {
+    mockedUseAdminContext.mockReturnValue(adminContext());
+    mockedListIntakeQuestions.mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderAdmin(<IntakeQuestions />);
+
+    await user.click(await screen.findByRole("button", { name: /new question/i }));
+    expect(screen.getByRole("combobox")).toHaveTextContent("Text");
+
+    await user.click(screen.getByRole("combobox"));
+    const options = await screen.findAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual(["Text", "Paragraph"]);
+  });
+
+  it("sends the selected answer type", async () => {
+    mockedUseAdminContext.mockReturnValue(adminContext());
+    mockedListIntakeQuestions.mockResolvedValue([]);
+    mockedCreateIntakeQuestion.mockResolvedValue(question());
+    const user = userEvent.setup();
+    renderAdmin(<IntakeQuestions />);
+
+    await user.click(await screen.findByRole("button", { name: /new question/i }));
+    await user.type(screen.getByLabelText(/^key$/i), "deal_thesis");
+    await user.type(screen.getByLabelText(/^prompt$/i), "What is the investment thesis?");
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Paragraph" }));
+    await user.click(screen.getByRole("button", { name: /create question/i }));
+
+    await waitFor(() =>
+      expect(mockedCreateIntakeQuestion).toHaveBeenCalledWith(
+        expect.objectContaining({ inputType: "textarea" })
+      )
+    );
   });
 });
 
@@ -172,10 +208,7 @@ describe("IntakeQuestions — reorder", () => {
     await user.click(screen.getByRole("button", { name: "Move runway up" }));
 
     await waitFor(() =>
-      expect(mockedReorderIntakeQuestions).toHaveBeenCalledWith([
-        { id: "q-2", displayOrder: 1 },
-        { id: "q-1", displayOrder: 2 },
-      ])
+      expect(mockedReorderIntakeQuestions).toHaveBeenCalledWith(["q-2", "q-1"])
     );
   });
 });

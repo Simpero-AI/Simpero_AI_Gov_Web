@@ -95,7 +95,7 @@ export interface AdminIntakeQuestion {
   questionKey: string;
   prompt: string;
   helpText: string | null;
-  inputType: string; // enum not specified in the contract — kept as string, never offered in the form
+  inputType: "text" | "textarea"; // only two values allowed by Alpha's DB CHECK constraint
   required: boolean;
   displayOrder: number;
   isActive: boolean;

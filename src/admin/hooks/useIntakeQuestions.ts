@@ -26,8 +26,13 @@ export function useCreateIntakeQuestionMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (body: { questionKey: string; prompt: string; helpText?: string | null; required: boolean }) =>
-      createIntakeQuestion(body),
+    mutationFn: (body: {
+      questionKey: string;
+      prompt: string;
+      helpText?: string | null;
+      inputType: "text" | "textarea";
+      required: boolean;
+    }) => createIntakeQuestion(body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.intakeQuestions });
       toast.success("Question created");
@@ -58,7 +63,7 @@ export function useReorderIntakeQuestionsMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (body: { id: string; displayOrder: number }[]) => reorderIntakeQuestions(body),
+    mutationFn: (questionIds: string[]) => reorderIntakeQuestions(questionIds),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.intakeQuestions });
       toast.success("Order updated");

@@ -238,6 +238,7 @@ export async function createIntakeQuestion(body: {
   questionKey: string;
   prompt: string;
   helpText?: string | null;
+  inputType: "text" | "textarea";
   required: boolean;
 }): Promise<AdminIntakeQuestion> {
   const res = await apiFetch("/api/admin/intake-questions", {
@@ -263,19 +264,16 @@ export async function updateIntakeQuestion(
 }
 
 /**
- * Body shape assumed, not specified in the frozen contract (brief section
- * 3.3 names only the route). Sends the full ordered set as {id,
- * displayOrder} pairs, matching the field name the GET response already
- * uses — flagged in the status doc; adjust here if Alpha's real
- * implementation expects something else (e.g. a bare ordered id array).
+ * Confirmed against Alpha's ReorderIntakeQuestionsRequest schema: a bare
+ * ordered id array, no displayOrder values — order is implied by position.
  */
 export async function reorderIntakeQuestions(
-  body: { id: string; displayOrder: number }[]
+  questionIds: string[]
 ): Promise<AdminIntakeQuestion[]> {
   const res = await apiFetch("/api/admin/intake-questions/reorder", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ questionIds }),
   });
   if (!res.ok) throw new Error(`PUT /admin/intake-questions/reorder failed: ${res.status}`);
   return (await res.json()) as AdminIntakeQuestion[];

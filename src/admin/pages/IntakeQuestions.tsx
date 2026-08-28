@@ -20,6 +20,11 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Table,
   TableBody,
   TableCell,
@@ -44,6 +49,7 @@ const questionSchema = z.object({
   questionKey: z.string().min(1, "Key is required"),
   prompt: z.string().min(1, "Prompt is required"),
   helpText: z.string().optional(),
+  inputType: z.enum(["text", "textarea"]),
   required: z.boolean(),
 });
 type QuestionFormValues = z.infer<typeof questionSchema>;
@@ -69,6 +75,7 @@ function QuestionDialog({ mode, question, trigger }: QuestionDialogProps) {
       questionKey: question?.questionKey ?? "",
       prompt: question?.prompt ?? "",
       helpText: question?.helpText ?? "",
+      inputType: question?.inputType ?? "text",
       required: question?.required ?? false,
     },
   });
@@ -80,6 +87,7 @@ function QuestionDialog({ mode, question, trigger }: QuestionDialogProps) {
         questionKey: question?.questionKey ?? "",
         prompt: question?.prompt ?? "",
         helpText: question?.helpText ?? "",
+        inputType: question?.inputType ?? "text",
         required: question?.required ?? false,
       });
   }
@@ -89,7 +97,13 @@ function QuestionDialog({ mode, question, trigger }: QuestionDialogProps) {
     const helpText = values.helpText?.trim() ? values.helpText : null;
     if (mode === "create") {
       createMutation.mutate(
-        { questionKey: values.questionKey, prompt: values.prompt, helpText, required: values.required },
+        {
+          questionKey: values.questionKey,
+          prompt: values.prompt,
+          helpText,
+          inputType: values.inputType,
+          required: values.required,
+        },
         { onSuccess }
       );
     } else if (question) {
@@ -154,6 +168,27 @@ function QuestionDialog({ mode, question, trigger }: QuestionDialogProps) {
             />
             <FormField
               control={form.control}
+              name="inputType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Answer type</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="text">Text</SelectItem>
+                      <SelectItem value="textarea">Paragraph</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="required"
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center gap-2 space-y-0">
@@ -196,7 +231,7 @@ export default function IntakeQuestions() {
     if (target < 0 || target >= questions.length) return;
     const reordered = [...questions];
     [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
-    reorderMutation.mutate(reordered.map((q, i) => ({ id: q.id, displayOrder: i + 1 })));
+    reorderMutation.mutate(reordered.map((q) => q.id));
   }
 
   return (
