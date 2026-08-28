@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MaterialsCard } from "@/components/mvp/screening/MaterialsCard";
 import { VerdictHeader } from "@/components/mvp/screening/VerdictHeader";
@@ -8,19 +7,13 @@ import { RiskFlagsPanel } from "@/components/mvp/screening/RiskFlagsPanel";
 import { MandateFitPanel } from "@/components/mvp/screening/MandateFitPanel";
 import { ScreeningDecisionBar } from "@/components/mvp/screening/ScreeningDecisionBar";
 import { fetchScreening, screeningQueryKey } from "@/api/screening";
+import { fetchScreeningMaterials, screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { mapScreening } from "@/lib/screeningView";
-import { mapScreeningMaterials } from "@/lib/screeningMaterials";
-import type { ICMemoResult } from "@shared/simperoTypes";
 
 export interface ScreeningTabProps {
   dealId: string;
   /** The deal's uploaded source file name, if any. */
   fileName: string | null;
-  /** The deal's parsed IC-memo, when analysis has completed. Feeds the
-   * Extracted-from-Materials, Agent Highlights, and Risk Flags panels via
-   * mapScreeningMaterials. Null before a memo exists — every panel then falls
-   * back to its own empty state. */
-  memo: Partial<ICMemoResult> | null;
 }
 
 /**
@@ -30,20 +23,35 @@ export interface ScreeningTabProps {
  * MandateFitPanel. Until a deal has been screened the endpoint 404s -> null and
  * those panels render their coming-soon state.
  *
- * ExtractedGrid, HighlightsPanel and RiskFlagsPanel are fed from the deal's
- * IC-memo (mapScreeningMaterials) rather than the screening_result, which
- * carries only rule verdicts: the extracted-with-citation facts, investment
- * highlights, and risk register already live on the memo deliverable (the same
- * data the Summary tab renders). ScreeningDecisionBar stays null — a recorded
- * advance/reject human decision has no backend surface yet.
+ * ExtractedGrid, HighlightsPanel and RiskFlagsPanel are fed from
+ * GET /deals/{id}/screening-materials, which derives them from the deal's
+ * claims spine (the ground-truth field-level extraction with citations). That
+ * populates as soon as a deal is parsed, independent of whether it has been
+ * screened. highlights/riskFlags come back empty until their LLM pass lands, so
+ * those two panels show their empty state for now. ScreeningDecisionBar stays
+ * null — a recorded advance/reject human decision has no backend surface yet.
  */
-export function ScreeningTab({ dealId, fileName, memo }: ScreeningTabProps) {
+export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
   const screeningQuery = useQuery({
     queryKey: screeningQueryKey(dealId),
     queryFn: () => fetchScreening(dealId),
   });
   const view = screeningQuery.data ? mapScreening(screeningQuery.data) : null;
-  const materials = useMemo(() => mapScreeningMaterials(memo), [memo]);
+
+  const materialsQuery = useQuery({
+    queryKey: screeningMaterialsQueryKey(dealId),
+    queryFn: () => fetchScreeningMaterials(dealId),
+  });
+  const materials = materialsQuery.data ?? null;
+  // ExtractedGrid's ScreeningCitedField.citation is optional (string?), while
+  // the wire carries an explicit null — normalise null -> undefined.
+  const extractedFields = materials
+    ? materials.extractedFields.map((f) => ({
+        label: f.label,
+        value: f.value,
+        citation: f.citation ?? undefined,
+      }))
+    : null;
 
   return (
     <div>
@@ -78,10 +86,10 @@ export function ScreeningTab({ dealId, fileName, memo }: ScreeningTabProps) {
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
             <div className="flex flex-col gap-5">
-              <ExtractedGrid fields={materials.extractedFields} />
+              <ExtractedGrid fields={extractedFields} />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <HighlightsPanel items={materials.highlights} />
-                <RiskFlagsPanel items={materials.riskFlags} />
+                <HighlightsPanel items={materials?.highlights ?? null} />
+                <RiskFlagsPanel items={materials?.riskFlags ?? null} />
               </div>
             </div>
             <MandateFitPanel fit={view?.fit ?? null} />
