@@ -1,17 +1,15 @@
 import { apiFetch } from "@/api/http";
 
 /**
- * The Initial Screening tab's materials, derived from the deal's claims spine
- * (backend build_screening_materials). `extractedFields` are the deal's key
+ * The Initial Screening tab's "Extracted from Materials" panel — the deal's key
  * canonical metrics (latest actual figure each), copied verbatim from the
- * verified claims with a human citation string; `highlights` / `riskFlags` are
- * a later LLM-derived layer over the same claims and come back empty until that
- * lands.
+ * verified claims with a human citation string (backend
+ * build_screening_materials). Deliberately claims-only: the LLM-derived Agent
+ * Highlights / Risk Flags come from a separate endpoint (see screeningInsights)
+ * so a slow/failed model call can never blank this reliable, fast panel.
  */
 export interface ScreeningMaterials {
   extractedFields: { label: string; value: string; citation: string | null }[];
-  highlights: string[];
-  riskFlags: string[];
 }
 
 export const screeningMaterialsQueryKey = (dealId: string) =>
