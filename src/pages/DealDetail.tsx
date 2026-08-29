@@ -436,7 +436,7 @@ function AnalysisTabs({
         {/* COMPANY */}
         {tab === "company" && <CompanyTab memoTyped={memoTyped} />}{" "}
         {/* MARKET */}
-        {tab === "market" && <MarketTab memoTyped={memoTyped} />}{" "}
+        {tab === "market" && <MarketTab dealId={dealId} />}{" "}
         {/* FINANCIALS */}
         {tab === "financials" && (
           <FinancialsTab
