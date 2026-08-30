@@ -5,19 +5,19 @@ import { intakeLinkUrl } from "@/api/intakeLink";
 
 interface ShareLinkStepProps {
   /**
-   * Reads and clears the ref-held raw token exactly once (see
-   * `rawTokenRef`/`takeToken` in NewDealWizard.tsx). Called from a lazy
-   * `useState` initializer below so it only ever runs on this component
-   * instance's first render — after that the token lives only in this
-   * instance's local state, never in anything that outlives the mount.
+   * Reads the ref-held raw token (see `rawTokenRef`/`readToken` in
+   * NewDealWizard.tsx). Called from a lazy `useState` initializer below so it
+   * captures the token into this instance's local state on mount; the parent
+   * clears the ref when the user leaves this step, so a re-entry reads null and
+   * this step falls back to its "shown once" message.
    */
-  takeToken: () => string | null;
+  readToken: () => string | null;
   recipientEmail: string;
   onContinue: () => void;
 }
 
-export function ShareLinkStep({ takeToken, recipientEmail, onContinue }: ShareLinkStepProps) {
-  const [token] = useState(() => takeToken());
+export function ShareLinkStep({ readToken, recipientEmail, onContinue }: ShareLinkStepProps) {
+  const [token] = useState(() => readToken());
   const url = token ? intakeLinkUrl(token) : null;
 
   async function handleCopy() {
