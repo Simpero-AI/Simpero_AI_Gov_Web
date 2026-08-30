@@ -329,8 +329,8 @@ export function CompanyTab({ dealId, memoTyped }: CompanyTabProps) {
           />
         ) : (
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-            {facts.map((f) => (
-              <FactCard key={f.label} fact={f} />
+            {facts.map((f, i) => (
+              <FactCard key={i} fact={f} />
             ))}
           </div>
         )}
