@@ -67,7 +67,9 @@ describe("IntakePage", () => {
     vi.mocked(publicIntakeApi.postIntakeSession).mockResolvedValue({ sessionToken: "sess-1" });
     vi.mocked(publicIntakeApi.getIntakeQuestions).mockResolvedValue({
       orgDisplayName: "Acme Capital",
-      questions: [{ questionKey: "q1", prompt: "What is the fund size?", helpText: null, required: true, displayOrder: 1 }],
+      questions: [
+        { questionKey: "q1", prompt: "What is the fund size?", helpText: null, required: true, displayOrder: 1, inputType: "text" },
+      ],
     });
     vi.mocked(publicIntakeApi.postIntakeAnswers).mockResolvedValue(undefined);
     vi.mocked(publicIntakeApi.postIntakeSubmit).mockResolvedValue(undefined);

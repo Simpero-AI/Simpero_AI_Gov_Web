@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Textarea } from "@/components/mvp/primitives";
+import { Button, Input, Textarea } from "@/components/mvp/primitives";
 import { postIntakeAnswers, type IntakeQuestion } from "@/api/publicIntake";
 
 const MAX_ANSWER_LENGTH = 4000;
@@ -79,14 +79,25 @@ export function QuestionsStep({
                 {q.required && <span className="text-red-500"> *</span>}
               </label>
               {q.helpText && <p className="text-xs text-gray-400 mb-1.5">{q.helpText}</p>}
-              <Textarea
-                id={`q-${q.questionKey}`}
-                value={answers[q.questionKey] ?? ""}
-                onChange={(e) => setAnswer(q.questionKey, e.target.value)}
-                disabled={submitting}
-                rows={3}
-                data-testid={`intake-question-${q.questionKey}`}
-              />
+              {q.inputType === "text" ? (
+                <Input
+                  type="text"
+                  id={`q-${q.questionKey}`}
+                  value={answers[q.questionKey] ?? ""}
+                  onChange={(e) => setAnswer(q.questionKey, e.target.value)}
+                  disabled={submitting}
+                  data-testid={`intake-question-${q.questionKey}`}
+                />
+              ) : (
+                <Textarea
+                  id={`q-${q.questionKey}`}
+                  value={answers[q.questionKey] ?? ""}
+                  onChange={(e) => setAnswer(q.questionKey, e.target.value)}
+                  disabled={submitting}
+                  rows={3}
+                  data-testid={`intake-question-${q.questionKey}`}
+                />
+              )}
               {errors[q.questionKey] && (
                 <p className="text-xs text-red-600 mt-1" data-testid={`intake-question-error-${q.questionKey}`}>
                   {errors[q.questionKey]}

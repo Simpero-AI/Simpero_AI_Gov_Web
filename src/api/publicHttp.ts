@@ -20,5 +20,5 @@ export function setIntakeSessionToken(token: string | null): void {
 export async function publicApiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (intakeSessionToken) headers.set("Authorization", `Bearer ${intakeSessionToken}`);
-  return fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  return fetch(`${API_BASE_URL}${path}`, { ...init, headers, credentials: "omit" });
 }

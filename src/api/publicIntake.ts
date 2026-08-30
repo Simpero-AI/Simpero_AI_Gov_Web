@@ -27,6 +27,7 @@ export type IntakeQuestion = {
   helpText: string | null;
   required: boolean;
   displayOrder: number;
+  inputType: "text" | "textarea";
 };
 
 export type IntakeQuestionsResponse = {

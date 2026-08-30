@@ -27,7 +27,7 @@ describe("publicApiFetch", () => {
     const headers = new Headers(init.headers);
     expect(headers.get("Authorization")).not.toBe("Bearer clerk-secret-token");
     expect(headers.has("Authorization")).toBe(false);
-    expect(init.credentials).not.toBe("include");
+    expect(init.credentials).toBe("omit");
   });
 
   it("attaches the intake session token, not a Clerk token, once set", async () => {
