@@ -23,7 +23,7 @@ interface Step3ConfirmProps {
   documentsLoading: boolean;
   /** Effective status per brief §3.4 — `null` means no intake link was ever generated for this deal (the frozen, pre-existing path). */
   intakeStatus: IntakeLinkStatus | null;
-  /** GET /deals/{dealId}/intake-response (P3-05, mocked until it ships) — null until fetched/available. */
+  /** GET /deals/{dealId}/intake-response (P3-05) — null until fetched/available. */
   intakeResponse: IntakeResponse | null;
   /** F10 fix: regenerate a link when a submitted response left no usable documents. */
   onReissue: () => void;
@@ -198,7 +198,11 @@ export function Step3Confirm({
             </h2>
             <div className="text-xs text-gray-500 text-right shrink-0">
               <div>{intakeResponse.respondentEmail}</div>
-              <div>{new Date(intakeResponse.submittedAt).toLocaleString()}</div>
+              <div>
+                {intakeResponse.submittedAt
+                  ? new Date(intakeResponse.submittedAt).toLocaleString()
+                  : "—"}
+              </div>
             </div>
           </div>
           <dl className="space-y-4">

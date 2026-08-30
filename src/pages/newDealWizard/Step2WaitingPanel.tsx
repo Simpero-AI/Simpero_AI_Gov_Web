@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Clock3 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/mvp/primitives/sonner";
-import { intakeLinkQueryKey, revokeIntakeLink, type IntakeLink } from "@/api/intakeLink";
+import { IntakeApiError, intakeLinkQueryKey, revokeIntakeLink, type IntakeLink } from "@/api/intakeLink";
 
 interface Step2WaitingPanelProps {
   link: IntakeLink;
@@ -37,7 +37,25 @@ export function Step2WaitingPanel({ link, dealId, onRevoked }: Step2WaitingPanel
       onRevoked();
     },
     onError: (error: Error) => {
-      toast.error("Could not revoke link", { description: error.message });
+      // 404: no pending link exists any more — another tab already revoked
+      // it, or the external party submitted in the meantime. This panel's
+      // cached view is just stale, not a failed action: refresh it instead
+      // of telling the user their click didn't work.
+      if (error instanceof IntakeApiError && error.status === 404) {
+        queryClient.invalidateQueries({ queryKey: intakeLinkQueryKey(dealId) });
+        setConfirming(false);
+        return;
+      }
+      // 409: the link is stored `pending` but past `expires_at` — P3-01's
+      // lazy-expire hasn't flipped it to `expired` yet, so the server won't
+      // revoke it. Surface that distinctly rather than the generic message.
+      if (error instanceof IntakeApiError && error.status === 409) {
+        toast.error("This link has already expired", {
+          description: "Refresh to see its current status.",
+        });
+      } else {
+        toast.error("Could not revoke link", { description: error.message });
+      }
       setConfirming(false);
     },
   });
