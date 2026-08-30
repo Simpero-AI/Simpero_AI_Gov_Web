@@ -43,7 +43,21 @@ export type CreateIntakeLinkResponse = {
   expiresAt: string;
 };
 
-/** POST /api/deals/{dealId}/intake-link — generates a link, returns the raw token exactly once. */
+/** Thrown by `createIntakeLink`/`revokeIntakeLink` on a non-ok response — same shape as `AnalysisApiError` (src/api/deals.ts). */
+export class IntakeApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/**
+ * POST /api/deals/{dealId}/intake-link — generates a link, returns the raw
+ * token exactly once. Throws `IntakeApiError` on any non-ok response —
+ * notably 409 for "analysis has already started for this deal" and "an
+ * active intake link already exists for this deal", both user-actionable.
+ */
 export async function createIntakeLink(
   dealId: string,
   body: { recipientEmail: string }
@@ -54,18 +68,13 @@ export async function createIntakeLink(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`POST /api/deals/${dealId}/intake-link failed: ${res.status} ${await res.text()}`);
+    const errBody = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new IntakeApiError(
+      res.status,
+      errBody.detail ?? `POST /api/deals/${dealId}/intake-link failed: ${res.status}`
+    );
   }
   return (await res.json()) as CreateIntakeLinkResponse;
-}
-
-/** Thrown by `revokeIntakeLink` on a non-ok response — same shape as `AnalysisApiError` (src/api/deals.ts). */
-export class IntakeApiError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
 }
 
 /**

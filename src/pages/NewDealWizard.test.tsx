@@ -8,7 +8,7 @@ import { createDeal, fetchDeal } from "@/api/deals";
 import type { DealWithLatestMemo } from "@/api/deals";
 import { fetchDealDocuments } from "@/api/documents";
 import type { DealDocument } from "@/api/documents";
-import { createIntakeLink, fetchIntakeLink, revokeIntakeLink } from "@/api/intakeLink";
+import { IntakeApiError, createIntakeLink, fetchIntakeLink, revokeIntakeLink } from "@/api/intakeLink";
 import type { IntakeLink } from "@/api/intakeLink";
 import { toast } from "@/components/mvp/primitives/sonner";
 import fs from "node:fs";
@@ -269,9 +269,59 @@ describe("NewDealWizard — Step 3 confirm guard (attach mode)", () => {
   });
 });
 
+describe("NewDealWizard — reissue intake link (F10)", () => {
+  function renderReissuable() {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([]); // no verified docs -> reissue prompt shows
+    vi.mocked(fetchIntakeLink).mockResolvedValue({
+      status: "submitted",
+      recipientEmail: "gp@example.com",
+      expiresAt: new Date().toISOString(),
+      submittedAt: new Date().toISOString(),
+    });
+    return renderWizard("/new-deal/confirm?dealId=deal-1");
+  }
+
+  it("409 (a link already active, raced by another tab or a just-landed submission) surfaces a distinct message", async () => {
+    vi.mocked(createIntakeLink).mockRejectedValue(
+      new IntakeApiError(409, "An active intake link already exists for this deal")
+    );
+    renderReissuable();
+
+    await waitFor(() => expect(screen.getByTestId("wizard-reissue-link")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("wizard-reissue-link"));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "A link is already active for this deal",
+        expect.anything()
+      )
+    );
+  });
+
+  it("a non-409 failure shows the generic message", async () => {
+    vi.mocked(createIntakeLink).mockRejectedValue(new Error("network down"));
+    renderReissuable();
+
+    await waitFor(() => expect(screen.getByTestId("wizard-reissue-link")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("wizard-reissue-link"));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Could not generate a new link",
+        expect.objectContaining({ description: "network down" })
+      )
+    );
+  });
+});
+
 describe("NewDealWizard — Step 1 external collection checkbox (P5-01)", () => {
   it("AC: checkbox unchecked (default) — createDeal called with an identical body, createIntakeLink not called, navigates to upload-files", async () => {
     vi.mocked(createDeal).mockResolvedValue({ id: "deal-1" });
+    // Explicit, not relying on a leftover mock value from a prior test:
+    // this test reaches Step 2's render, which reads fetchIntakeLink.
+    vi.mocked(fetchIntakeLink).mockResolvedValue(null);
+    vi.mocked(fetchDealDocuments).mockResolvedValue([]);
 
     const { history } = renderWizard("/new-deal");
 
@@ -328,6 +378,41 @@ describe("NewDealWizard — Step 1 external collection checkbox (P5-01)", () => 
       })
     );
     await waitFor(() => expect(history).toContain("/new-deal/share-link"));
+  });
+
+  it("createIntakeLink failing after the deal is created shows a link-specific error, not 'Could not create deal', and lands on Step 2", async () => {
+    vi.mocked(createDeal).mockResolvedValue({ id: "deal-1" });
+    vi.mocked(createIntakeLink).mockRejectedValue(
+      new IntakeApiError(409, "An active intake link already exists for this deal")
+    );
+    vi.mocked(fetchDealDocuments).mockResolvedValue([]);
+    vi.mocked(fetchIntakeLink).mockResolvedValue(null);
+
+    const { history } = renderWizard("/new-deal");
+
+    fireEvent.change(screen.getByTestId("wizard-deal-name"), {
+      target: { value: "CloudMed" },
+    });
+    fireEvent.change(screen.getByTestId("wizard-gp-source"), {
+      target: { value: "Sequoia" },
+    });
+    fireEvent.click(screen.getByTestId("wizard-collect-externally"));
+    fireEvent.change(screen.getByTestId("wizard-recipient-email"), {
+      target: { value: "gp@example.com" },
+    });
+    fireEvent.click(screen.getByTestId("wizard-continue-step-1"));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Could not generate the intake link",
+        expect.objectContaining({
+          description: "An active intake link already exists for this deal",
+        })
+      )
+    );
+    expect(toast.error).not.toHaveBeenCalledWith("Could not create deal", expect.anything());
+    expect(createDeal).toHaveBeenCalledTimes(1); // the deal is not re-created
+    await waitFor(() => expect(history).toContain("/new-deal/upload-files"));
   });
 
   it("checked + blank email — Continue disabled, no network call", async () => {

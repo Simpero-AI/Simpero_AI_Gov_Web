@@ -11,6 +11,7 @@ import {
 } from "@/api/deals";
 import { dealDocumentsQueryKey, fetchDealDocuments } from "@/api/documents";
 import {
+  IntakeApiError,
   createIntakeLink,
   fetchIntakeLink,
   fetchIntakeResponse,
@@ -317,12 +318,30 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
       if (state.collectExternally) {
         // Direct await, not useMutation — matches createDeal's idiom above and,
         // critically, keeps the raw token out of the MutationCache (P5-02).
-        const link = await createIntakeLink(created.id, {
-          recipientEmail: state.recipientEmail.trim(),
-        });
-        rawTokenRef.current = link.token;
-        queryClient.invalidateQueries({ queryKey: intakeLinkQueryKey(created.id) });
-        navigate("/new-deal/share-link");
+        try {
+          const link = await createIntakeLink(created.id, {
+            recipientEmail: state.recipientEmail.trim(),
+          });
+          rawTokenRef.current = link.token;
+          queryClient.invalidateQueries({ queryKey: intakeLinkQueryKey(created.id) });
+          navigate("/new-deal/share-link");
+        } catch (err) {
+          // The deal already exists at this point (`deal_created` above already
+          // fired) — this is NOT a "could not create deal" failure, and must
+          // never look like one. Land on Step 2: the deal is usable there
+          // (attachDealId is set, so the step guard doesn't bounce), without
+          // needing to re-create it.
+          if (err instanceof IntakeApiError && err.status === 409) {
+            toast.error("Could not generate the intake link", {
+              description: err.message,
+            });
+          } else {
+            const message =
+              err instanceof Error ? err.message : "Could not generate the intake link";
+            toast.error("Could not generate the intake link", { description: message });
+          }
+          navigate("/new-deal/upload-files");
+        }
         return;
       }
       navigate("/new-deal/upload-files");
@@ -417,9 +436,19 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
       queryClient.invalidateQueries({ queryKey: intakeLinkQueryKey(state.attachDealId) });
       navigate("/new-deal/share-link");
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Could not generate a new link";
-      toast.error("Could not generate a new link", { description: message });
+      // 409 here is the expected outcome, not an edge case — reissue races
+      // ux_deal_intake_link_pending_deal (a link already generated in
+      // another tab, or the lazy-expire on the old one hasn't run yet), same
+      // idiom as Step2WaitingPanel's revoke handling.
+      if (err instanceof IntakeApiError && err.status === 409) {
+        toast.error("A link is already active for this deal", {
+          description: "Refresh to see its current status.",
+        });
+      } else {
+        const message =
+          err instanceof Error ? err.message : "Could not generate a new link";
+        toast.error("Could not generate a new link", { description: message });
+      }
     }
   };
 
