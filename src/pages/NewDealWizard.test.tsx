@@ -658,6 +658,41 @@ describe("NewDealWizard — Step 2 external-collection waiting panel (P5-04)", (
     );
   });
 
+  it("revoke racing a 404 (already revoked elsewhere, or just submitted) refreshes the panel instead of showing a failure toast", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([]);
+    // Second GET (after the invalidation this 404 should trigger) reflects
+    // what actually happened — the external party submitted in the meantime.
+    vi.mocked(fetchIntakeLink)
+      .mockResolvedValueOnce(makePendingIntakeLink())
+      .mockResolvedValueOnce({
+        status: "submitted",
+        recipientEmail: "gp@example.com",
+        expiresAt: new Date().toISOString(),
+        submittedAt: new Date().toISOString(),
+      });
+    vi.mocked(revokeIntakeLink).mockRejectedValue(
+      new IntakeApiError(404, "No pending intake link exists for this deal")
+    );
+
+    renderWizard("/new-deal/upload-files?dealId=deal-1");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard-revoke-link")).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByTestId("wizard-revoke-link"));
+    fireEvent.click(screen.getByTestId("wizard-confirm-revoke-link"));
+
+    await waitFor(() => expect(revokeIntakeLink).toHaveBeenCalledTimes(1));
+    expect(toast.error).not.toHaveBeenCalled();
+    // Same "dropzone reappears" outcome as an actual successful revoke — the
+    // panel corrected itself off the stale cached "pending" view, it didn't
+    // fail. Still on Step 2: this fix doesn't add navigation, just a refetch.
+    await waitFor(() =>
+      expect(screen.getByTestId("deal-document-dropzone")).toBeInTheDocument()
+    );
+  });
+
   it("createdAt absent renders '—', never a fabricated or 'Invalid Date' value (flagged risk: §3.2 doesn't list this field — delete this case if P3-02 ships without it)", async () => {
     vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
     vi.mocked(fetchDealDocuments).mockResolvedValue([]);

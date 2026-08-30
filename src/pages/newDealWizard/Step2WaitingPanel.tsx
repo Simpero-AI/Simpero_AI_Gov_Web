@@ -37,6 +37,15 @@ export function Step2WaitingPanel({ link, dealId, onRevoked }: Step2WaitingPanel
       onRevoked();
     },
     onError: (error: Error) => {
+      // 404: no pending link exists any more — another tab already revoked
+      // it, or the external party submitted in the meantime. This panel's
+      // cached view is just stale, not a failed action: refresh it instead
+      // of telling the user their click didn't work.
+      if (error instanceof IntakeApiError && error.status === 404) {
+        queryClient.invalidateQueries({ queryKey: intakeLinkQueryKey(dealId) });
+        setConfirming(false);
+        return;
+      }
       // 409: the link is stored `pending` but past `expires_at` — P3-01's
       // lazy-expire hasn't flipped it to `expired` yet, so the server won't
       // revoke it. Surface that distinctly rather than the generic message.
