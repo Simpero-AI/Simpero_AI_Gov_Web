@@ -364,6 +364,17 @@ describe("NewDealWizard — share-link step (P5-02)", () => {
     );
   }
 
+  // Test-only stand-in for the browser forward button (navigate(1) in the same
+  // MemoryRouter), to exercise a back-then-forward return to the share-link step.
+  function HistoryForwardButton() {
+    const navigate = useNavigate();
+    return (
+      <button type="button" data-testid="test-history-forward" onClick={() => navigate(1)}>
+        forward (test only)
+      </button>
+    );
+  }
+
   function renderWithBack(initialPath: string) {
     const history: string[] = [];
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -372,6 +383,7 @@ describe("NewDealWizard — share-link step (P5-02)", () => {
         <MemoryRouter initialEntries={[initialPath]}>
           <LocationRecorder history={history} />
           <HistoryBackButton />
+          <HistoryForwardButton />
           <Routes>
             <Route path="/new-deal/:step?" element={<NewDealWizardRoute />} />
           </Routes>
@@ -434,6 +446,26 @@ describe("NewDealWizard — share-link step (P5-02)", () => {
       const key = localStorage.key(i) as string;
       expect(localStorage.getItem(key)).not.toContain("raw-token-xyz");
     }
+  });
+
+  it("AC: a browser back-then-forward to the share-link step does not re-display the token", async () => {
+    await createDealViaExternalCollection();
+    await screen.findByTestId("wizard-intake-link-url");
+
+    // Browser back to Step 1, WITHOUT clicking Continue.
+    fireEvent.click(screen.getByTestId("test-history-back"));
+    await waitFor(() => expect(screen.getByTestId("wizard-deal-name")).toBeInTheDocument());
+
+    // Browser forward, back onto the share-link step.
+    fireEvent.click(screen.getByTestId("test-history-forward"));
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard-step-share-link")).toBeInTheDocument()
+    );
+
+    // The one-time token was cleared on leaving the step, so it is not shown again.
+    expect(screen.queryByTestId("wizard-intake-link-url")).not.toBeInTheDocument();
+    expect(screen.getByTestId("wizard-intake-link-unavailable")).toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain("raw-token-xyz");
   });
 
   it("copy button writes the full origin+/intake/<token> URL", async () => {
