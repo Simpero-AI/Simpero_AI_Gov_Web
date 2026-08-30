@@ -9,10 +9,12 @@ config({ path: path.join(root, ".env"), quiet: true });
 config({ path: path.join(root, ".env.local"), override: true, quiet: true });
 
 // Testing Library's default 1000ms poll timeout for waitFor/findBy is tight
-// on a loaded shared CI runner — tests that pass reliably locally have been
-// observed timing out only in CI. Raising it doesn't mask a real hang (genuine
-// bugs still time out, just at 5s), it just gives slow-runner scheduling room.
-configure({ asyncUtilTimeout: 5000 });
+// on a loaded shared CI runner — tests that pass reliably alone or locally
+// have been observed timing out only under full-suite parallel load (heavy
+// component trees like MvpAppShell competing for CPU across worker threads).
+// Raising it doesn't mask a real hang (genuine bugs still time out, just
+// later); vitest.config.ts's testTimeout is raised to match with headroom.
+configure({ asyncUtilTimeout: 8000 });
 
 // jsdom installs its own AbortController/AbortSignal over Node's, but leaves
 // the global `Request` as Node's (undici) — and undici brand-checks
