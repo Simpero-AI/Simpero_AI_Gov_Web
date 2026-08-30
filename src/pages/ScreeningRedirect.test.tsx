@@ -34,6 +34,7 @@ function makeRow(over: Partial<LivePipelineRow> = {}): LivePipelineRow {
     irrPct: null,
     actionPill: null,
     agentStatus: { jobStatus: "complete", currentPhase: null, steps: [] },
+    intakeStatus: "none",
     ...over,
   };
 }

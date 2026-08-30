@@ -26,4 +26,15 @@ export interface LivePipelineRow {
 
   // computed from analysis_jobs
   agentStatus: DealStatusPayload;
+
+  /**
+   * P3-06. Must stay character-identical to the backend Literal at
+   * app/schemas/deals.py::IntakePipelineStatus (Simpero_AI_Gov_Alpha) —
+   * nothing enforces this across the two repos. Collapses every
+   * deal_intake_link state to three: "none" covers no link, revoked,
+   * expired, and a link still stored `pending` past its `expires_at`
+   * (there is deliberately no fourth state — a functionally dead link
+   * routes exactly like a deal that never had one).
+   */
+  intakeStatus: "none" | "pending" | "submitted";
 }

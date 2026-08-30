@@ -25,18 +25,15 @@ export type DealsTableTab = "active" | "rejected" | "all";
 type RowWithConfidential = LivePipelineRow & { confidential?: boolean };
 
 /**
- * `intakeStatus` doesn't exist on the backend's `LivePipelineRow` yet
- * (P3-06, not built — external-deal-intake brief §3.2). Additive local
- * overlay so the row routes correctly the moment the field ships, without
- * editing the frozen shared contract ahead of the backend. Absent field =>
- * 'none' => today's unchanged destination.
+ * P3-06/P5-07: a live/waiting link sends the row to the wizard's waiting
+ * panel (Step 2) or answers step (Step 3) instead of the ordinary analysis
+ * page — `intakeStatus` is already collapsed to these three states
+ * server-side (see LivePipelineRow's doc comment), so no further collapsing
+ * happens here.
  */
-type RowWithIntakeStatus = LivePipelineRow & { intakeStatus?: "none" | "pending" | "submitted" };
-
 export function dealRowHref(row: LivePipelineRow): string {
-  const status = (row as RowWithIntakeStatus).intakeStatus ?? "none";
-  if (status === "pending") return `/new-deal/upload-files?dealId=${row.dealId}`;
-  if (status === "submitted") return `/new-deal/confirm?dealId=${row.dealId}`;
+  if (row.intakeStatus === "pending") return `/new-deal/upload-files?dealId=${row.dealId}`;
+  if (row.intakeStatus === "submitted") return `/new-deal/confirm?dealId=${row.dealId}`;
   return `/deals/${row.dealId}/analysis`;
 }
 
