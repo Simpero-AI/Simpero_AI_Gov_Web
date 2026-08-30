@@ -62,6 +62,7 @@ import { TeamMemberCard } from "@/components/mvp/icMemo/TeamMemberCard";
 import { DealHeaderCard } from "@/components/mvp/dealDetail/DealHeaderCard";
 import { apiFetch } from "@/api/http";
 import { screeningQueryKey } from "@/api/screening";
+import { companyQueryKey } from "@/api/company";
 import { ScreeningTab } from "./dealDetail/ScreeningTab";
 import {
   formatUsdShort,
@@ -434,7 +435,7 @@ function AnalysisTabs({
           />
         )}{" "}
         {/* COMPANY */}
-        {tab === "company" && <CompanyTab memoTyped={memoTyped} />}{" "}
+        {tab === "company" && <CompanyTab dealId={dealId} memoTyped={memoTyped} />}{" "}
         {/* MARKET */}
         {tab === "market" && <MarketTab memoTyped={memoTyped} />}{" "}
         {/* FINANCIALS */}
@@ -665,6 +666,10 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
       // Screening lands as part of the same pipeline; refetch it too so a user
       // parked on the Screening tab sees the verdict without a manual reload.
       void queryClient.invalidateQueries({ queryKey: screeningQueryKey(dealId) });
+      // The Company (Business Overview) tab is derived from the same claims the
+      // pipeline just produced; invalidate it so a user parked there sees the
+      // populated profile instead of the stale/empty pre-pipeline snapshot.
+      void queryClient.invalidateQueries({ queryKey: companyQueryKey(dealId) });
       setJustCompleted(true);
     }
   }, [jobStatus, dealId, queryClient]);
