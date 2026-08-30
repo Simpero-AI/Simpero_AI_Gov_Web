@@ -1,11 +1,18 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
+import { configure } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(root, ".env"), quiet: true });
 config({ path: path.join(root, ".env.local"), override: true, quiet: true });
+
+// Testing Library's default 1000ms poll timeout for waitFor/findBy is tight
+// on a loaded shared CI runner — tests that pass reliably locally have been
+// observed timing out only in CI. Raising it doesn't mask a real hang (genuine
+// bugs still time out, just at 5s), it just gives slow-runner scheduling room.
+configure({ asyncUtilTimeout: 5000 });
 
 // jsdom installs its own AbortController/AbortSignal over Node's, but leaves
 // the global `Request` as Node's (undici) — and undici brand-checks
