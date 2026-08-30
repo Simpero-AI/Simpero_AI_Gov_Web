@@ -51,7 +51,12 @@ import {
   type PersistedStep1,
 } from "./newDealWizard/storage";
 
-const VALID_STEPS = new Set(["details", "upload-files", "share-link", "confirm"]);
+const VALID_STEPS = new Set([
+  "details",
+  "upload-files",
+  "share-link",
+  "confirm",
+]);
 type StepName = "details" | "upload-files" | "share-link" | "confirm";
 
 interface NewDealWizardProps {
@@ -171,7 +176,9 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
   const intakeResponseQuery = useQuery({
     queryKey: intakeResponseQueryKey(state.attachDealId ?? ""),
     queryFn: () => fetchIntakeResponse(state.attachDealId as string),
-    enabled: state.attachDealId != null && intakeLinkQuery.data?.status === "submitted",
+    enabled:
+      state.attachDealId != null &&
+      intakeLinkQuery.data?.status === "submitted",
   });
 
   useEffect(() => {
@@ -323,23 +330,22 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
             recipientEmail: state.recipientEmail.trim(),
           });
           rawTokenRef.current = link.token;
-          queryClient.invalidateQueries({ queryKey: intakeLinkQueryKey(created.id) });
+          queryClient.invalidateQueries({
+            queryKey: intakeLinkQueryKey(created.id),
+          });
           navigate("/new-deal/share-link");
         } catch (err) {
           // The deal already exists at this point (`deal_created` above already
-          // fired) — this is NOT a "could not create deal" failure, and must
-          // never look like one. Land on Step 2: the deal is usable there
-          // (attachDealId is set, so the step guard doesn't bounce), without
-          // needing to re-create it.
-          if (err instanceof IntakeApiError && err.status === 409) {
-            toast.error("Could not generate the intake link", {
-              description: err.message,
-            });
-          } else {
-            const message =
-              err instanceof Error ? err.message : "Could not generate the intake link";
-            toast.error("Could not generate the intake link", { description: message });
-          }
+          // fired) — this is NOT a "could not create deal" failure and must never
+          // look like one. P3-01's 409 details are already human-readable, so they
+          // pass straight through; no status branch earns its keep here.
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Could not generate the intake link";
+          toast.error("Could not generate the intake link", {
+            description: message,
+          });
           navigate("/new-deal/upload-files");
         }
         return;
@@ -429,11 +435,16 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
   // since `set_attach_deal_id` doesn't carry it) over local wizard state.
   const handleReissueIntakeLink = async () => {
     if (state.attachDealId == null) return;
-    const recipientEmail = intakeLinkQuery.data?.recipientEmail ?? state.recipientEmail;
+    const recipientEmail =
+      intakeLinkQuery.data?.recipientEmail ?? state.recipientEmail;
     try {
-      const link = await createIntakeLink(state.attachDealId, { recipientEmail });
+      const link = await createIntakeLink(state.attachDealId, {
+        recipientEmail,
+      });
       rawTokenRef.current = link.token;
-      queryClient.invalidateQueries({ queryKey: intakeLinkQueryKey(state.attachDealId) });
+      queryClient.invalidateQueries({
+        queryKey: intakeLinkQueryKey(state.attachDealId),
+      });
       navigate("/new-deal/share-link");
     } catch (err) {
       // 409 here is the expected outcome, not an edge case — reissue races
@@ -465,7 +476,8 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
   // P5-06: which WizardProgressBar step-2 label to show. `intakeLinkQuery.data`
   // is non-null once a link has ever been generated for this deal (any status),
   // which covers reloads/back-navigation after Step 1, not just the in-session flag.
-  const externalBranch = state.collectExternally || intakeLinkQuery.data != null;
+  const externalBranch =
+    state.collectExternally || intakeLinkQuery.data != null;
 
   // P5-04: effective status per §3.4 — the server already resolves a stale
   // `pending` row to `expired`, so this is a direct read, not a re-derivation.
@@ -565,7 +577,9 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
                         // idiom as `attachDealIdFromUrl as string` in dealQuery's
                         // queryFn above.
                         queryClient.invalidateQueries({
-                          queryKey: dealDocumentsQueryKey(state.attachDealId as string),
+                          queryKey: dealDocumentsQueryKey(
+                            state.attachDealId as string
+                          ),
                         });
                       }}
                     />
