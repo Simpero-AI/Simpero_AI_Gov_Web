@@ -120,6 +120,18 @@ describe("DealsTable", () => {
     expect(screen.getByText("No deals match the current filters.")).toBeInTheDocument();
   });
 
+  it("routes to the deal analysis page when intakeStatus is absent on the wire", () => {
+    // intakeStatus is required in TypeScript, but that's a type-level
+    // guarantee, not a wire one: Alpha PR #160 (P3-06) hasn't merged, so
+    // GET /deals/pipeline doesn't send this field yet. Covers a pre-#160
+    // backend and any future rollback — `unknown` is needed because the
+    // type system won't let a real LivePipelineRow omit the field.
+    const { intakeStatus: _omitted, ...withoutIntakeStatus } = makeRow({ dealId: "1", name: "Acme" });
+    const row = withoutIntakeStatus as unknown as LivePipelineRow;
+    render(<DealsTable rows={[row]} />);
+    expect(screen.getByRole("link", { name: /Acme/ })).toHaveAttribute("href", "/deals/1/analysis");
+  });
+
   it("routes to the deal analysis page when intakeStatus is 'none'", () => {
     const row = makeRow({ dealId: "1", name: "Acme", intakeStatus: "none" });
     render(<DealsTable rows={[row]} />);
