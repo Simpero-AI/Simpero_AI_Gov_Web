@@ -15,7 +15,11 @@ interface Step1DetailsProps {
 interface Errors {
   dealName?: string;
   gpSource?: string;
+  recipientEmail?: string;
 }
+
+// Basic shape check only — the backend is the source of truth for real validation.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function Step1Details({ state, dispatch, onContinue, attached, attachedViaUrl }: Step1DetailsProps) {
   const [errors, setErrors] = useState<Errors>({});
@@ -32,6 +36,11 @@ export function Step1Details({ state, dispatch, onContinue, attached, attachedVi
     const e: Errors = {};
     if (state.dealName.trim() === "") e.dealName = "Deal name is required";
     if (state.gpSource.trim() === "") e.gpSource = "GP / Source is required";
+    if (state.collectExternally) {
+      const email = state.recipientEmail.trim();
+      if (email === "") e.recipientEmail = "Recipient email is required";
+      else if (!EMAIL_RE.test(email)) e.recipientEmail = "Enter a valid email address";
+    }
     return e;
   }
 
@@ -45,7 +54,8 @@ export function Step1Details({ state, dispatch, onContinue, attached, attachedVi
   const continueDisabled =
     state.dealName.trim() === "" ||
     state.gpSource.trim() === "" ||
-    state.submitting;
+    state.submitting ||
+    (state.collectExternally && state.recipientEmail.trim() === "");
 
   return (
     <div className="space-y-6" data-testid="wizard-step-1">
@@ -140,6 +150,46 @@ export function Step1Details({ state, dispatch, onContinue, attached, attachedVi
         </div>
       </div>
 
+      {!attached && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              data-testid="wizard-collect-externally"
+              checked={state.collectExternally}
+              onChange={(e) =>
+                dispatch({ type: "set_collect_externally", enabled: e.target.checked })
+              }
+              className="mt-0.5"
+            />
+            <span className="text-sm text-gray-900">
+              Collect diligence materials from an external party
+            </span>
+          </label>
+
+          {state.collectExternally && (
+            <div className="mt-4">
+              <label className={lbl} htmlFor="wizard-recipient-email">Recipient Email{lblReq}</label>
+              <input
+                id="wizard-recipient-email"
+                data-testid="wizard-recipient-email"
+                type="email"
+                value={state.recipientEmail}
+                onChange={(e) =>
+                  dispatch({ type: "set_field", key: "recipientEmail", value: e.target.value })
+                }
+                placeholder="e.g. gp@example.com"
+                className={inp}
+                aria-invalid={!!(showErrors && errors.recipientEmail)}
+              />
+              {showErrors && errors.recipientEmail && (
+                <p className="text-xs text-red-600 mt-1">{errors.recipientEmail}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {state.submitError && (
         <div
           className="px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700"
@@ -159,7 +209,13 @@ export function Step1Details({ state, dispatch, onContinue, attached, attachedVi
         >
           {/* In attach mode the deal already exists, so this is a plain step advance;
               otherwise the click is what actually creates the deal. */}
-          {attached ? "Continue" : state.submitting ? "Creating…" : "Create Deal"}
+          {attached
+            ? "Continue"
+            : state.submitting
+              ? "Creating…"
+              : state.collectExternally
+                ? "Generate Link"
+                : "Create Deal"}
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>

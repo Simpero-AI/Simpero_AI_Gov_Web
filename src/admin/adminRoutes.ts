@@ -12,6 +12,7 @@ export const ADMIN_ROUTES = {
   organizations: `${ADMIN_BASE}/organizations`,
   orgDetail: (orgId: string) => `${ADMIN_BASE}/organizations/${orgId}`,
   mandateTaxonomy: `${ADMIN_BASE}/mandate-taxonomy`,
+  intakeQuestions: `${ADMIN_BASE}/intake-questions`,
   members: `${ADMIN_BASE}/members`,
   invitations: `${ADMIN_BASE}/invitations`,
   signIn: `${ADMIN_BASE}/sign-in`,

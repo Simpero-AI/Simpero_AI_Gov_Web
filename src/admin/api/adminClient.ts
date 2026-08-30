@@ -13,6 +13,7 @@ import type {
   UpdateRoleBody,
   AdminMandateCategory,
   AdminMandateOption,
+  AdminIntakeQuestion,
 } from "../types";
 
 /**
@@ -219,6 +220,75 @@ export async function createMandateSubOption(
   if (!res.ok)
     throw new Error(`POST /admin/mandates/options/${parentOptionId}/suboptions failed: ${res.status}`);
   return (await res.json()) as AdminMandateOption;
+}
+
+// ── Intake questions (/api/admin/intake-questions) ──────────────────────────
+// P2-02, already built (Alpha PR #108). questionKey is create-only — the
+// public snapshot's 422 validation keys off it, so no PATCH-body field for
+// renaming it exists here (see AdminIntakeQuestion in types.ts and P5-08's
+// flagged notes in the status doc for what's assumed vs. confirmed).
+
+export async function listIntakeQuestions(): Promise<AdminIntakeQuestion[]> {
+  const res = await apiFetch("/api/admin/intake-questions");
+  if (!res.ok) throw new Error(`GET /admin/intake-questions failed: ${res.status}`);
+  return (await res.json()) as AdminIntakeQuestion[];
+}
+
+export async function createIntakeQuestion(body: {
+  questionKey: string;
+  prompt: string;
+  helpText?: string | null;
+  inputType: "text" | "textarea";
+  required: boolean;
+}): Promise<AdminIntakeQuestion> {
+  const res = await apiFetch("/api/admin/intake-questions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`POST /admin/intake-questions failed: ${res.status}`);
+  return (await res.json()) as AdminIntakeQuestion;
+}
+
+export async function updateIntakeQuestion(
+  id: string,
+  body: { prompt: string; helpText?: string | null; required: boolean }
+): Promise<AdminIntakeQuestion> {
+  const res = await apiFetch(`/api/admin/intake-questions/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`PATCH /admin/intake-questions/${id} failed: ${res.status}`);
+  return (await res.json()) as AdminIntakeQuestion;
+}
+
+/**
+ * Confirmed against Alpha's ReorderIntakeQuestionsRequest schema: a bare
+ * ordered id array, no displayOrder values — order is implied by position.
+ */
+export async function reorderIntakeQuestions(
+  questionIds: string[]
+): Promise<AdminIntakeQuestion[]> {
+  const res = await apiFetch("/api/admin/intake-questions/reorder", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ questionIds }),
+  });
+  if (!res.ok) throw new Error(`PUT /admin/intake-questions/reorder failed: ${res.status}`);
+  return (await res.json()) as AdminIntakeQuestion[];
+}
+
+export async function activateIntakeQuestion(id: string): Promise<AdminIntakeQuestion> {
+  const res = await apiFetch(`/api/admin/intake-questions/${id}/activate`, { method: "PATCH" });
+  if (!res.ok) throw new Error(`PATCH /admin/intake-questions/${id}/activate failed: ${res.status}`);
+  return (await res.json()) as AdminIntakeQuestion;
+}
+
+export async function deactivateIntakeQuestion(id: string): Promise<AdminIntakeQuestion> {
+  const res = await apiFetch(`/api/admin/intake-questions/${id}/deactivate`, { method: "PATCH" });
+  if (!res.ok) throw new Error(`PATCH /admin/intake-questions/${id}/deactivate failed: ${res.status}`);
+  return (await res.json()) as AdminIntakeQuestion;
 }
 
 export async function updateOrgMemberRole(

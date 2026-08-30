@@ -22,6 +22,11 @@ import InstitutionalMemoryPage from "./pages/intelligence/InstitutionalMemory";
 import AntiPortfolio from "./pages/AntiPortfolio";
 import NewDealWizard from "@/pages/NewDealWizard";
 
+// External Deal Intake public surface (P4) — lazy for the same reason as the
+// Admin Portal below: its code (no MvpAppShell/useAuth) must never enter the
+// main product bundle.
+const IntakePage = lazy(() => import("@/pages/intake/IntakePage"));
+
 // Admin Portal — lazy so its code never enters the main product bundle
 // (docs/plans/admin-portal-frontend.md). Mounted as a sibling of the
 // AuthGate layout route below, NOT inside it — admins are an admin-only
@@ -37,6 +42,15 @@ function AdminBootFallback() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[color:var(--mvp-sidebar-bg)]">
       <Spinner className="size-6 text-white" />
+    </div>
+  );
+}
+
+/** Suspense fallback for the intake chunk — matches IntakeShell's own bg-gray-50, not the product loader. */
+function IntakeBootFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <Spinner className="size-6 text-gray-400" />
     </div>
   );
 }
@@ -86,6 +100,17 @@ export const routes: RouteObject[] = [
     children: [
       { path: "/landing", element: <StealthLanding /> },
       { path: "/shared/:token", element: <SharedMemo /> },
+      // External Deal Intake (P4) — unauthenticated public surface for a
+      // party with no Simpero account, structurally isolated from the
+      // product shell the same way the admin portal is (see IntakeShell).
+      {
+        path: "/intake/:token",
+        element: (
+          <Suspense fallback={<IntakeBootFallback />}>
+            <IntakePage />
+          </Suspense>
+        ),
+      },
       // Both the bare and the splat form are registered for the Clerk auth
       // routes — `/sign-in/*` is not documented to also match bare `/sign-in`.
       { path: "/sign-in", element: <SignInPage /> },

@@ -118,4 +118,27 @@ describe("DealsTable", () => {
     render(<DealsTable rows={[makeRow({ dealId: "1", name: "Acme", state: "declined" })]} />);
     expect(screen.getByText("No deals match the current filters.")).toBeInTheDocument();
   });
+
+  it("routes to the deal analysis page when intakeStatus is absent", () => {
+    render(<DealsTable rows={[makeRow({ dealId: "1", name: "Acme" })]} />);
+    expect(screen.getByRole("link", { name: /Acme/ })).toHaveAttribute("href", "/deals/1/analysis");
+  });
+
+  it("routes to the deal analysis page when intakeStatus is 'none'", () => {
+    const row = { ...makeRow({ dealId: "1", name: "Acme" }), intakeStatus: "none" } as LivePipelineRow;
+    render(<DealsTable rows={[row]} />);
+    expect(screen.getByRole("link", { name: /Acme/ })).toHaveAttribute("href", "/deals/1/analysis");
+  });
+
+  it("routes to the upload-files wizard step when intakeStatus is 'pending'", () => {
+    const row = { ...makeRow({ dealId: "1", name: "Acme" }), intakeStatus: "pending" } as LivePipelineRow;
+    render(<DealsTable rows={[row]} />);
+    expect(screen.getByRole("link", { name: /Acme/ })).toHaveAttribute("href", "/new-deal/upload-files?dealId=1");
+  });
+
+  it("routes to the confirm wizard step when intakeStatus is 'submitted'", () => {
+    const row = { ...makeRow({ dealId: "1", name: "Acme" }), intakeStatus: "submitted" } as LivePipelineRow;
+    render(<DealsTable rows={[row]} />);
+    expect(screen.getByRole("link", { name: /Acme/ })).toHaveAttribute("href", "/new-deal/confirm?dealId=1");
+  });
 });
