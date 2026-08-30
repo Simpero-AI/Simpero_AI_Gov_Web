@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { Step3Confirm } from "./Step3Confirm";
 import { initialWizardState } from "./newDealWizardReducer";
 import type { DealDocument } from "@/api/documents";
@@ -233,5 +233,32 @@ describe("Step3Confirm — answers panel", () => {
 
     expect(screen.getByText("$12M")).toBeInTheDocument();
     expect(screen.getByText("Not answered")).toBeInTheDocument();
+  });
+
+  it("renders '—' for a null submittedAt, never 'Invalid Date'", () => {
+    const intakeResponse: IntakeResponse = {
+      id: "resp-1",
+      dealId: "deal-1",
+      respondentEmail: "gp@example.com",
+      submittedAt: null,
+      answers: [],
+    };
+    render(
+      <Step3Confirm
+        state={baseState()}
+        dispatch={noop}
+        onBack={noop}
+        onSubmit={noop}
+        documents={[doc("d1", "a.pdf", "verified")]}
+        documentsLoading={false}
+        intakeStatus="submitted"
+        intakeResponse={intakeResponse}
+        onReissue={noop}
+      />
+    );
+
+    const answersPanel = screen.getByTestId("wizard-intake-answers");
+    expect(within(answersPanel).getByText("—")).toBeInTheDocument();
+    expect(within(answersPanel).queryByText("Invalid Date")).not.toBeInTheDocument();
   });
 });
