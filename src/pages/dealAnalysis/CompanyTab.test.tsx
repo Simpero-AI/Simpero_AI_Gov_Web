@@ -1,88 +1,103 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CompanyTab } from "./CompanyTab";
-import { buildE2eDeliverableMemo } from "@shared/e2eUxMemoFixture";
-import type { ICMemoResult } from "@shared/simperoTypes";
+import { fetchCompany, type CompanyView } from "@/api/company";
 
-afterEach(cleanup);
+// CompanyTab fetches GET /deals/{id}/company via react-query — mock the client so
+// the tab renders against controlled data with no real network call.
+vi.mock("@/api/company", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/company")>();
+  return { ...actual, fetchCompany: vi.fn() };
+});
+
+const mockFetchCompany = vi.mocked(fetchCompany);
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+function renderCompanyTab() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <CompanyTab dealId="deal-1" />
+    </QueryClientProvider>
+  );
+}
+
+const EMPTY: CompanyView = {
+  facts: [],
+  overview: [],
+  risks: [],
+  commercial: [],
+  relatedParties: [],
+  plans: [],
+};
 
 describe("CompanyTab", () => {
-  it("renders honest empty-states for every section when there is no memo", () => {
-    render(<CompanyTab memoTyped={null} />);
-    expect(screen.getByText("Company facts not yet extracted")).toBeInTheDocument();
-    expect(screen.getByText("Co-investor data coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Business model details not yet extracted")).toBeInTheDocument();
-    expect(screen.getByText("Key customer data coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Funding history coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Geographic breakdown coming soon")).toBeInTheDocument();
-    expect(screen.getByText("IP & compliance data coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Technology & operations details coming soon")).toBeInTheDocument();
-    // No fabricated corroboration when nothing real was rendered.
-    expect(screen.getByText(/no structured source citations/i)).toBeInTheDocument();
+  it("renders an honest empty-state for every section when the deal has no company claims", async () => {
+    mockFetchCompany.mockResolvedValue(EMPTY);
+    renderCompanyTab();
+
+    expect(await screen.findByText("Company facts not available")).toBeInTheDocument();
+    expect(screen.getByText("Business overview not available")).toBeInTheDocument();
+    expect(screen.getByText("Business risks not available")).toBeInTheDocument();
+    expect(screen.getByText("Commercial terms not available")).toBeInTheDocument();
+    expect(screen.getByText("Related parties not available")).toBeInTheDocument();
+    expect(screen.getByText("Plans & commitments not available")).toBeInTheDocument();
   });
 
-  it("renders the real companyOverview fields (founded/HQ/employees, products, revenue mix) instead of the empty-states", () => {
-    const memo = buildE2eDeliverableMemo();
-    render(<CompanyTab memoTyped={memo} />);
+  it("renders identity facts and grouped qualitative assertions with status", async () => {
+    mockFetchCompany.mockResolvedValue({
+      facts: [
+        { label: "Sector", value: "Gaming & Leisure", citation: null, status: "derived", entity: "AcmeCo" },
+        { label: "Headcount", value: "1,450", citation: "cim.pdf · p.4", status: "verified", entity: "AcmeCo" },
+      ],
+      overview: [
+        {
+          label: "AcmeCo",
+          value: "Revenue is 70% recurring subscription.",
+          citation: "cim.pdf · p.6",
+          status: "verified",
+          entity: "AcmeCo",
+        },
+      ],
+      risks: [
+        {
+          label: "AcmeCo",
+          value: "Heavily dependent on a single supplier.",
+          citation: "cim.pdf · p.7",
+          status: "cited",
+          entity: "AcmeCo",
+        },
+      ],
+      commercial: [],
+      relatedParties: [],
+      plans: [],
+    });
+    renderCompanyTab();
 
-    expect(screen.getByText("2018")).toBeInTheDocument();
-    expect(screen.getByText("San Francisco, CA")).toBeInTheDocument();
-    expect(screen.getByText("120")).toBeInTheDocument();
-    expect(screen.queryByText("Company facts not yet extracted")).not.toBeInTheDocument();
+    expect(await screen.findByText("Gaming & Leisure")).toBeInTheDocument();
+    expect(screen.getByText("1,450")).toBeInTheDocument();
+    expect(screen.getByText("Revenue is 70% recurring subscription.")).toBeInTheDocument();
+    expect(screen.getByText("Heavily dependent on a single supplier.")).toBeInTheDocument();
+    // Trust status is surfaced (derived for sector/HQ, verified/cited for claims).
+    expect(screen.getByText("Derived")).toBeInTheDocument();
+    expect(screen.getAllByText("Verified").length).toBeGreaterThan(0);
+    expect(screen.getByText("Cited")).toBeInTheDocument();
+    expect(screen.getByText("cim.pdf · p.4")).toBeInTheDocument();
 
-    expect(screen.getByText("Core Platform")).toBeInTheDocument();
-    expect(screen.getByText("API-first ledger for B2B payments.")).toBeInTheDocument();
-    expect(screen.getByText("Revenue Mix — Subscription")).toBeInTheDocument();
-    expect(screen.getByText("80%")).toBeInTheDocument();
-    expect(screen.queryByText("Business model details not yet extracted")).not.toBeInTheDocument();
-
-    // Sections with genuinely no backing field stay honest even with a fully-populated memo.
-    expect(screen.getByText("Co-investor data coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Key customer data coming soon")).toBeInTheDocument();
+    expect(screen.queryByText("Company facts not available")).not.toBeInTheDocument();
+    // A section with no claims still renders its honest empty-state.
+    expect(screen.getByText("Commercial terms not available")).toBeInTheDocument();
   });
 
-  it("labels ofac_screening honestly as sanctions screening (not fabricated IP/patent data) and reflects a CLEAR result", () => {
-    const memo: ICMemoResult = {
-      ...buildE2eDeliverableMemo(),
-      ofac_screening: {
-        results: [],
-        entitiesScreened: 3,
-        possibleMatches: 0,
-        confirmedMatches: 0,
-        screeningAvailable: true,
-        screenedAt: "2026-01-01T00:00:00.000Z",
-      },
-    };
-    render(<CompanyTab memoTyped={memo} />);
-    expect(screen.getByText(/OFAC Sanctions Screening — Clear/)).toBeInTheDocument();
-    expect(screen.getByText(/3 entities screened/)).toBeInTheDocument();
-    expect(screen.getByText(/Patent and licensing data aren't extracted/)).toBeInTheDocument();
-    expect(screen.queryByText("IP & compliance data coming soon")).not.toBeInTheDocument();
-  });
+  it("shows an error state when the company fetch fails", async () => {
+    mockFetchCompany.mockRejectedValue(new Error("boom"));
+    renderCompanyTab();
 
-  it("flags a confirmed OFAC match distinctly from a clear result", () => {
-    const memo: ICMemoResult = {
-      ...buildE2eDeliverableMemo(),
-      ofac_screening: {
-        results: [
-          {
-            entity: "Acme Holdings",
-            entityType: "organization",
-            status: "CONFIRMED_MATCH",
-            matchedName: "Acme Holdings Ltd",
-            screened_at: "2026-01-01T00:00:00.000Z",
-          },
-        ],
-        entitiesScreened: 1,
-        possibleMatches: 0,
-        confirmedMatches: 1,
-        screeningAvailable: true,
-        screenedAt: "2026-01-01T00:00:00.000Z",
-      },
-    };
-    render(<CompanyTab memoTyped={memo} />);
-    expect(screen.getByText(/OFAC Sanctions Screening — Confirmed Match/)).toBeInTheDocument();
-    expect(screen.getByText("Acme Holdings")).toBeInTheDocument();
-    expect(screen.getByText(/Matched: Acme Holdings Ltd/)).toBeInTheDocument();
+    expect(await screen.findByText("Couldn't load company data for this deal.")).toBeInTheDocument();
   });
 });

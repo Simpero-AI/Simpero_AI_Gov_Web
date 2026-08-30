@@ -434,7 +434,7 @@ function AnalysisTabs({
           />
         )}{" "}
         {/* COMPANY */}
-        {tab === "company" && <CompanyTab memoTyped={memoTyped} />}{" "}
+        {tab === "company" && <CompanyTab dealId={dealId} />}{" "}
         {/* MARKET */}
         {tab === "market" && <MarketTab memoTyped={memoTyped} />}{" "}
         {/* FINANCIALS */}
