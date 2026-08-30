@@ -3,6 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CompanyTab } from "./CompanyTab";
 import { fetchCompany, type CompanyView } from "@/api/company";
+import type { ICMemoResult } from "@shared/simperoTypes";
 
 // CompanyTab fetches GET /deals/{id}/company via react-query — mock the client so
 // the tab renders against controlled data with no real network call.
@@ -18,11 +19,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function renderCompanyTab() {
+function renderCompanyTab(memoTyped: Partial<ICMemoResult> | null = null) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CompanyTab dealId="deal-1" />
+      <CompanyTab dealId="deal-1" memoTyped={memoTyped} />
     </QueryClientProvider>
   );
 }
@@ -99,5 +100,55 @@ describe("CompanyTab", () => {
     renderCompanyTab();
 
     expect(await screen.findByText("Couldn't load company data for this deal.")).toBeInTheDocument();
+  });
+
+  it("shows a loading state instead of a false 'not available' flash while fetching", () => {
+    mockFetchCompany.mockReturnValue(new Promise(() => {}));  // never resolves
+    renderCompanyTab();
+
+    expect(screen.getByText("Loading company profile…")).toBeInTheDocument();
+    // Must NOT flash the empty state before data arrives.
+    expect(screen.queryByText("Company facts not available")).not.toBeInTheDocument();
+  });
+
+  it("keeps the mockup's not-yet-sourced sections as honest placeholders", async () => {
+    mockFetchCompany.mockResolvedValue(EMPTY);
+    renderCompanyTab();
+
+    await screen.findByText("Company facts not available");
+    expect(screen.getByText("Co-investor data coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Key customer data coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Funding history coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Geographic breakdown coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Technology & operations details coming soon")).toBeInTheDocument();
+    // No memo OFAC data -> the compliance section shows its own placeholder.
+    expect(screen.getByText("IP & compliance data coming soon")).toBeInTheDocument();
+  });
+
+  it("surfaces an OFAC sanctions match from the memo (compliance visibility not dropped)", async () => {
+    mockFetchCompany.mockResolvedValue(EMPTY);
+    const memoWithOfac = {
+      ofac_screening: {
+        confirmedMatches: 1,
+        possibleMatches: 0,
+        screeningAvailable: true,
+        entitiesScreened: 2,
+        screenedAt: "2026-01-15T00:00:00Z",
+        results: [
+          {
+            entity: "Sanctioned Holdco LLC",
+            entityType: "organization",
+            status: "CONFIRMED_MATCH",
+            matchedName: "Sanctioned Holdco LLC",
+          },
+        ],
+      },
+    } as unknown as Partial<ICMemoResult>;
+
+    renderCompanyTab(memoWithOfac);
+
+    expect(await screen.findByText(/OFAC Sanctions Screening/)).toBeInTheDocument();
+    expect(screen.getByText("Sanctioned Holdco LLC")).toBeInTheDocument();
+    expect(screen.queryByText("IP & compliance data coming soon")).not.toBeInTheDocument();
   });
 });
