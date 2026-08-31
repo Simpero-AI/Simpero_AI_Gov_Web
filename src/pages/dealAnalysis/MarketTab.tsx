@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Compass, Globe, type LucideIcon } from "lucide-react";
+import { BarChart3, Compass, Globe, Loader2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
 import { fetchMarket, marketQueryKey, type MarketFact } from "@/api/market";
@@ -90,7 +90,7 @@ function Citation({ citation }: { citation: string | null }) {
 
 // A human-readable subtitle for the well-known sizing acronyms; unknown labels
 // (e.g. "Market Size", "Market Growth (CAGR)") stand on their own.
-const _SIZING_DESC: Record<string, string> = {
+const SIZING_DESC: Record<string, string> = {
   TAM: "Total Addressable Market",
   SAM: "Serviceable Addressable Market",
   SOM: "Serviceable Obtainable Market",
@@ -110,11 +110,11 @@ function SizingCard({ fact }: { fact: MarketFact }) {
       </p>
       <div className="flex items-center justify-between gap-2 border-t border-[color:var(--rev-border)] pt-2.5">
         <span className="text-[12px] text-[color:var(--rev-text-4)]">
-          {_SIZING_DESC[fact.label] ?? <Citation citation={fact.citation} />}
+          {SIZING_DESC[fact.label] ?? <Citation citation={fact.citation} />}
         </span>
         <StatusPill status={fact.status} />
       </div>
-      {_SIZING_DESC[fact.label] && fact.citation ? (
+      {SIZING_DESC[fact.label] && fact.citation ? (
         <div className="mt-2">
           <Citation citation={fact.citation} />
         </div>
@@ -159,6 +159,20 @@ export function MarketTab({ dealId }: MarketTabProps) {
   const definition = market?.marketDefinition ?? [];
   const competition = market?.competitivePosition ?? [];
 
+  // Guard the fetch before the sections: their empty states are definitive
+  // negatives ("not available"), so rendering them while the query is still
+  // pending would flash a false "no market data" on a claim-rich deal (and again
+  // on every deal switch, since the query key is per-deal) before the real
+  // figures arrive.
+  if (marketQuery.isPending) {
+    return (
+      <div className="flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading…
+      </div>
+    );
+  }
+
   if (marketQuery.isError) {
     return (
       <div
@@ -191,8 +205,8 @@ export function MarketTab({ dealId }: MarketTabProps) {
           />
         ) : (
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-            {sizing.map((f) => (
-              <SizingCard key={f.label} fact={f} />
+            {sizing.map((f, i) => (
+              <SizingCard key={`${f.label}-${i}`} fact={f} />
             ))}
           </div>
         )}

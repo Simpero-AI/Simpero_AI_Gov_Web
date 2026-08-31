@@ -79,6 +79,17 @@ describe("MarketTab", () => {
     expect(screen.queryByText("Competitive position not available")).not.toBeInTheDocument();
   });
 
+  it("shows a loading state, not a false empty-state, while the fetch is pending", () => {
+    // A never-resolving fetch keeps the query pending. The tab must render its
+    // loading state and NOT the definitive "not available" negatives, which
+    // would otherwise flash on a claim-rich deal before its figures arrive.
+    mockFetchMarket.mockReturnValue(new Promise<MarketView>(() => {}));
+    renderMarketTab();
+
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.queryByText("Market sizing not available")).not.toBeInTheDocument();
+  });
+
   it("shows an error state when the market fetch fails", async () => {
     mockFetchMarket.mockRejectedValue(new Error("boom"));
     renderMarketTab();
