@@ -36,6 +36,10 @@ import { WizardProgressBar } from "./newDealWizard/WizardProgressBar";
 import { Step1Details } from "./newDealWizard/Step1Details";
 import { ShareLinkStep } from "./newDealWizard/ShareLinkStep";
 import { Step2WaitingPanel } from "./newDealWizard/Step2WaitingPanel";
+import {
+  fetchIntakeActivity,
+  intakeActivityQueryKey,
+} from "@/api/intakeActivity";
 import { Step3Confirm } from "./newDealWizard/Step3Confirm";
 import { DealDocumentUpload } from "@/components/deals/DealDocumentUpload";
 import {
@@ -180,6 +184,19 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
       state.attachDealId != null &&
       intakeLinkQuery.data?.status === "submitted",
   });
+  // P5-10: deliberately NOT gated on `status === "submitted"` the way the
+  // response query above is. The events most worth reading are often the ones
+  // on a link that was never submitted -- repeated failed verification
+  // attempts, a rejected document, a revoke. Gating this on submission would
+  // hide exactly the cases the panel exists for. Gated on the link existing at
+  // all, since a deal on the frozen three-step path has no intake history.
+  const intakeActivityQuery = useQuery({
+    queryKey: intakeActivityQueryKey(state.attachDealId ?? ""),
+    queryFn: () => fetchIntakeActivity(state.attachDealId as string),
+    enabled:
+      state.attachDealId != null && intakeLinkQuery.data?.status != null,
+  });
+
 
   useEffect(() => {
     if (attachDealIdFromUrl == null) return;
@@ -630,6 +647,9 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
               intakeStatus={intakeStatus}
               intakeResponse={intakeResponseQuery.data ?? null}
               onReissue={handleReissueIntakeLink}
+              intakeActivity={intakeActivityQuery.data?.rows ?? []}
+              intakeActivityLoading={intakeActivityQuery.isLoading}
+              intakeActivityErrored={intakeActivityQuery.isError}
             />
           )}
         </PageContainer>
