@@ -1,4 +1,10 @@
-import { test, expect, type Page, type BrowserContext } from "@playwright/test";
+import {
+  test,
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test";
 import { TEXT_SAMPLE_PDF_BYTES } from "./fixtures/textSamplePdf";
 
 /**
@@ -18,10 +24,13 @@ import { TEXT_SAMPLE_PDF_BYTES } from "./fixtures/textSamplePdf";
  * link and would no longer be testing the path a real recipient walks.
  *
  * The AC's "zero Clerk session state" is enforced structurally, not asserted
- * after the fact: the recipient's half runs in a context created from scratch
- * with no storageState, so it cannot inherit the org user's cookies even by
- * accident. A positive check that the page carries no Clerk artefacts runs
- * inside it as well -- the point of P4-02/P4-03 is that this surface never
+ * after the fact. The isolation comes from `browser.newContext()` itself --
+ * a fresh context starts with its own empty cookie jar and storage and never
+ * inherits another context's, nor `use.storageState`. (This repo sets no
+ * storageState anywhere; the explicit `undefined` below is documentation of
+ * intent, not the thing doing the work -- worth knowing before someone
+ * "fixes" it.) A positive check that the page carries no Clerk artefacts runs
+ * inside it as well: the point of P4-02/P4-03 is that this surface never
  * touches the product's auth, and a regression there would otherwise show up
  * only as a redirect nobody notices.
  */
@@ -34,17 +43,33 @@ test.skip(
   !process.env.E2E_BACKEND_FIXTURES,
   "@needs-backend-fixtures: requires a running backend and an authenticated org session"
 );
+// Second gate, same as g31's data-mutating tests: this one creates a deal, an
+// intake link, a document and an analysis run, so it needs a real database and
+// not merely a reachable API.
+test.skip(
+  !process.env.E2E_DATABASE_URL?.trim(),
+  "requires E2E_DATABASE_URL (real DB)"
+);
 
 const RECIPIENT_EMAIL = "external-party@example.com";
+/**
+ * Unique per run. This spec creates a deal, a link, a document and an analysis
+ * on a shared backend and cleans none of it up, so a constant name would let a
+ * second run's row lookup match the FIRST run's deal -- a different id, and a
+ * green assertion about the wrong row.
+ */
+const DEAL_NAME = `X-02 External Intake Deal ${Date.now()}`;
+const UPLOAD_FILENAME = "x02-external-document.pdf";
 
 /**
- * The recipient's browser. A brand-new context -- no storageState, no shared
- * cookie jar -- is what makes "signed out" true by construction rather than by
- * cleanup, which is the AC's actual requirement.
+ * The recipient's browser: a brand-new context, which is what makes "signed
+ * out" true by construction rather than by cleanup -- the AC's actual
+ * requirement. `storageState: undefined` is stated explicitly to document that
+ * no session is being loaded on purpose; `newContext()` would isolate anyway.
  */
-async function openCleanRecipientContext(browser: {
-  newContext: (opts?: Record<string, unknown>) => Promise<BrowserContext>;
-}): Promise<{ context: BrowserContext; page: Page }> {
+async function openCleanRecipientContext(
+  browser: Browser
+): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({ storageState: undefined });
   const page = await context.newPage();
   return { context, page };
@@ -61,9 +86,7 @@ test.describe("X-02 full external-party flow", () => {
     await page.goto("/new-deal", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("wizard-step-1")).toBeVisible();
 
-    await page
-      .getByTestId("wizard-deal-name")
-      .fill("X-02 External Intake Deal");
+    await page.getByTestId("wizard-deal-name").fill(DEAL_NAME);
     await page.getByTestId("wizard-gp-source").fill("X-02 Source");
     await page.getByTestId("wizard-collect-externally").check();
     await page.getByTestId("wizard-recipient-email").fill(RECIPIENT_EMAIL);
@@ -85,6 +108,10 @@ test.describe("X-02 full external-party flow", () => {
     );
 
     const dealId = new URL(page.url()).searchParams.get("dealId");
+    // Asserted, not defaulted. A `?? "\d+"` fallback further down would make
+    // the href check match ANY deal the moment this came back null -- a green
+    // assertion that had stopped checking anything.
+    expect(dealId, "share-link step URL must carry dealId").toBeTruthy();
 
     await page.getByTestId("wizard-continue-share-link").click();
 
@@ -120,10 +147,6 @@ test.describe("X-02 full external-party flow", () => {
         ];
         return {
           storage: keys.filter(k => /clerk/i.test(k)),
-          cookies: document.cookie
-            .split(";")
-            .map(c => c.trim().split("=")[0])
-            .filter(name => /clerk|__session/i.test(name)),
           globalClerk: "Clerk" in window,
         };
       });
@@ -131,13 +154,19 @@ test.describe("X-02 full external-party flow", () => {
         clerkArtefacts.storage,
         "no Clerk storage on the public surface"
       ).toEqual([]);
-      expect(
-        clerkArtefacts.cookies,
-        "no Clerk cookies on the public surface"
-      ).toEqual([]);
       expect(clerkArtefacts.globalClerk, "Clerk must not load here").toBe(
         false
       );
+
+      // Read cookies through the context, not `document.cookie`: the latter
+      // never exposes HttpOnly cookies, and Clerk's `__session` is HttpOnly --
+      // so a document.cookie filter for it returns [] whether or not a session
+      // exists, and cannot fail on the one artefact it is written to catch.
+      const cookieNames = (await recipientContext.cookies()).map(c => c.name);
+      expect(
+        cookieNames.filter(name => /clerk|__session/i.test(name)),
+        "no Clerk cookies on the public surface"
+      ).toEqual([]);
 
       // ---- Email verification ------------------------------------------------
       await recipientPage
@@ -182,7 +211,7 @@ test.describe("X-02 full external-party flow", () => {
       const uploadInput = recipientPage.getByTestId("intake-upload-input");
       await uploadInput.waitFor({ state: "attached" });
       await uploadInput.setInputFiles({
-        name: "x02-external-document.pdf",
+        name: UPLOAD_FILENAME,
         mimeType: "application/pdf",
         buffer: TEXT_SAMPLE_PDF_BYTES,
       });
@@ -191,7 +220,7 @@ test.describe("X-02 full external-party flow", () => {
       // storage -> POST /complete. Submit stays disabled until it lands.
       await expect(
         recipientPage.getByTestId("intake-upload-list")
-      ).toContainText("x02-external-document.pdf", { timeout: 60_000 });
+      ).toContainText(UPLOAD_FILENAME, { timeout: 60_000 });
       await expect(
         recipientPage.getByTestId("intake-submit-button")
       ).toBeEnabled({
@@ -217,12 +246,13 @@ test.describe("X-02 full external-party flow", () => {
 
     const dealRow = page
       .getByRole("link")
-      .filter({ hasText: "X-02 External Intake Deal" })
+      .filter({ hasText: DEAL_NAME })
       .first();
     await expect(dealRow).toBeVisible({ timeout: 30_000 });
+    // Anchored: unanchored, `dealId=1` would also match `dealId=15`.
     await expect(dealRow).toHaveAttribute(
       "href",
-      new RegExp(`/new-deal/confirm\\?dealId=${dealId ?? "\\d+"}`)
+      new RegExp(`/new-deal/confirm\\?dealId=${dealId}$`)
     );
     await dealRow.click();
 
@@ -239,7 +269,7 @@ test.describe("X-02 full external-party flow", () => {
     // And the document the external party uploaded is listed by name, so it
     // arrived on the deal rather than only into storage.
     await expect(page.getByTestId("wizard-intake-documents")).toContainText(
-      "x02-external-document.pdf",
+      UPLOAD_FILENAME,
       { timeout: 30_000 }
     );
 
@@ -248,12 +278,22 @@ test.describe("X-02 full external-party flow", () => {
     await expect(page.getByTestId("wizard-reissue-prompt")).toHaveCount(0);
 
     // ---- Start Analysis proceeds unchanged ---------------------------------
+    // Asserted on the outgoing request, not on navigation, for the reason g31
+    // documents: POST /api/deals/{dealId}/analysis may still 404, in which case
+    // the wizard shows an error toast and STAYS on Confirm. A
+    // `not.toHaveURL(/confirm/)` check would therefore fail today, and would be
+    // weak even once the endpoint lands -- an error page and a redirect back to
+    // /deals both satisfy it. What "proceeds unchanged" actually means here is
+    // that the external-intake branch reaches this step and fires the same
+    // request the ordinary upload branch does, against this deal.
     await expect(page.getByTestId("wizard-start-analysis")).toBeEnabled();
-    await page.getByTestId("wizard-start-analysis").click();
 
-    await expect(page.getByTestId("wizard-submit-error")).toHaveCount(0);
-    await expect(page).not.toHaveURL(/\/new-deal\/confirm/, {
-      timeout: 30_000,
-    });
+    const analysisRequest = page.waitForRequest(
+      req => req.method() === "POST" && req.url().includes("/analysis")
+    );
+    await page.getByTestId("wizard-start-analysis").click();
+    expect((await analysisRequest).url()).toMatch(
+      new RegExp(`/api/deals/${dealId}/analysis$`)
+    );
   });
 });
