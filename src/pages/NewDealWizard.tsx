@@ -19,7 +19,7 @@ import {
   intakeResponseQueryKey,
 } from "@/api/intakeLink";
 import { evaluateConfirmGate } from "./newDealWizard/confirmStepGate";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight } from "lucide-react";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
 import { MvpSidebar } from "@/components/mvp/shell/MvpSidebar";
 import { MvpFundSelector } from "@/components/mvp/shell/MvpFundSelector";
@@ -563,6 +563,33 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
                    so this narrowing check covers the brief window before it fires. */
                 state.attachDealId != null && (
                   <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    {(intakeStatus === "revoked" || intakeStatus === "expired") && (
+                      <div
+                        className="flex items-start gap-3 p-4 mb-4 bg-amber-50 border border-amber-200 rounded-xl"
+                        data-testid="wizard-dead-link-prompt"
+                      >
+                        <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1 text-sm text-amber-800 leading-relaxed">
+                          <p className="font-semibold">
+                            {intakeStatus === "revoked"
+                              ? "This link was revoked."
+                              : "This link has expired."}
+                          </p>
+                          <p className="text-xs text-amber-700/80 mt-1">
+                            Generate a new link to resume external collection,
+                            or upload files manually below.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleReissueIntakeLink}
+                            data-testid="wizard-regenerate-link"
+                            className="mt-3 px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition"
+                          >
+                            Generate new link
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
                       Upload Files
                     </h2>
