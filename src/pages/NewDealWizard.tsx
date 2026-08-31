@@ -463,15 +463,28 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     }
   };
 
-  // P5-02: consume-once read of the ref-held raw token. Passed to
-  // ShareLinkStep, which calls it inside a lazy useState initializer, so it
-  // runs exactly once per mount — after that first read the ref is null and
-  // the token exists only in that component instance's local state.
-  const takeToken = () => {
-    const t = rawTokenRef.current;
-    rawTokenRef.current = null;
-    return t;
-  };
+  // P5-02: read the ref-held raw token for the share-link step's display.
+  // Deliberately does NOT clear the ref on read: ShareLinkStep can unmount and
+  // remount within a single share-link visit (a parent re-render that briefly
+  // changes the rendered step — e.g. the intake-link query settling — flips
+  // `stepName` off and back), and clearing on read blanked the token to the
+  // "unavailable" state on that second mount. The single-display guarantee is
+  // instead enforced when the wizard leaves the step (the effect below), so the
+  // token survives an in-visit remount but is gone on any genuine re-entry.
+  const readToken = () => rawTokenRef.current;
+  // Clear the one-time token when the wizard SETTLES on a step other than
+  // share-link, so a later return to it (browser back/forward, or Continue then
+  // Back) never re-displays the link. Keyed on the committed step transition, NOT
+  // on ShareLinkStep's unmount, so a transient in-visit remount (see readToken)
+  // does not blank the token mid-display. The token only ever lived in this ref,
+  // never in query/reducer state or storage.
+  const prevStepForTokenRef = useRef(stepName);
+  useEffect(() => {
+    if (prevStepForTokenRef.current === "share-link" && stepName !== "share-link") {
+      rawTokenRef.current = null;
+    }
+    prevStepForTokenRef.current = stepName;
+  }, [stepName]);
 
   // P5-06: which WizardProgressBar step-2 label to show. `intakeLinkQuery.data`
   // is non-null once a link has ever been generated for this deal (any status),
@@ -614,7 +627,7 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
           )}
           {stepName === "share-link" && (
             <ShareLinkStep
-              takeToken={takeToken}
+              readToken={readToken}
               recipientEmail={state.recipientEmail}
               onContinue={() => navigate("/new-deal/upload-files")}
             />
