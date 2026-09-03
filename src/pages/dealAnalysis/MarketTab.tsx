@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Compass, Globe, Loader2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
-import { fetchMarket, marketQueryKey, type MarketFact } from "@/api/market";
+import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
+import { fetchMarket, marketQueryKey, type MarketFact, type MarketFactStatus } from "@/api/market";
 
 interface MarketTabProps {
   dealId: string;
@@ -58,15 +59,16 @@ function UnbackedSection({
 
 // A claim's trust status, as a small pill. Verified is the earned status; cited
 // and partially_verified are shown honestly as what they are, never dressed up.
-function StatusPill({ status }: { status: string }) {
-  const label =
-    status === "verified"
-      ? "Verified"
-      : status === "partially_verified"
-        ? "Partial"
-        : status === "cited"
-          ? "Cited"
-          : status;
+const STATUS_LABEL: Record<MarketFactStatus, string> = {
+  verified: "Verified",
+  partially_verified: "Partial",
+  cited: "Cited",
+};
+
+function StatusPill({ status }: { status: MarketFactStatus }) {
+  // Record keyed on the union -> a new/renamed status is a compile error here,
+  // not a silently unstyled pill. The ?? keeps an unexpected runtime value legible.
+  const label = STATUS_LABEL[status] ?? status;
   const verified = status === "verified";
   return (
     <span
@@ -175,21 +177,10 @@ export function MarketTab({ dealId }: MarketTabProps) {
 
   if (marketQuery.isError) {
     return (
-      <div
-        role="alert"
-        className="rounded-[10px] border px-4 py-3 text-[13px]"
-        style={{
-          borderColor: "color-mix(in srgb, var(--rev-danger) 35%, transparent)",
-          background: "color-mix(in srgb, var(--rev-danger) 6%, transparent)",
-        }}
-      >
-        <span className="font-medium text-[color:var(--rev-text-2)]">
-          Couldn&apos;t load market data for this deal.
-        </span>{" "}
-        <span className="text-[color:var(--rev-text-6)]">
-          {(marketQuery.error as Error | null)?.message ?? "Please try again."}
-        </span>
-      </div>
+      <QueryErrorAlert
+        message="Couldn't load market data for this deal."
+        error={marketQuery.error as Error | null}
+      />
     );
   }
 

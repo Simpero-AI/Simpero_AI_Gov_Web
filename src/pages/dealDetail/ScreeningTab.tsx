@@ -6,6 +6,7 @@ import { HighlightsPanel } from "@/components/mvp/screening/HighlightsPanel";
 import { RiskFlagsPanel } from "@/components/mvp/screening/RiskFlagsPanel";
 import { MandateFitPanel } from "@/components/mvp/screening/MandateFitPanel";
 import { ScreeningDecisionBar } from "@/components/mvp/screening/ScreeningDecisionBar";
+import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
 import { fetchScreening, screeningQueryKey } from "@/api/screening";
 import { fetchScreeningMaterials, screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { fetchScreeningInsights, screeningInsightsQueryKey } from "@/api/screeningInsights";
@@ -76,21 +77,11 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
       <MaterialsCard fileName={fileName} />
 
       {screeningQuery.isError ? (
-        <div
-          role="alert"
-          className="mt-4 rounded-[10px] border px-4 py-3 text-[13px]"
-          style={{
-            borderColor: "color-mix(in srgb, var(--rev-danger) 35%, transparent)",
-            background: "color-mix(in srgb, var(--rev-danger) 6%, transparent)",
-          }}
-        >
-          <span className="font-medium text-[color:var(--rev-text-2)]">
-            Couldn&apos;t load screening for this deal.
-          </span>{" "}
-          <span className="text-[color:var(--rev-text-6)]">
-            {(screeningQuery.error as Error | null)?.message ?? "Please try again."}
-          </span>
-        </div>
+        <QueryErrorAlert
+          message="Couldn't load screening for this deal."
+          error={screeningQuery.error as Error | null}
+          className="mt-4"
+        />
       ) : (
         <>
           <VerdictHeader verdict={view?.verdict ?? null} />

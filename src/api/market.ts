@@ -9,14 +9,18 @@ import { apiFetch } from "@/api/http";
  * has no such claims — the tab renders "information not available", never
  * fabricated market intel.
  */
+/** The trust statuses build_market_view emits -- only a claim that earned one of
+ * these reaches the tab. A literal union so a renamed/added value is a compile
+ * error at the StatusPill mapping, not a silently unstyled raw string. */
+export type MarketFactStatus = "verified" | "partially_verified" | "cited";
+
 export interface MarketFact {
   /** Metric name for sizing (e.g. "TAM"); the entity the assertion is about for a qualitative fact. */
   label: string;
   /** Formatted figure for sizing (e.g. "$5.00B"); the assertion text for a qualitative fact. */
   value: string;
   citation: string | null;
-  /** Trust status: "verified" | "partially_verified" | "cited". */
-  status: string;
+  status: MarketFactStatus;
   entity: string | null;
 }
 
