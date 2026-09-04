@@ -207,6 +207,19 @@ export function MarketTab({ dealId }: MarketTabProps) {
   // `sizing`/`definition`/`competition` above already coalesce a null view to [].
   return (
     <div className="space-y-5">
+      {/* Reaching here with isError set means a refetch failed while cached figures
+          remain -- react-query keeps `data` across a failed refetch and the
+          no-cached-data case returned above. Show the figures under a stale notice
+          rather than silently, or swapping in the error alert. */}
+      {marketQuery.isError ? (
+        <div
+          role="status"
+          className="rounded-[10px] border px-4 py-2.5 text-[12px] text-[color:var(--rev-text-6)]"
+          style={{ borderColor: "var(--rev-border)", background: "var(--rev-tint-neutral)" }}
+        >
+          Showing the last loaded market data — the latest refresh didn&apos;t go through.
+        </div>
+      ) : null}
       {/* Market Sizing */}
       <SectionCard eyebrow="Market Sizing" icon={<BarChart3 className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
         {sizing.length === 0 ? (

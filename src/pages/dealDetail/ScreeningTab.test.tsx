@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ScreeningTab } from "./ScreeningTab";
 import { fetchScreening } from "@/api/screening";
-import { fetchScreeningMaterials } from "@/api/screeningMaterials";
+import { fetchScreeningMaterials, screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { fetchScreeningInsights } from "@/api/screeningInsights";
 
 // ScreeningTab drives three INDEPENDENT queries (verdict, extracted materials,
@@ -70,5 +70,31 @@ describe("ScreeningTab", () => {
       await screen.findByText("Couldn't load the extracted figures for this deal.")
     ).toBeInTheDocument();
     expect(screen.getByText("Strong net retention")).toBeInTheDocument();
+  });
+
+  it("keeps the extracted grid on a transient materials refetch failure", async () => {
+    // react-query sets isError on a failed refetch but KEEPS the last-good data, so
+    // the error alert must be gated on there being no cached materials -- otherwise a
+    // transient refetch failure blanks a grid that still holds good figures.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mockScreening.mockResolvedValue(null);
+    mockMaterials.mockResolvedValueOnce({
+      extractedFields: [{ label: "ARR", value: "$4.2M", citation: null }],
+    });
+    mockInsights.mockResolvedValue({ highlights: [], riskFlags: [] });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ScreeningTab dealId="deal-1" fileName="cim.pdf" />
+      </QueryClientProvider>
+    );
+    expect(await screen.findByText("$4.2M")).toBeInTheDocument();
+
+    mockMaterials.mockRejectedValue(new Error("materials refetch 500"));
+    await queryClient.refetchQueries({ queryKey: screeningMaterialsQueryKey("deal-1") });
+
+    await waitFor(() => expect(screen.getByText("$4.2M")).toBeInTheDocument());
+    expect(
+      screen.queryByText("Couldn't load the extracted figures for this deal.")
+    ).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MarketTab } from "./MarketTab";
 import { fetchMarket, marketQueryKey, type MarketView } from "@/api/market";
@@ -132,12 +132,12 @@ describe("MarketTab", () => {
     expect(screen.queryByText("This deal is no longer available")).not.toBeInTheDocument();
   });
 
-  it("keeps the last figures rendered when a refetch fails, with no error alert", async () => {
-    // react-query retains cached data across a failed refetch (and only reports
-    // isError when nothing is cached), so a transient refresh failure after figures
-    // have loaded -- e.g. right after a re-analysis invalidates the query -- must not
-    // blank them or swap in the error alert, which is reserved for a first load with
-    // nothing cached.
+  it("keeps the last figures under a stale notice when a refetch fails", async () => {
+    // react-query keeps cached `data` across a failed refetch (and still reports
+    // isError), so a transient refresh failure after figures have loaded -- e.g.
+    // right after a re-analysis invalidates the query -- must keep the figures under
+    // a stale notice, never blank them or swap in the error alert (reserved for a
+    // first load with nothing cached).
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     mockFetchMarket.mockResolvedValueOnce({
       sizing: [{ label: "TAM", value: "$5.00B", citation: null, status: "verified", entity: null }],
@@ -154,6 +154,9 @@ describe("MarketTab", () => {
     mockFetchMarket.mockRejectedValue(new Error("refetch boom"));
     await queryClient.refetchQueries({ queryKey: marketQueryKey("deal-1") });
 
+    await waitFor(() =>
+      expect(screen.getByText(/Showing the last loaded market data/)).toBeInTheDocument()
+    );
     expect(screen.getByText("$5.00B")).toBeInTheDocument();
     expect(screen.queryByText("Couldn't load market data for this deal.")).not.toBeInTheDocument();
   });

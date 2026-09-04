@@ -89,12 +89,13 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
         </div>
       ) : (
         <>
-          {/* Scope the screening error to the verdict + mandate-fit region only.
-              The extracted grid (materialsQuery) and the highlight/risk panels
-              (insightsQuery) are independent queries -- when only the screening
-              verdict fails, they must keep rendering their own loaded data rather
-              than being blanked by a whole-tab error. */}
-          {screeningQuery.isError ? (
+          {/* Scope the screening error to the verdict + mandate-fit region only --
+              the extracted grid (materialsQuery) and highlight/risk panels
+              (insightsQuery) are independent and must keep rendering. And gate it on
+              there being NO cached verdict (view === null): react-query sets isError
+              on a failed REFETCH while keeping the last-good data, so an unguarded
+              check would blank a working verdict on a transient refresh failure. */}
+          {screeningQuery.isError && view === null ? (
             <QueryErrorAlert
               message="Couldn't load screening for this deal."
               error={screeningQuery.error as Error | null}
@@ -105,7 +106,10 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
             <div className="flex flex-col gap-5">
-              {materialsQuery.isError ? (
+              {materialsQuery.isError && materials === null ? (
+                // Same cached-data gate as the verdict above: a failed refetch keeps
+                // the last-good materials, so only show the error when there is no
+                // cached grid to fall back on.
                 <QueryErrorAlert
                   message="Couldn't load the extracted figures for this deal."
                   error={materialsQuery.error as Error | null}
@@ -118,7 +122,9 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
                 <RiskFlagsPanel items={insights?.riskFlags ?? null} />
               </div>
             </div>
-            {screeningQuery.isError ? null : <MandateFitPanel fit={view?.fit ?? null} />}
+            {screeningQuery.isError && view === null ? null : (
+              <MandateFitPanel fit={view?.fit ?? null} />
+            )}
           </div>
 
           <div className="mt-5">
