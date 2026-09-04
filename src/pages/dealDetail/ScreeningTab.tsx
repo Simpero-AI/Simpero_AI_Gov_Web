@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import { MaterialsCard } from "@/components/mvp/screening/MaterialsCard";
 import { VerdictHeader } from "@/components/mvp/screening/VerdictHeader";
 import { ExtractedGrid } from "@/components/mvp/screening/ExtractedGrid";
@@ -82,6 +83,16 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
           error={screeningQuery.error as Error | null}
           className="mt-4"
         />
+      ) : screeningQuery.isPending || materialsQuery.isPending ? (
+        // Guard the verdict + extracted grid the same way MarketTab does: their
+        // empty states are definitive negatives, so rendering them while these
+        // fast queries are still pending would flash a false "not available" on
+        // every screened deal. (Insights loads independently below -- its panels
+        // are meant to sit empty until it arrives, so it is deliberately excluded.)
+        <div className="mt-4 flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading…
+        </div>
       ) : (
         <>
           <VerdictHeader verdict={view?.verdict ?? null} />

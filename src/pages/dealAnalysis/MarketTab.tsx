@@ -173,7 +173,11 @@ export function MarketTab({ dealId }: MarketTabProps) {
     );
   }
 
-  if (marketQuery.isError) {
+  // A hard error with nothing cached blanks the tab -- but if a previous fetch
+  // left data in cache (e.g. a transient refetch failure right after a
+  // re-analysis invalidates the query), keep showing it under a stale notice
+  // rather than replacing real figures with an error alert.
+  if (marketQuery.isError && market === null) {
     return (
       <QueryErrorAlert
         message="Couldn't load market data for this deal."
@@ -182,8 +186,29 @@ export function MarketTab({ dealId }: MarketTabProps) {
     );
   }
 
+  // fetchMarket maps a 404 to null: the deal itself is gone, distinct from a deal
+  // that simply has no market claims (which is an empty MarketView, handled below).
+  if (market === null) {
+    return (
+      <EmptyState
+        icon={Globe}
+        title="This deal is no longer available"
+        description="It may have been deleted. Head back to the deals list and pick another."
+      />
+    );
+  }
+
   return (
     <div className="space-y-5">
+      {marketQuery.isError ? (
+        <div
+          role="status"
+          className="rounded-[10px] border px-4 py-2.5 text-[12px] text-[color:var(--rev-text-6)]"
+          style={{ borderColor: "var(--rev-border)", background: "var(--rev-tint-neutral)" }}
+        >
+          Showing the last loaded market data — the latest refresh didn&apos;t go through.
+        </div>
+      ) : null}
       {/* Market Sizing */}
       <SectionCard eyebrow="Market Sizing" icon={<BarChart3 className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
         {sizing.length === 0 ? (
