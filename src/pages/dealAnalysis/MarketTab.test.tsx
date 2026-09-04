@@ -97,6 +97,29 @@ describe("MarketTab", () => {
     expect(await screen.findByText("Couldn't load market data for this deal.")).toBeInTheDocument();
   });
 
+  it("renders the backend fallback label for a qualitative fact with no named entity", async () => {
+    // A qualitative assertion with no entity carries the backend's class fallback in
+    // `label` ("The market" / "Competitor"); the row header must show it, not the
+    // raw null entity as a bare em-dash.
+    mockFetchMarket.mockResolvedValue({
+      sizing: [],
+      marketDefinition: [
+        {
+          label: "The market",
+          value: "The market is highly fragmented.",
+          citation: null,
+          status: "verified",
+          entity: null,
+        },
+      ],
+      competitivePosition: [],
+    });
+    renderMarketTab();
+
+    expect(await screen.findByText("The market is highly fragmented.")).toBeInTheDocument();
+    expect(screen.getByText("The market")).toBeInTheDocument();
+  });
+
   it("treats a 404 (null view) as 'no market data yet', not a deleted deal", async () => {
     // fetchMarket maps a 404 to null. The parent DealDetail has already proven the
     // deal exists, so the tab must render the neutral per-section empty states, not

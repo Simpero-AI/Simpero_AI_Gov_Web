@@ -77,13 +77,7 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
 
       <MaterialsCard fileName={fileName} />
 
-      {screeningQuery.isError ? (
-        <QueryErrorAlert
-          message="Couldn't load screening for this deal."
-          error={screeningQuery.error as Error | null}
-          className="mt-4"
-        />
-      ) : screeningQuery.isPending || materialsQuery.isPending ? (
+      {screeningQuery.isPending || materialsQuery.isPending ? (
         // Guard the verdict + extracted grid the same way MarketTab does: their
         // empty states are definitive negatives, so rendering them while these
         // fast queries are still pending would flash a false "not available" on
@@ -95,7 +89,19 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
         </div>
       ) : (
         <>
-          <VerdictHeader verdict={view?.verdict ?? null} />
+          {/* Scope the screening error to the verdict + mandate-fit region only.
+              The extracted grid (materialsQuery) and the highlight/risk panels
+              (insightsQuery) are independent queries -- when only the screening
+              verdict fails, they must keep rendering their own loaded data rather
+              than being blanked by a whole-tab error. */}
+          {screeningQuery.isError ? (
+            <QueryErrorAlert
+              message="Couldn't load screening for this deal."
+              error={screeningQuery.error as Error | null}
+            />
+          ) : (
+            <VerdictHeader verdict={view?.verdict ?? null} />
+          )}
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
             <div className="flex flex-col gap-5">
@@ -112,7 +118,7 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
                 <RiskFlagsPanel items={insights?.riskFlags ?? null} />
               </div>
             </div>
-            <MandateFitPanel fit={view?.fit ?? null} />
+            {screeningQuery.isError ? null : <MandateFitPanel fit={view?.fit ?? null} />}
           </div>
 
           <div className="mt-5">

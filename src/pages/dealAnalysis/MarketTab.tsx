@@ -136,7 +136,11 @@ function AssertionRow({ fact }: { fact: MarketFact }) {
       <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{fact.value}</p>
       <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-[color:var(--rev-border-subtle)] pt-2.5">
         <span className="truncate text-[11.5px] text-[color:var(--rev-text-5)]">
-          {fact.entity || "—"}
+          {/* label is the row header the backend computes: the named entity, or a
+              class-appropriate fallback ("The market" / "Competitor") when the
+              assertion has no entity. Rendering the raw `entity` here dropped that
+              fallback and showed a bare em-dash for every unattributed assertion. */}
+          {fact.label || "—"}
         </span>
         <span className="flex shrink-0 items-center gap-2.5">
           <Citation citation={fact.citation} />
