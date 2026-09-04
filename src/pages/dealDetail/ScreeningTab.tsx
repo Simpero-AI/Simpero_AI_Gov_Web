@@ -116,9 +116,11 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
             ) : (
               <ExtractedGrid fields={extractedFields} />
             )}
-            {screeningQuery.isError && view === null ? null : (
-              <MandateFitPanel fit={view?.fit ?? null} />
-            )}
+            {/* MandateFitPanel renders its own "not yet screened" empty state for
+                fit === null, so show it even on a screening error (the failure is
+                already surfaced in the verdict slot above) rather than leaving an
+                unexplained blank cell next to the error. */}
+            <MandateFitPanel fit={view?.fit ?? null} />
           </div>
         </>
       )}

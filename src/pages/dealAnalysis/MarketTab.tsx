@@ -100,9 +100,10 @@ const SIZING_DESC: Record<string, string> = {
 };
 
 function SizingCard({ fact }: { fact: MarketFact }) {
-  // A known acronym gets its human description as the caption; an unknown label
-  // (e.g. "Market Size") shows its citation string there instead. Computed once
-  // so the caption and the below-the-line citation can't fall out of sync.
+  // A known acronym (TAM/SAM/SOM) gets its human description as the caption; an
+  // unknown label (e.g. "Market Size", "Market Growth (CAGR)") has no caption
+  // text. The citation always renders below via <Citation>, so it never doubles
+  // into the caption and an absent citation never leaves a blank caption line.
   const description = SIZING_DESC[fact.label];
   return (
     <div
@@ -116,12 +117,10 @@ function SizingCard({ fact }: { fact: MarketFact }) {
         {fact.value}
       </p>
       <div className="flex items-center justify-between gap-2 border-t border-[color:var(--rev-border)] pt-2.5">
-        <span className="text-[12px] text-[color:var(--rev-text-4)]">
-          {description ?? fact.citation}
-        </span>
+        <span className="text-[12px] text-[color:var(--rev-text-4)]">{description ?? ""}</span>
         <StatusPill status={fact.status} />
       </div>
-      {description && fact.citation ? (
+      {fact.citation ? (
         <div className="mt-2">
           <Citation citation={fact.citation} />
         </div>

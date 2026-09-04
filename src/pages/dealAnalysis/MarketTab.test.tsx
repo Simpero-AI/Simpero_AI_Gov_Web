@@ -79,6 +79,26 @@ describe("MarketTab", () => {
     expect(screen.queryByText("Competitive position not available")).not.toBeInTheDocument();
   });
 
+  it("renders a non-acronym sizing label with a null citation cleanly (no blank/doubled caption)", async () => {
+    // "Market Size" / "Market Growth (CAGR)" aren't in SIZING_DESC, so they have
+    // no caption description. With a null citation the card still renders value +
+    // status; with a citation it renders exactly once (below the line, never
+    // doubled into the caption).
+    mockFetchMarket.mockResolvedValue({
+      sizing: [
+        { label: "Market Size", value: "$1.20B", citation: null, status: "verified", entity: null },
+        { label: "Market Growth (CAGR)", value: "8%", citation: "cim.pdf · p.5", status: "cited", entity: null },
+      ],
+      marketDefinition: [],
+      competitivePosition: [],
+    });
+    renderMarketTab();
+
+    expect(await screen.findByText("$1.20B")).toBeInTheDocument();
+    expect(screen.getByText("8%")).toBeInTheDocument();
+    expect(screen.getAllByText("cim.pdf · p.5")).toHaveLength(1);
+  });
+
   it("shows a loading state, not a false empty-state, while the fetch is pending", () => {
     // A never-resolving fetch keeps the query pending. The tab must render its
     // loading state and NOT the definitive "not available" negatives, which
