@@ -99,7 +99,14 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
             <div className="flex flex-col gap-5">
-              <ExtractedGrid fields={extractedFields} />
+              {materialsQuery.isError ? (
+                <QueryErrorAlert
+                  message="Couldn't load the extracted figures for this deal."
+                  error={materialsQuery.error as Error | null}
+                />
+              ) : (
+                <ExtractedGrid fields={extractedFields} />
+              )}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <HighlightsPanel items={insights?.highlights ?? null} />
                 <RiskFlagsPanel items={insights?.riskFlags ?? null} />

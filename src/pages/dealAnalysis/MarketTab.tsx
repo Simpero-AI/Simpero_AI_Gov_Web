@@ -74,7 +74,14 @@ const STATUS_TONE: Record<MarketFactStatus, "success" | "neutral"> = {
 };
 
 function StatusPill({ status }: { status: MarketFactStatus }) {
-  return <StatusChip status={STATUS_TONE[status]}>{STATUS_LABEL[status]}</StatusChip>;
+  // fetchMarket casts the API JSON unchecked, so at runtime `status` may be a value
+  // outside the union (a backend rename ahead of a frontend deploy, or a bad row).
+  // Look it up as a plain string so an unknown value falls back to a legible neutral
+  // pill showing the raw value, not a blank, tone-less badge. The Records stay
+  // union-keyed, so a code-side typo is still a compile error.
+  const tone = (STATUS_TONE as Record<string, "success" | "neutral">)[status] ?? "neutral";
+  const label = (STATUS_LABEL as Record<string, string>)[status] ?? status;
+  return <StatusChip status={tone}>{label}</StatusChip>;
 }
 
 function Citation({ citation }: { citation: string | null }) {
