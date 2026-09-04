@@ -62,6 +62,7 @@ import { TeamMemberCard } from "@/components/mvp/icMemo/TeamMemberCard";
 import { DealHeaderCard } from "@/components/mvp/dealDetail/DealHeaderCard";
 import { apiFetch } from "@/api/http";
 import { screeningQueryKey } from "@/api/screening";
+import { marketQueryKey } from "@/api/market";
 import { ScreeningTab } from "./dealDetail/ScreeningTab";
 import {
   formatUsdShort,
@@ -662,9 +663,12 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
       jobStatus === "complete"
     ) {
       void queryClient.invalidateQueries({ queryKey: dealQueryKey(dealId) });
-      // Screening lands as part of the same pipeline; refetch it too so a user
-      // parked on the Screening tab sees the verdict without a manual reload.
+      // Screening and Market both land from the same pipeline; refetch them too
+      // so a user parked on either tab sees the fresh result without a manual
+      // reload (Market especially: a re-analysis is exactly when its previously
+      // empty sizing/definition/competition populate).
       void queryClient.invalidateQueries({ queryKey: screeningQueryKey(dealId) });
+      void queryClient.invalidateQueries({ queryKey: marketQueryKey(dealId) });
       setJustCompleted(true);
     }
   }, [jobStatus, dealId, queryClient]);

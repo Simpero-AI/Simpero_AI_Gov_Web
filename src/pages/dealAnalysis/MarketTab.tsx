@@ -4,6 +4,7 @@ import { BarChart3, Compass, Globe, Loader2, type LucideIcon } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
 import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
+import { StatusChip } from "@/components/mvp/common/StatusChip";
 import { fetchMarket, marketQueryKey, type MarketFact, type MarketFactStatus } from "@/api/market";
 
 interface MarketTabProps {
@@ -57,30 +58,23 @@ function UnbackedSection({
   return <EmptyState icon={icon} title={title} description={description} className="border-none p-0" />;
 }
 
-// A claim's trust status, as a small pill. Verified is the earned status; cited
-// and partially_verified are shown honestly as what they are, never dressed up.
+// A claim's trust status, as the app's shared StatusChip. Verified is the earned
+// status (success tone); cited and partially_verified are shown honestly as
+// neutral, never dressed up. Records keyed on the union -> a new/renamed status
+// is a compile error here, not a silently unstyled pill.
 const STATUS_LABEL: Record<MarketFactStatus, string> = {
   verified: "Verified",
   partially_verified: "Partial",
   cited: "Cited",
 };
+const STATUS_TONE: Record<MarketFactStatus, "success" | "neutral"> = {
+  verified: "success",
+  partially_verified: "neutral",
+  cited: "neutral",
+};
 
 function StatusPill({ status }: { status: MarketFactStatus }) {
-  // Record keyed on the union -> a new/renamed status is a compile error here,
-  // not a silently unstyled pill. The ?? keeps an unexpected runtime value legible.
-  const label = STATUS_LABEL[status] ?? status;
-  const verified = status === "verified";
-  return (
-    <span
-      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.5px]"
-      style={{
-        color: verified ? "var(--rev-success)" : "var(--rev-text-6)",
-        background: verified ? "var(--rev-tint-success)" : "var(--rev-tint-neutral)",
-      }}
-    >
-      {label}
-    </span>
-  );
+  return <StatusChip status={STATUS_TONE[status]}>{STATUS_LABEL[status]}</StatusChip>;
 }
 
 function Citation({ citation }: { citation: string | null }) {
@@ -99,6 +93,10 @@ const SIZING_DESC: Record<string, string> = {
 };
 
 function SizingCard({ fact }: { fact: MarketFact }) {
+  // A known acronym gets its human description as the caption; an unknown label
+  // (e.g. "Market Size") shows its citation string there instead. Computed once
+  // so the caption and the below-the-line citation can't fall out of sync.
+  const description = SIZING_DESC[fact.label];
   return (
     <div
       className="rounded-xl border border-[color:var(--rev-border)] p-5"
@@ -112,11 +110,11 @@ function SizingCard({ fact }: { fact: MarketFact }) {
       </p>
       <div className="flex items-center justify-between gap-2 border-t border-[color:var(--rev-border)] pt-2.5">
         <span className="text-[12px] text-[color:var(--rev-text-4)]">
-          {SIZING_DESC[fact.label] ?? <Citation citation={fact.citation} />}
+          {description ?? fact.citation}
         </span>
         <StatusPill status={fact.status} />
       </div>
-      {SIZING_DESC[fact.label] && fact.citation ? (
+      {description && fact.citation ? (
         <div className="mt-2">
           <Citation citation={fact.citation} />
         </div>
