@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router";
 import AdminGuard from "./components/AdminGuard";
 import AdminHome from "./pages/AdminHome";
+import IntakeQuestions from "./pages/IntakeQuestions";
 import Invitations from "./pages/Invitations";
 import MandateTaxonomy from "./pages/MandateTaxonomy";
 import Members from "./pages/Members";
@@ -22,6 +23,7 @@ export default function AdminApp() {
         <Route path="organizations" element={<Organizations />} />
         <Route path="organizations/:orgId" element={<OrgDetail />} />
         <Route path="mandate-taxonomy" element={<MandateTaxonomy />} />
+        <Route path="intake-questions" element={<IntakeQuestions />} />
         <Route path="members" element={<Members />} />
         <Route path="invitations" element={<Invitations />} />
         {/* Unknown admin path falls back to the product root (wouter's `~/`). */}

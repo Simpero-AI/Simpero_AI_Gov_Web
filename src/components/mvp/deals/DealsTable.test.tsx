@@ -26,6 +26,7 @@ function makeRow(over: Partial<LivePipelineRow> = {}): LivePipelineRow {
     irrPct: null,
     actionPill: null,
     agentStatus: { jobStatus: "complete", currentPhase: null, steps: [] },
+    intakeStatus: "none",
     ...over,
   };
 }
@@ -117,5 +118,56 @@ describe("DealsTable", () => {
   it("shows an empty-state row when no deals match the current filters", () => {
     render(<DealsTable rows={[makeRow({ dealId: "1", name: "Acme", state: "declined" })]} />);
     expect(screen.getByText("No deals match the current filters.")).toBeInTheDocument();
+  });
+
+  it("routes to the deal analysis page when intakeStatus is absent on the wire", () => {
+    // intakeStatus is required in TypeScript, but that's a type-level
+    // guarantee, not a wire one: Alpha PR #160 (P3-06) hasn't merged, so
+    // GET /deals/pipeline doesn't send this field yet. Covers a pre-#160
+    // backend and any future rollback — `unknown` is needed because the
+    // type system won't let a real LivePipelineRow omit the field.
+    const { intakeStatus: _omitted, ...withoutIntakeStatus } = makeRow({ dealId: "1", name: "Acme" });
+    const row = withoutIntakeStatus as unknown as LivePipelineRow;
+    render(<DealsTable rows={[row]} />);
+    expect(screen.getByRole("link", { name: /Acme/ })).toHaveAttribute("href", "/deals/1/analysis");
+  });
+
+  it("routes to the deal analysis page when intakeStatus is 'none'", () => {
+    const row = makeRow({ dealId: "1", name: "Acme", intakeStatus: "none" });
+    render(<DealsTable rows={[row]} />);
+    expect(screen.getByRole("link", { name: /Acme/ })).toHaveAttribute("href", "/deals/1/analysis");
+  });
+
+  it("routes to the upload-files wizard step when intakeStatus is 'pending'", () => {
+    const row = makeRow({ dealId: "1", name: "Acme", intakeStatus: "pending" });
+    render(<DealsTable rows={[row]} />);
+    expect(screen.getByRole("link", { name: /Acme/ })).toHaveAttribute("href", "/new-deal/upload-files?dealId=1");
+  });
+
+  it("routes to the confirm wizard step when intakeStatus is 'submitted'", () => {
+    const row = makeRow({ dealId: "1", name: "Acme", intakeStatus: "submitted" });
+    render(<DealsTable rows={[row]} />);
+    expect(screen.getByRole("link", { name: /Acme/ })).toHaveAttribute("href", "/new-deal/confirm?dealId=1");
+  });
+
+  it("a mixed grid routes each row independently by its own intakeStatus", () => {
+    const rows = [
+      makeRow({ dealId: "1", name: "AlphaCo", intakeStatus: "none" }),
+      makeRow({ dealId: "2", name: "BravoCo", intakeStatus: "pending" }),
+      makeRow({ dealId: "3", name: "CharlieCo", intakeStatus: "submitted" }),
+      makeRow({ dealId: "4", name: "DeltaCo", intakeStatus: "none" }),
+    ];
+    render(<DealsTable rows={rows} />);
+
+    expect(screen.getByRole("link", { name: /AlphaCo/ })).toHaveAttribute("href", "/deals/1/analysis");
+    expect(screen.getByRole("link", { name: /BravoCo/ })).toHaveAttribute(
+      "href",
+      "/new-deal/upload-files?dealId=2"
+    );
+    expect(screen.getByRole("link", { name: /CharlieCo/ })).toHaveAttribute(
+      "href",
+      "/new-deal/confirm?dealId=3"
+    );
+    expect(screen.getByRole("link", { name: /DeltaCo/ })).toHaveAttribute("href", "/deals/4/analysis");
   });
 });

@@ -1,4 +1,4 @@
-import { Building2, ListChecks, Mail, Users } from "lucide-react";
+import { Building2, FileQuestion, ListChecks, Mail, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ function navItemsFor(isPlatformAdmin: boolean, isOrgAdmin: boolean): NavItem[] {
   if (isPlatformAdmin) {
     items.push({ href: ADMIN_ROUTES.organizations, label: "Organizations", icon: Building2 });
     items.push({ href: ADMIN_ROUTES.mandateTaxonomy, label: "Mandate Taxonomy", icon: ListChecks });
+    items.push({ href: ADMIN_ROUTES.intakeQuestions, label: "Intake Questions", icon: FileQuestion });
   }
   if (isOrgAdmin) {
     items.push({ href: ADMIN_ROUTES.members, label: "Members", icon: Users });

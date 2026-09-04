@@ -46,8 +46,22 @@ backend, and what needs a human decision.
   they ever disagree). This does **not** relax the rule above for
   `src/shared/` (still the faithful rendering contract) or for the New Deal
   flow (`src/pages/NewDealWizard.tsx`, `src/pages/newDealWizard/**`, route
-  `/new-deal/:step?`), which keeps its pixel-identical obligation even while
-  the redesign landed around it — the one carve-out inside the carve-out.
+  `/new-deal/:step?`) — subject to one further, narrower exception
+  immediately below, the New Deal flow keeps its pixel-identical obligation
+  even while the redesign landed around it, the one carve-out inside the
+  carve-out.
+- **Second exception (2026-08-27):** the External Deal Intake Link feature —
+  Web-side plan: `docs/plans/external-deal-intake-link-implementation-brief.md`
+  (companion Alpha brief of the same name covers the backend); status:
+  `docs/plans/external-deal-intake-link-web-status.md`. This narrows the New
+  Deal pixel-identical obligation above, and only that. The pre-existing
+  three-step path (`details` / `upload-files` / `confirm`) is unaffected and
+  keeps the obligation unchanged. Net-new surface added for this feature is
+  exempt from it: the Step 1 "collect externally" checkbox and recipient-email
+  field, the new `share-link` wizard step, and the conditional Step 2
+  (waiting panel) / Step 3 (answers + per-document status) content shown only
+  on the external-intake branch. `src/shared/` remains out of scope of this
+  exception too, same as the one above.
 - **Redesigned pages must never fabricate data to match the mockup.** Where
   a mockup section has no backing field on `simperoTypes.ts`, render it as a
   real-shaped `UnbackedSection`/empty state instead of inventing content;

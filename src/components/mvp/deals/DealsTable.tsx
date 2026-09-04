@@ -24,6 +24,19 @@ export type DealsTableTab = "active" | "rejected" | "all";
  */
 type RowWithConfidential = LivePipelineRow & { confidential?: boolean };
 
+/**
+ * P3-06/P5-07: a live/waiting link sends the row to the wizard's waiting
+ * panel (Step 2) or answers step (Step 3) instead of the ordinary analysis
+ * page — `intakeStatus` is already collapsed to these three states
+ * server-side (see LivePipelineRow's doc comment), so no further collapsing
+ * happens here.
+ */
+export function dealRowHref(row: LivePipelineRow): string {
+  if (row.intakeStatus === "pending") return `/new-deal/upload-files?dealId=${row.dealId}`;
+  if (row.intakeStatus === "submitted") return `/new-deal/confirm?dealId=${row.dealId}`;
+  return `/deals/${row.dealId}/analysis`;
+}
+
 /** Exported for reuse by `DealHeaderCard` (deal-detail shell) — one stage→style mapping, not two. */
 export const STAGE_STYLES: Record<DealState, { bg: string; fg: string; label: string }> = {
   sourcing: { bg: "var(--rev-tint-neutral)", fg: "var(--rev-text-4)", label: "Sourcing" },
@@ -187,7 +200,7 @@ export function DealsTable({ rows, nameQuery = "", className }: DealsTableProps)
                 return (
                   <DenseTableRow key={row.dealId}>
                     <DenseTableCell className="p-0">
-                      <Link to={`/deals/${row.dealId}/analysis`} className="flex items-center gap-3 px-5 py-3.5 no-underline">
+                      <Link to={dealRowHref(row)} className="flex items-center gap-3 px-5 py-3.5 no-underline">
                         <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[9px] bg-[color:var(--rev-tint-primary)] font-mono text-[13px] font-semibold text-[color:var(--rev-primary)]">
                           {initials(row.name)}
                         </div>

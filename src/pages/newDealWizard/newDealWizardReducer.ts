@@ -8,6 +8,12 @@ export type WizardState = {
   dealSizeMaxM: string;
   sectorTags: string[];
 
+  // Step 1 — external collection branch (P5-01). NOT persisted to localStorage:
+  // adding a field to PersistedStep1 invalidates every existing draft via
+  // isPersistedStep1, and recipientEmail is PII.
+  collectExternally: boolean;
+  recipientEmail: string;
+
   // Step 2
   /** Set once `DealDocumentUpload` reports at least one successful upload this session — gates the Step 3 guard. */
   hasUploadedDocument: boolean;
@@ -25,9 +31,10 @@ export type WizardState = {
 export type WizardAction =
   | {
       type: "set_field";
-      key: "dealName" | "gpSource" | "dealSizeMinM" | "dealSizeMaxM";
+      key: "dealName" | "gpSource" | "dealSizeMinM" | "dealSizeMaxM" | "recipientEmail";
       value: string;
     }
+  | { type: "set_collect_externally"; enabled: boolean }
   | { type: "toggle_sector"; tag: string }
   | { type: "document_uploaded" }
   | { type: "submitting_start" }
@@ -57,6 +64,9 @@ export function initialWizardState(): WizardState {
     dealSizeMaxM: "",
     sectorTags: [],
 
+    collectExternally: false,
+    recipientEmail: "",
+
     hasUploadedDocument: false,
 
     submitting: false,
@@ -82,6 +92,9 @@ export function newDealWizardReducer(
   switch (action.type) {
     case "set_field":
       return { ...state, [action.key]: action.value } as WizardState;
+
+    case "set_collect_externally":
+      return { ...state, collectExternally: action.enabled };
 
     case "toggle_sector": {
       const tags = state.sectorTags.includes(action.tag)

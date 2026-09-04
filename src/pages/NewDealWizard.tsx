@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AnalysisApiError,
   createDeal,
@@ -9,7 +9,17 @@ import {
   fetchDeal,
   startDealAnalysis,
 } from "@/api/deals";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { dealDocumentsQueryKey, fetchDealDocuments } from "@/api/documents";
+import {
+  IntakeApiError,
+  createIntakeLink,
+  fetchIntakeLink,
+  fetchIntakeResponse,
+  intakeLinkQueryKey,
+  intakeResponseQueryKey,
+} from "@/api/intakeLink";
+import { evaluateConfirmGate } from "./newDealWizard/confirmStepGate";
+import { AlertTriangle, ArrowLeft, ArrowRight } from "lucide-react";
 import { MvpAppShell } from "@/components/mvp/shell/MvpAppShell";
 import { MvpSidebar } from "@/components/mvp/shell/MvpSidebar";
 import { MvpFundSelector } from "@/components/mvp/shell/MvpFundSelector";
@@ -24,6 +34,8 @@ import { getLoginUrl } from "@/const";
 
 import { WizardProgressBar } from "./newDealWizard/WizardProgressBar";
 import { Step1Details } from "./newDealWizard/Step1Details";
+import { ShareLinkStep } from "./newDealWizard/ShareLinkStep";
+import { Step2WaitingPanel } from "./newDealWizard/Step2WaitingPanel";
 import { Step3Confirm } from "./newDealWizard/Step3Confirm";
 import { DealDocumentUpload } from "@/components/deals/DealDocumentUpload";
 import {
@@ -39,8 +51,13 @@ import {
   type PersistedStep1,
 } from "./newDealWizard/storage";
 
-const VALID_STEPS = new Set(["details", "upload-files", "confirm"]);
-type StepName = "details" | "upload-files" | "confirm";
+const VALID_STEPS = new Set([
+  "details",
+  "upload-files",
+  "share-link",
+  "confirm",
+]);
+type StepName = "details" | "upload-files" | "share-link" | "confirm";
 
 interface NewDealWizardProps {
   step?: string;
@@ -58,6 +75,7 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
   const nav = buildMvpNav({ id: authUser?.id ?? "anon", role });
   const navigate = useNavigate();
   const { search } = useLocation();
+  const queryClient = useQueryClient();
 
   // Normalize the route param.
   const stepName: StepName = useMemo(() => {
@@ -66,8 +84,10 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     return step as StepName;
   }, [step]);
 
+  // "share-link" is the external-collection branch's own step 2 (alongside
+  // "upload-files") — it maps to the same progress-bar index.
   const currentStepIdx: 1 | 2 | 3 =
-    stepName === "details" ? 1 : stepName === "upload-files" ? 2 : 3;
+    stepName === "details" ? 1 : stepName === "confirm" ? 3 : 2;
 
   // Parse `?dealId=` for attach mode. dealId is an opaque UUID string
   // (Deal.id in the backend) — no numeric coercion, same idiom as DealAnalysis.tsx.
@@ -81,6 +101,11 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     newDealWizardReducer,
     initialWizardState()
   );
+  // Holds the raw intake-link token between creation (P5-01) and the share-link
+  // step's display (P5-02) — deliberately a ref, never query/reducer state, so it
+  // never lands in the QueryClient cache or gets serialized anywhere.
+  const rawTokenRef = useRef<string | null>(null);
+
   // localStorage rehydrate on mount (skip in attach mode).
   const rehydratedRef = useRef(false);
   useEffect(() => {
@@ -131,6 +156,31 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     queryFn: () => fetchDeal(attachDealIdFromUrl as string),
     enabled: attachDealIdFromUrl != null,
   });
+
+  // P5-03: the Step 3 guard is server-driven, not `state.hasUploadedDocument`
+  // (which only ever reflects a fresh in-session upload — see
+  // confirmStepGate.ts). Neither query overrides the global retry policy
+  // (no `retry: false`): a transient blip must not read as a hard block.
+  const documentsQuery = useQuery({
+    queryKey: dealDocumentsQueryKey(state.attachDealId ?? ""),
+    queryFn: () => fetchDealDocuments(state.attachDealId as string),
+    enabled: state.attachDealId != null,
+  });
+  const intakeLinkQuery = useQuery({
+    queryKey: intakeLinkQueryKey(state.attachDealId ?? ""),
+    queryFn: () => fetchIntakeLink(state.attachDealId as string),
+    enabled: state.attachDealId != null,
+  });
+  // P5-05: the response 404s (by contract, §3.2) unless a link has actually
+  // been submitted, so there's no point calling it any earlier.
+  const intakeResponseQuery = useQuery({
+    queryKey: intakeResponseQueryKey(state.attachDealId ?? ""),
+    queryFn: () => fetchIntakeResponse(state.attachDealId as string),
+    enabled:
+      state.attachDealId != null &&
+      intakeLinkQuery.data?.status === "submitted",
+  });
+
   useEffect(() => {
     if (attachDealIdFromUrl == null) return;
     if (!dealQuery.data) return;
@@ -185,13 +235,43 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
         toast.error("Create the deal first");
         navigate("/new-deal");
       }
+    } else if (stepName === "share-link") {
+      // Guard on the deal, never on the token — the token being absent (already
+      // consumed, or a reload) is a legitimate render state for this step, not
+      // an error condition to bounce out of.
+      if (state.attachDealId == null) {
+        toast.error("Create the deal first");
+        navigate("/new-deal");
+      }
     } else if (stepName === "confirm") {
       if (state.attachDealId == null) {
         toast.error("Create the deal first");
         navigate("/new-deal");
-      } else if (!state.hasUploadedDocument) {
-        toast.error("Attach a primary document first");
-        navigate("/new-deal/upload-files");
+        return;
+      }
+      const gate = evaluateConfirmGate({
+        documents: documentsQuery.isLoading
+          ? { kind: "loading" }
+          : documentsQuery.isError
+            ? { kind: "error" }
+            : {
+                kind: "ready",
+                count:
+                  (documentsQuery.data?.length ?? 0) +
+                  (state.hasUploadedDocument ? 1 : 0),
+              },
+        intakeLink: intakeLinkQuery.isLoading
+          ? { kind: "loading" }
+          : intakeLinkQuery.isError
+            ? { kind: "error" }
+            : { kind: "ready", status: intakeLinkQuery.data?.status ?? null },
+      });
+      if (gate.kind === "block") {
+        toast.error(gate.title, {
+          id: "new-deal-step-gate",
+          description: gate.description,
+        });
+        navigate(gate.to);
       }
     }
   }, [
@@ -202,6 +282,12 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     state.hasUploadedDocument,
     state.attachDealId,
     navigate,
+    documentsQuery.isLoading,
+    documentsQuery.isError,
+    documentsQuery.data,
+    intakeLinkQuery.isLoading,
+    intakeLinkQuery.isError,
+    intakeLinkQuery.data,
   ]);
 
   // Step 1 → Step 2: the deal is created here (not at final submit) so that
@@ -236,6 +322,34 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
         sectorTags: state.sectorTags,
       });
       dispatch({ type: "deal_created", dealId: created.id });
+      if (state.collectExternally) {
+        // Direct await, not useMutation — matches createDeal's idiom above and,
+        // critically, keeps the raw token out of the MutationCache (P5-02).
+        try {
+          const link = await createIntakeLink(created.id, {
+            recipientEmail: state.recipientEmail.trim(),
+          });
+          rawTokenRef.current = link.token;
+          queryClient.invalidateQueries({
+            queryKey: intakeLinkQueryKey(created.id),
+          });
+          navigate("/new-deal/share-link");
+        } catch (err) {
+          // The deal already exists at this point (`deal_created` above already
+          // fired) — this is NOT a "could not create deal" failure and must never
+          // look like one. P3-01's 409 details are already human-readable, so they
+          // pass straight through; no status branch earns its keep here.
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Could not generate the intake link";
+          toast.error("Could not generate the intake link", {
+            description: message,
+          });
+          navigate("/new-deal/upload-files");
+        }
+        return;
+      }
       navigate("/new-deal/upload-files");
     } catch (err) {
       const message =
@@ -313,6 +427,62 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     navigate(`/analysis/${dealId}`);
   };
 
+  // P5-05 (F10 fix): regenerate a link when a submitted response left no
+  // usable documents. Reuses P5-01's exact token mechanism — same
+  // `createIntakeLink` call, same ref-only token handoff, same destination —
+  // deliberately not a second token path. Prefers the fetched link's
+  // recipientEmail (attach mode never populates `state.recipientEmail`,
+  // since `set_attach_deal_id` doesn't carry it) over local wizard state.
+  const handleReissueIntakeLink = async () => {
+    if (state.attachDealId == null) return;
+    const recipientEmail =
+      intakeLinkQuery.data?.recipientEmail ?? state.recipientEmail;
+    try {
+      const link = await createIntakeLink(state.attachDealId, {
+        recipientEmail,
+      });
+      rawTokenRef.current = link.token;
+      queryClient.invalidateQueries({
+        queryKey: intakeLinkQueryKey(state.attachDealId),
+      });
+      navigate("/new-deal/share-link");
+    } catch (err) {
+      // 409 here is the expected outcome, not an edge case — reissue races
+      // ux_deal_intake_link_pending_deal (a link already generated in
+      // another tab, or the lazy-expire on the old one hasn't run yet), same
+      // idiom as Step2WaitingPanel's revoke handling.
+      if (err instanceof IntakeApiError && err.status === 409) {
+        toast.error("A link is already active for this deal", {
+          description: "Refresh to see its current status.",
+        });
+      } else {
+        const message =
+          err instanceof Error ? err.message : "Could not generate a new link";
+        toast.error("Could not generate a new link", { description: message });
+      }
+    }
+  };
+
+  // P5-02: consume-once read of the ref-held raw token. Passed to
+  // ShareLinkStep, which calls it inside a lazy useState initializer, so it
+  // runs exactly once per mount — after that first read the ref is null and
+  // the token exists only in that component instance's local state.
+  const takeToken = () => {
+    const t = rawTokenRef.current;
+    rawTokenRef.current = null;
+    return t;
+  };
+
+  // P5-06: which WizardProgressBar step-2 label to show. `intakeLinkQuery.data`
+  // is non-null once a link has ever been generated for this deal (any status),
+  // which covers reloads/back-navigation after Step 1, not just the in-session flag.
+  const externalBranch =
+    state.collectExternally || intakeLinkQuery.data != null;
+
+  // P5-04: effective status per §3.4 — the server already resolves a stale
+  // `pending` row to `expired`, so this is a direct read, not a re-derivation.
+  const intakeStatus = intakeLinkQuery.data?.status ?? null;
+
   return (
     <MvpAppShell>
       <MvpAppShell.Sidebar>
@@ -358,7 +528,10 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
             className="mb-6"
           />
 
-          <WizardProgressBar currentStep={currentStepIdx} />
+          <WizardProgressBar
+            currentStep={currentStepIdx}
+            step2Label={externalBranch ? "External Collection" : undefined}
+          />
 
           {stepName === "details" && (
             <Step1Details
@@ -371,20 +544,74 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
           )}
           {stepName === "upload-files" && (
             <div className="space-y-5" data-testid="wizard-step-2">
-              {/* `state.attachDealId != null` narrows for the DealDocumentUpload
-                  prop below — the step guard effect above redirects away from
-                  this step once attachDealId is null, but that redirect is async,
-                  so this narrowing check covers the brief window before it fires. */}
-              {state.attachDealId != null && (
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
-                    Upload Files
-                  </h2>
-                  <DealDocumentUpload
-                    dealId={state.attachDealId}
-                    onUploaded={() => dispatch({ type: "document_uploaded" })}
-                  />
-                </div>
+              {intakeStatus === "pending" ? (
+                <Step2WaitingPanel
+                  link={intakeLinkQuery.data!}
+                  dealId={state.attachDealId as string}
+                  onRevoked={() => {
+                    // Nothing extra needed here — Step2WaitingPanel already
+                    // invalidates the intake-link query itself; once that
+                    // resolves, `intakeStatus` stops being "pending" and the
+                    // dropzone branch below renders on the next paint. This is
+                    // the ordinary non-intake path resuming, not a regression.
+                  }}
+                />
+              ) : (
+                /* `state.attachDealId != null` narrows for the DealDocumentUpload
+                   prop below — the step guard effect above redirects away from
+                   this step once attachDealId is null, but that redirect is async,
+                   so this narrowing check covers the brief window before it fires. */
+                state.attachDealId != null && (
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    {(intakeStatus === "revoked" || intakeStatus === "expired") && (
+                      <div
+                        className="flex items-start gap-3 p-4 mb-4 bg-amber-50 border border-amber-200 rounded-xl"
+                        data-testid="wizard-dead-link-prompt"
+                      >
+                        <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1 text-sm text-amber-800 leading-relaxed">
+                          <p className="font-semibold">
+                            {intakeStatus === "revoked"
+                              ? "This link was revoked."
+                              : "This link has expired."}
+                          </p>
+                          <p className="text-xs text-amber-700/80 mt-1">
+                            Generate a new link to resume external collection,
+                            or upload files manually below.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleReissueIntakeLink}
+                            data-testid="wizard-regenerate-link"
+                            className="mt-3 px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition"
+                          >
+                            Generate new link
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
+                      Upload Files
+                    </h2>
+                    <DealDocumentUpload
+                      dealId={state.attachDealId}
+                      onUploaded={() => {
+                        dispatch({ type: "document_uploaded" });
+                        // `state.attachDealId` is narrowed for the JSX above by the
+                        // surrounding `!= null` check, but TS can't carry that
+                        // narrowing into this closure (the captured binding could
+                        // theoretically change before the callback fires) — same
+                        // idiom as `attachDealIdFromUrl as string` in dealQuery's
+                        // queryFn above.
+                        queryClient.invalidateQueries({
+                          queryKey: dealDocumentsQueryKey(
+                            state.attachDealId as string
+                          ),
+                        });
+                      }}
+                    />
+                  </div>
+                )
               )}
               <div className="flex justify-between">
                 <button
@@ -399,6 +626,12 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
                   type="button"
                   onClick={() => navigate("/new-deal/confirm")}
                   data-testid="wizard-continue-step-2"
+                  disabled={intakeStatus === "pending"}
+                  title={
+                    intakeStatus === "pending"
+                      ? "Waiting for the external party to submit"
+                      : undefined
+                  }
                   className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition"
                 >
                   Continue <ArrowRight className="w-4 h-4" />
@@ -406,12 +639,24 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
               </div>
             </div>
           )}
+          {stepName === "share-link" && (
+            <ShareLinkStep
+              takeToken={takeToken}
+              recipientEmail={state.recipientEmail}
+              onContinue={() => navigate("/new-deal/upload-files")}
+            />
+          )}
           {stepName === "confirm" && (
             <Step3Confirm
               state={state}
               dispatch={dispatch}
               onBack={() => navigate("/new-deal/upload-files")}
               onSubmit={handleSubmit}
+              documents={documentsQuery.data ?? []}
+              documentsLoading={documentsQuery.isLoading}
+              intakeStatus={intakeStatus}
+              intakeResponse={intakeResponseQuery.data ?? null}
+              onReissue={handleReissueIntakeLink}
             />
           )}
         </PageContainer>
