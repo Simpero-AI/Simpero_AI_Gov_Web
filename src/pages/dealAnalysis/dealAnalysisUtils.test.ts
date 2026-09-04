@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ANALYSIS_TABS, VALID_TABS } from "./dealAnalysisUtils";
 
 describe("ANALYSIS_TABS", () => {
-  it("has exactly the 9 wired-up Phase 5/6 tabs, one entry each, and none stale (no dangling RisksTab/ParserVerificationTab/valuation placeholder)", () => {
+  it("has exactly the 10 wired-up Phase 5/6 tabs, one entry each, and none stale (no dangling RisksTab/ParserVerificationTab/valuation placeholder)", () => {
     const ids = ANALYSIS_TABS.map((t) => t.id);
     expect(ids).toEqual([
       "summary",
@@ -13,6 +13,7 @@ describe("ANALYSIS_TABS", () => {
       "founders",
       "cap-table",
       "findings",
+      "corroboration",
       "workspace",
     ]);
     // No duplicates.

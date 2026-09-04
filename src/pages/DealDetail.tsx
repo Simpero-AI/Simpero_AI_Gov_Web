@@ -63,6 +63,7 @@ import { DealHeaderCard } from "@/components/mvp/dealDetail/DealHeaderCard";
 import { apiFetch } from "@/api/http";
 import { screeningQueryKey } from "@/api/screening";
 import { companyQueryKey } from "@/api/company";
+import { corroborationQueryKey } from "@/api/corroboration";
 import { ScreeningTab } from "./dealDetail/ScreeningTab";
 import {
   formatUsdShort,
@@ -88,6 +89,7 @@ import { FinancialsTab } from "./dealAnalysis/FinancialsTab";
 import { FoundersTab } from "./dealAnalysis/FoundersTab";
 import { CapTableTab } from "./dealAnalysis/CapTableTab";
 import { FindingsTab } from "./dealAnalysis/FindingsTab";
+import { CorroborationTab } from "./dealAnalysis/CorroborationTab";
 import { WorkspaceTab } from "./dealAnalysis/WorkspaceTab";
 import { useUserDisplay } from "@/hooks/useUserDisplay";
 import { ANALYSIS_TABS, VALID_TABS, type TabKey } from "./dealAnalysis/dealAnalysisUtils";
@@ -452,6 +454,8 @@ function AnalysisTabs({
         {tab === "cap-table" && <CapTableTab memoTyped={memoTyped} />}
         {/* FINDINGS */}
         {tab === "findings" && <FindingsTab />}
+        {/* CORROBORATION */}
+        {tab === "corroboration" && <CorroborationTab dealId={dealId} />}
         {/* DILIGENCE WORKSPACE */}
         {tab === "workspace" && (
           <WorkspaceTab memoTyped={memoTyped} dealId={dealId} sessionId={sessionId} />
@@ -670,6 +674,9 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
       // pipeline just produced; invalidate it so a user parked there sees the
       // populated profile instead of the stale/empty pre-pipeline snapshot.
       void queryClient.invalidateQueries({ queryKey: companyQueryKey(dealId) });
+      // Corroboration runs as a chained stage of the same pipeline; invalidate
+      // so a user on the Corroboration tab sees the checks once they land.
+      void queryClient.invalidateQueries({ queryKey: corroborationQueryKey(dealId) });
       setJustCompleted(true);
     }
   }, [jobStatus, dealId, queryClient]);
