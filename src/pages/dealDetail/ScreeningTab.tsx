@@ -77,24 +77,24 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
 
       <MaterialsCard fileName={fileName} />
 
+      {/* Verdict + extracted grid + mandate-fit are gated on the two fast,
+          claims-derived queries (screening, materials): their empty states are
+          definitive negatives, so rendering them while these load would flash a
+          false "not available". The highlight/risk panels (insightsQuery, the LLM
+          pass) render OUTSIDE this gate, below -- so a slow verdict/materials load,
+          or a slow/failed model call, never hides them; they sit empty until
+          insights arrives. */}
       {screeningQuery.isPending || materialsQuery.isPending ? (
-        // Guard the verdict + extracted grid the same way MarketTab does: their
-        // empty states are definitive negatives, so rendering them while these
-        // fast queries are still pending would flash a false "not available" on
-        // every screened deal. (Insights loads independently below -- its panels
-        // are meant to sit empty until it arrives, so it is deliberately excluded.)
         <div className="mt-4 flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading…
         </div>
       ) : (
         <>
-          {/* Scope the screening error to the verdict + mandate-fit region only --
-              the extracted grid (materialsQuery) and highlight/risk panels
-              (insightsQuery) are independent and must keep rendering. And gate it on
-              there being NO cached verdict (view === null): react-query sets isError
-              on a failed REFETCH while keeping the last-good data, so an unguarded
-              check would blank a working verdict on a transient refresh failure. */}
+          {/* Scope the screening error to the verdict + mandate-fit region only, and
+              gate it on there being NO cached verdict (view === null): react-query
+              sets isError on a failed REFETCH while keeping the last-good data, so an
+              unguarded check would blank a working verdict on a transient refresh. */}
           {screeningQuery.isError && view === null ? (
             <QueryErrorAlert
               message="Couldn't load screening for this deal."
@@ -105,33 +105,36 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
           )}
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
-            <div className="flex flex-col gap-5">
-              {materialsQuery.isError && materials === null ? (
-                // Same cached-data gate as the verdict above: a failed refetch keeps
-                // the last-good materials, so only show the error when there is no
-                // cached grid to fall back on.
-                <QueryErrorAlert
-                  message="Couldn't load the extracted figures for this deal."
-                  error={materialsQuery.error as Error | null}
-                />
-              ) : (
-                <ExtractedGrid fields={extractedFields} />
-              )}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <HighlightsPanel items={insights?.highlights ?? null} />
-                <RiskFlagsPanel items={insights?.riskFlags ?? null} />
-              </div>
-            </div>
+            {materialsQuery.isError && materials === null ? (
+              // Same cached-data gate as the verdict: a failed refetch keeps the
+              // last-good materials, so only show the error when there is no cached
+              // grid to fall back on.
+              <QueryErrorAlert
+                message="Couldn't load the extracted figures for this deal."
+                error={materialsQuery.error as Error | null}
+              />
+            ) : (
+              <ExtractedGrid fields={extractedFields} />
+            )}
             {screeningQuery.isError && view === null ? null : (
               <MandateFitPanel fit={view?.fit ?? null} />
             )}
           </div>
-
-          <div className="mt-5">
-            <ScreeningDecisionBar decision={null} />
-          </div>
         </>
       )}
+
+      {/* Highlights + risk flags (the LLM insights pass) render independently of the
+          gate above -- excluded from it entirely, not just from its pending check --
+          so their already-loaded data shows even while the fast queries are still in
+          flight. They sit empty until insights arrives. */}
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <HighlightsPanel items={insights?.highlights ?? null} />
+        <RiskFlagsPanel items={insights?.riskFlags ?? null} />
+      </div>
+
+      <div className="mt-5">
+        <ScreeningDecisionBar decision={null} />
+      </div>
     </div>
   );
 }

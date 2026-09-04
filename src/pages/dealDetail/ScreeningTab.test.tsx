@@ -97,4 +97,22 @@ describe("ScreeningTab", () => {
       screen.queryByText("Couldn't load the extracted figures for this deal.")
     ).not.toBeInTheDocument();
   });
+
+  it("renders the insight panels even while the verdict + materials are still pending", async () => {
+    // insightsQuery resolves while screening + materials stay pending. The highlight
+    // and risk-flag panels must render their loaded data independently of the loading
+    // gate (which still covers only the verdict + extracted grid).
+    mockScreening.mockReturnValue(new Promise(() => {})); // never resolves (pending)
+    mockMaterials.mockReturnValue(new Promise(() => {})); // never resolves (pending)
+    mockInsights.mockResolvedValue({
+      highlights: ["Strong net retention"],
+      riskFlags: ["Customer concentration risk"],
+    });
+    renderScreeningTab();
+
+    // Insights show even though the fast queries are still loading (the gate spinner).
+    expect(await screen.findByText("Strong net retention")).toBeInTheDocument();
+    expect(screen.getByText("Customer concentration risk")).toBeInTheDocument();
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+  });
 });
