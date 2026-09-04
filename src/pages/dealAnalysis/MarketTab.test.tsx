@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MarketTab } from "./MarketTab";
-import { fetchMarket, type MarketView } from "@/api/market";
+import { fetchMarket, marketQueryKey, type MarketView } from "@/api/market";
 
 // MarketTab fetches GET /deals/{id}/market via react-query — mock the client so
 // the tab renders against controlled data with no real network call.
@@ -95,5 +95,43 @@ describe("MarketTab", () => {
     renderMarketTab();
 
     expect(await screen.findByText("Couldn't load market data for this deal.")).toBeInTheDocument();
+  });
+
+  it("treats a 404 (null view) as 'no market data yet', not a deleted deal", async () => {
+    // fetchMarket maps a 404 to null. The parent DealDetail has already proven the
+    // deal exists, so the tab must render the neutral per-section empty states, not
+    // an alarming "no longer available / may have been deleted" prompt to abandon a
+    // valid deal.
+    mockFetchMarket.mockResolvedValue(null);
+    renderMarketTab();
+
+    expect(await screen.findByText("Market sizing not available")).toBeInTheDocument();
+    expect(screen.queryByText("This deal is no longer available")).not.toBeInTheDocument();
+  });
+
+  it("keeps the last figures rendered when a refetch fails, with no error alert", async () => {
+    // react-query retains cached data across a failed refetch (and only reports
+    // isError when nothing is cached), so a transient refresh failure after figures
+    // have loaded -- e.g. right after a re-analysis invalidates the query -- must not
+    // blank them or swap in the error alert, which is reserved for a first load with
+    // nothing cached.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mockFetchMarket.mockResolvedValueOnce({
+      sizing: [{ label: "TAM", value: "$5.00B", citation: null, status: "verified", entity: null }],
+      marketDefinition: [],
+      competitivePosition: [],
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MarketTab dealId="deal-1" />
+      </QueryClientProvider>
+    );
+    expect(await screen.findByText("$5.00B")).toBeInTheDocument();
+
+    mockFetchMarket.mockRejectedValue(new Error("refetch boom"));
+    await queryClient.refetchQueries({ queryKey: marketQueryKey("deal-1") });
+
+    expect(screen.getByText("$5.00B")).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load market data for this deal.")).not.toBeInTheDocument();
   });
 });
