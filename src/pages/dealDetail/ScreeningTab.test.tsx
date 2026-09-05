@@ -110,10 +110,29 @@ describe("ScreeningTab", () => {
     });
     renderScreeningTab();
 
-    // Insights show even though the fast queries are still loading (the gate spinner).
+    // Insights show even though the verdict + materials are still loading (each
+    // region now has its own spinner).
     expect(await screen.findByText("Strong net retention")).toBeInTheDocument();
     expect(screen.getByText("Customer concentration risk")).toBeInTheDocument();
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.getByText("Loading screening…")).toBeInTheDocument();
+    expect(screen.getByText("Loading extracted figures…")).toBeInTheDocument();
+  });
+
+  it("shows the verdict as soon as screening resolves, not blocked by slow materials", async () => {
+    // I9: the two regions gate independently. Screening resolves (here to a 404 ->
+    // no-verdict header); materials is still in flight. The screening region must
+    // NOT show a spinner (it settled) while the materials grid shows its own.
+    mockScreening.mockResolvedValue(null);
+    mockMaterials.mockReturnValue(new Promise(() => {})); // materials still loading
+    mockInsights.mockResolvedValue({ highlights: [], riskFlags: [] });
+    renderScreeningTab();
+
+    // Once screening settles its spinner clears, while the materials grid keeps
+    // its own spinner -- proving the two regions no longer share one gate.
+    await waitFor(() =>
+      expect(screen.queryByText("Loading screening…")).not.toBeInTheDocument()
+    );
+    expect(screen.getByText("Loading extracted figures…")).toBeInTheDocument();
   });
 
   it("shows the insight panels analyzing, not a false 'no risk flags', while insights load", async () => {

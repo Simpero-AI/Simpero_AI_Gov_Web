@@ -77,57 +77,57 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
 
       <MaterialsCard fileName={fileName} />
 
-      {/* Verdict + extracted grid + mandate-fit are gated on the two fast,
-          claims-derived queries (screening, materials): their empty states are
-          definitive negatives, so rendering them while these load would flash a
-          false "not available". The highlight/risk panels (insightsQuery, the LLM
-          pass) render OUTSIDE this gate, below -- so a slow verdict/materials load,
-          or a slow/failed model call, never hides them; they sit empty until
-          insights arrives. */}
-      {screeningQuery.isPending || materialsQuery.isPending ? (
-        <div className="mt-4 flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading…
+      {/* The verdict + mandate-fit gate on the SCREENING query and the extracted
+          grid on the MATERIALS query -- INDEPENDENTLY, so a fast verdict (~100ms)
+          shows on arrival instead of waiting behind a slow materials fetch (~8s),
+          and vice versa. Each region's empty state is a definitive negative, so
+          each is guarded by its OWN query's pending/error. The highlight/risk
+          panels (insightsQuery, the LLM pass) render outside both, below. Every
+          error is gated on NO cached data (view/materials === null) so a failed
+          refetch keeps the last-good render rather than blanking it. */}
+      {screeningQuery.isPending ? (
+        <div
+          role="status"
+          className="mt-4 flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Loading screening…
         </div>
+      ) : screeningQuery.isError && view === null ? (
+        <QueryErrorAlert
+          message="Couldn't load screening for this deal."
+          error={screeningQuery.error as Error | null}
+        />
       ) : (
-        <>
-          {/* Scope the screening error to the verdict + mandate-fit region only, and
-              gate it on there being NO cached verdict (view === null): react-query
-              sets isError on a failed REFETCH while keeping the last-good data, so an
-              unguarded check would blank a working verdict on a transient refresh. */}
-          {screeningQuery.isError && view === null ? (
-            <QueryErrorAlert
-              message="Couldn't load screening for this deal."
-              error={screeningQuery.error as Error | null}
-            />
-          ) : (
-            <VerdictHeader verdict={view?.verdict ?? null} />
-          )}
-
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
-            {materialsQuery.isError && materials === null ? (
-              // Same cached-data gate as the verdict: a failed refetch keeps the
-              // last-good materials, so only show the error when there is no cached
-              // grid to fall back on.
-              <QueryErrorAlert
-                message="Couldn't load the extracted figures for this deal."
-                error={materialsQuery.error as Error | null}
-              />
-            ) : (
-              <ExtractedGrid fields={extractedFields} />
-            )}
-            {/* MandateFitPanel's fit === null copy reads as "not scored yet",
-                which is MISLEADING on a load failure -- a screened deal hitting a
-                transient 500 would be shown as one the product can't score. So
-                don't render it when screening errored with nothing cached; the
-                failure is already surfaced in the verdict slot above, and this
-                cell stays empty rather than making a false claim. */}
-            {screeningQuery.isError && view === null ? null : (
-              <MandateFitPanel fit={view?.fit ?? null} />
-            )}
-          </div>
-        </>
+        <VerdictHeader verdict={view?.verdict ?? null} />
       )}
+
+      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
+        {materialsQuery.isPending ? (
+          <div
+            role="status"
+            className="flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]"
+          >
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            Loading extracted figures…
+          </div>
+        ) : materialsQuery.isError && materials === null ? (
+          <QueryErrorAlert
+            message="Couldn't load the extracted figures for this deal."
+            error={materialsQuery.error as Error | null}
+          />
+        ) : (
+          <ExtractedGrid fields={extractedFields} />
+        )}
+        {/* MandateFitPanel's fit === null copy reads as "not scored yet", which is
+            MISLEADING on a load failure -- so don't render it while screening is
+            pending or when it errored with nothing cached (the failure is surfaced
+            in the verdict slot above); this cell stays empty rather than making a
+            false claim. */}
+        {screeningQuery.isPending || (screeningQuery.isError && view === null) ? null : (
+          <MandateFitPanel fit={view?.fit ?? null} />
+        )}
+      </div>
 
       {/* Highlights + risk flags (the LLM insights pass) render independently of the
           gate above -- excluded from it entirely, not just from its pending check --
