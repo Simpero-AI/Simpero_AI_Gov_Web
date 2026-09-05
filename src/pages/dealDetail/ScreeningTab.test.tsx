@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ScreeningTab } from "./ScreeningTab";
-import { fetchScreening } from "@/api/screening";
+import { fetchScreening, screeningQueryKey } from "@/api/screening";
 import { fetchScreeningMaterials, screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { fetchScreeningInsights } from "@/api/screeningInsights";
 
@@ -133,6 +133,33 @@ describe("ScreeningTab", () => {
       expect(screen.queryByText("Loading screening…")).not.toBeInTheDocument()
     );
     expect(screen.getByText("Loading extracted figures…")).toBeInTheDocument();
+  });
+
+  it("shows the screening spinner on an empty-cache refetch, not a silent 'not screened'", async () => {
+    // A not-yet-screened deal caches null (404). A re-analysis invalidates the
+    // query -> refetch. isPending is false (a null is cached), so a plain isPending
+    // gate would keep silently rendering the no-verdict header through the refetch.
+    // The isFetching && view===null clause must show the loading state instead --
+    // the exact post-analysis scenario MarketTab's identical guard names.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mockScreening.mockResolvedValueOnce(null); // first load: 404 -> null cached
+    mockMaterials.mockResolvedValue({ extractedFields: [] });
+    mockInsights.mockResolvedValue({ highlights: [], riskFlags: [] });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ScreeningTab dealId="deal-1" fileName="cim.pdf" />
+      </QueryClientProvider>
+    );
+    // Settled with a null cache: no spinner.
+    await waitFor(() =>
+      expect(screen.queryByText("Loading screening…")).not.toBeInTheDocument()
+    );
+
+    // A refetch that hangs -> isFetching true while the cached view is still null.
+    mockScreening.mockReturnValue(new Promise(() => {}));
+    void queryClient.refetchQueries({ queryKey: screeningQueryKey("deal-1") });
+
+    expect(await screen.findByText("Loading screening…")).toBeInTheDocument();
   });
 
   it("shows the insight panels analyzing, not a false 'no risk flags', while insights load", async () => {

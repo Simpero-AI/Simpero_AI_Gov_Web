@@ -62,6 +62,8 @@ import { TeamMemberCard } from "@/components/mvp/icMemo/TeamMemberCard";
 import { DealHeaderCard } from "@/components/mvp/dealDetail/DealHeaderCard";
 import { apiFetch } from "@/api/http";
 import { screeningQueryKey } from "@/api/screening";
+import { screeningMaterialsQueryKey } from "@/api/screeningMaterials";
+import { screeningInsightsQueryKey } from "@/api/screeningInsights";
 import { marketQueryKey } from "@/api/market";
 import { companyQueryKey } from "@/api/company";
 import { ScreeningTab } from "./dealDetail/ScreeningTab";
@@ -669,6 +671,12 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
       // reload (Market especially: a re-analysis is exactly when its previously
       // empty sizing/definition/competition populate).
       void queryClient.invalidateQueries({ queryKey: screeningQueryKey(dealId) });
+      // The extracted-figures grid and the highlight/risk panels read their OWN
+      // queries (materials + insights), not screeningQueryKey -- invalidate them
+      // too, or a user parked on the Screening tab sees the verdict refresh while
+      // ExtractedGrid/Highlights/RiskFlags keep pre-pipeline data until a reload.
+      void queryClient.invalidateQueries({ queryKey: screeningMaterialsQueryKey(dealId) });
+      void queryClient.invalidateQueries({ queryKey: screeningInsightsQueryKey(dealId) });
       void queryClient.invalidateQueries({ queryKey: marketQueryKey(dealId) });
       // The Company (Business Overview) tab is derived from the same claims the
       // pipeline just produced; invalidate it so a user parked there sees the

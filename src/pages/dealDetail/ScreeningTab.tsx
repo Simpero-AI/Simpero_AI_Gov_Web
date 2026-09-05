@@ -85,7 +85,7 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
           panels (insightsQuery, the LLM pass) render outside both, below. Every
           error is gated on NO cached data (view/materials === null) so a failed
           refetch keeps the last-good render rather than blanking it. */}
-      {screeningQuery.isPending ? (
+      {screeningQuery.isPending || (screeningQuery.isFetching && view === null) ? (
         <div
           role="status"
           className="mt-4 flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]"
@@ -103,7 +103,7 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
       )}
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
-        {materialsQuery.isPending ? (
+        {materialsQuery.isPending || (materialsQuery.isFetching && materials === null) ? (
           <div
             role="status"
             className="flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]"
