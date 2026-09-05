@@ -10,6 +10,7 @@ export type TabKey =
   | "founders"
   | "cap-table"
   | "findings"
+  | "corroboration"
   | "workspace";
 
 export const VALID_TABS = new Set<TabKey>([
@@ -21,6 +22,7 @@ export const VALID_TABS = new Set<TabKey>([
   "founders",
   "cap-table",
   "findings",
+  "corroboration",
   "workspace",
 ]);
 
@@ -33,6 +35,7 @@ export const ANALYSIS_TABS: Array<{ id: TabKey; label: string; soon?: boolean }>
   { id: "founders", label: "Founders" },
   { id: "cap-table", label: "Cap Table" },
   { id: "findings", label: "Findings" },
+  { id: "corroboration", label: "Corroboration" },
   { id: "workspace", label: "Diligence Workspace" },
 ];
 
