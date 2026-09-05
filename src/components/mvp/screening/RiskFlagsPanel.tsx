@@ -1,30 +1,39 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
 import { cn } from "@/lib/utils";
 
 export interface RiskFlagsPanelProps {
   items: string[] | null;
+  /** The insights pass is still running -- show a loading state, not the
+   * "no risk flags" negative (materially misleading on a screening product). */
+  isLoading?: boolean;
+  /** The insights pass failed -- say so, rather than asserting "no risk flags"
+   * as fact when the risk analysis never ran. */
+  isError?: boolean;
   className?: string;
 }
 
 /**
- * Mockup's "Risk Flags" panel — concerns/gaps surfaced by the screening
- * agent. No screening pipeline exists yet (plan §4c), so `items` is always
- * `null` today.
+ * Mockup's "Risk Flags" panel — concerns/gaps surfaced by the screening agent
+ * (the LLM insights pass). Distinguishes running/failed from genuinely-empty so
+ * it never presents "no risk flags" as a settled fact while the pass is still in
+ * flight or after it errored -- a false "no risk flags" is the worst negative to
+ * show as fact on a diligence surface.
  */
-export function RiskFlagsPanel({ items, className }: RiskFlagsPanelProps) {
+export function RiskFlagsPanel({ items, isLoading, isError, className }: RiskFlagsPanelProps) {
+  const hasItems = !!(items && items.length > 0);
   return (
     <div
       className={cn(
         "rounded-xl p-[18px_20px]",
-        items && items.length > 0 ? "bg-[color:var(--rev-tint-warning)]" : "border border-dashed border-[color:var(--rev-border-strong)]",
+        hasItems ? "bg-[color:var(--rev-tint-warning)]" : "border border-dashed border-[color:var(--rev-border-strong)]",
         className
       )}
     >
       <div className="mb-3 font-mono text-[10px] font-semibold uppercase tracking-wider text-[color:var(--rev-warning)]">
         Risk Flags
       </div>
-      {items && items.length > 0 ? (
+      {hasItems ? (
         <ul className="space-y-2">
           {items.map((text, i) => (
             <li key={i} className="flex items-start gap-2 text-[12.5px] leading-relaxed text-[color:var(--rev-text-2)]">
@@ -33,6 +42,21 @@ export function RiskFlagsPanel({ items, className }: RiskFlagsPanelProps) {
             </li>
           ))}
         </ul>
+      ) : isError ? (
+        <EmptyState
+          icon={AlertTriangle}
+          title="Couldn't load risk flags"
+          description="The screening agent's risk analysis failed to load. Refresh to try again."
+          className="border-none p-0"
+        />
+      ) : isLoading ? (
+        <div
+          role="status"
+          className="flex items-center gap-2 text-[12.5px] text-[color:var(--rev-text-6)]"
+        >
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          Analyzing materials…
+        </div>
       ) : (
         <EmptyState
           icon={AlertTriangle}

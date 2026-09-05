@@ -62,6 +62,9 @@ import { TeamMemberCard } from "@/components/mvp/icMemo/TeamMemberCard";
 import { DealHeaderCard } from "@/components/mvp/dealDetail/DealHeaderCard";
 import { apiFetch } from "@/api/http";
 import { screeningQueryKey } from "@/api/screening";
+import { screeningMaterialsQueryKey } from "@/api/screeningMaterials";
+import { screeningInsightsQueryKey } from "@/api/screeningInsights";
+import { marketQueryKey } from "@/api/market";
 import { companyQueryKey } from "@/api/company";
 import { ScreeningTab } from "./dealDetail/ScreeningTab";
 import {
@@ -437,7 +440,7 @@ function AnalysisTabs({
         {/* COMPANY */}
         {tab === "company" && <CompanyTab dealId={dealId} memoTyped={memoTyped} />}{" "}
         {/* MARKET */}
-        {tab === "market" && <MarketTab memoTyped={memoTyped} />}{" "}
+        {tab === "market" && <MarketTab dealId={dealId} />}{" "}
         {/* FINANCIALS */}
         {tab === "financials" && (
           <FinancialsTab
@@ -663,9 +666,18 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
       jobStatus === "complete"
     ) {
       void queryClient.invalidateQueries({ queryKey: dealQueryKey(dealId) });
-      // Screening lands as part of the same pipeline; refetch it too so a user
-      // parked on the Screening tab sees the verdict without a manual reload.
+      // Screening and Market both land from the same pipeline; refetch them too
+      // so a user parked on either tab sees the fresh result without a manual
+      // reload (Market especially: a re-analysis is exactly when its previously
+      // empty sizing/definition/competition populate).
       void queryClient.invalidateQueries({ queryKey: screeningQueryKey(dealId) });
+      // The extracted-figures grid and the highlight/risk panels read their OWN
+      // queries (materials + insights), not screeningQueryKey -- invalidate them
+      // too, or a user parked on the Screening tab sees the verdict refresh while
+      // ExtractedGrid/Highlights/RiskFlags keep pre-pipeline data until a reload.
+      void queryClient.invalidateQueries({ queryKey: screeningMaterialsQueryKey(dealId) });
+      void queryClient.invalidateQueries({ queryKey: screeningInsightsQueryKey(dealId) });
+      void queryClient.invalidateQueries({ queryKey: marketQueryKey(dealId) });
       // The Company (Business Overview) tab is derived from the same claims the
       // pipeline just produced; invalidate it so a user parked there sees the
       // populated profile instead of the stale/empty pre-pipeline snapshot.

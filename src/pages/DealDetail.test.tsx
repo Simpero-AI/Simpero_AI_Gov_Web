@@ -6,6 +6,8 @@ import { useEffect } from "react";
 import DealDetail from "./DealDetail";
 import { dealStatusQueryKey, fetchDeal, fetchDealStatus } from "@/api/deals";
 import type { DealWithLatestMemo } from "@/api/deals";
+import { screeningMaterialsQueryKey } from "@/api/screeningMaterials";
+import { screeningInsightsQueryKey } from "@/api/screeningInsights";
 import type { DealStatusPayload } from "@shared/dealsStatus";
 
 // Real fetchDeal/fetchDealStatus hit the network via apiFetch — mock the
@@ -152,6 +154,38 @@ describe("DealDetail — completion interstitial", () => {
     fireEvent.click(screen.getByRole("button", { name: /View Initial Screening/i }));
 
     expect(history[history.length - 1]).toBe("/deals/deal-1/screening");
+  });
+
+  it("invalidates the extracted-figures + insights queries on completion, not just the verdict", async () => {
+    // The Screening tab's ExtractedGrid/Highlights/RiskFlags read their OWN queries
+    // (materials + insights), not screeningQueryKey. If completion invalidates only
+    // the verdict, those panels keep pre-pipeline data until a manual reload -- the
+    // stale-data bug this guards against.
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealStatus)
+      .mockResolvedValueOnce(processingStatus)
+      .mockResolvedValue(completeStatus);
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    renderDealDetail("deal-1", "screening", { queryClient });
+
+    await waitFor(() =>
+      expect(screen.getByText("Analyzing your document")).toBeInTheDocument()
+    );
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: dealStatusQueryKey("deal-1") });
+    });
+    await waitFor(() =>
+      expect(screen.getByText(/Analysis complete/i)).toBeInTheDocument()
+    );
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: screeningMaterialsQueryKey("deal-1"),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: screeningInsightsQueryKey("deal-1"),
+    });
   });
 
   it("does NOT hang on 'retrieving your memo' when a completed deal has no memo (the real pipeline shape) — shows the completion flow and lands on screening", async () => {
