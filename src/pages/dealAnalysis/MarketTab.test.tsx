@@ -182,4 +182,17 @@ describe("MarketTab", () => {
     expect(screen.getByText("$5.00B")).toBeInTheDocument();
     expect(screen.queryByText("Couldn't load market data for this deal.")).not.toBeInTheDocument();
   });
+
+  it("keeps the mockup's not-yet-sourced sections as honest placeholders", async () => {
+    // CLAUDE.md structure rule: a mockup section with no claims source is rendered
+    // as an UnbackedSection placeholder, not dropped (mirrors CompanyTab).
+    mockFetchMarket.mockResolvedValue(EMPTY);
+    renderMarketTab();
+
+    await screen.findByText("Market sizing not available");
+    expect(screen.getByText("Growth drivers coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Market risks coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Positioning matrix coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Growth strategy coming soon")).toBeInTheDocument();
+  });
 });

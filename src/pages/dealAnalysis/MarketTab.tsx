@@ -1,6 +1,16 @@
 import { type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Compass, Globe, Loader2, type LucideIcon } from "lucide-react";
+import {
+  BarChart3,
+  Compass,
+  Globe,
+  LayoutGrid,
+  Loader2,
+  Rocket,
+  ShieldAlert,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
 import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
@@ -285,6 +295,53 @@ export function MarketTab({ dealId }: MarketTabProps) {
             ))}
           </div>
         )}
+      </SectionCard>
+
+      {/* Mockup sections the claims pipeline has no source for -- kept as honest
+          "coming soon" placeholders (CLAUDE.md structure rule), never faked,
+          mirroring CompanyTab's not-yet-sourced sections. */}
+      <SectionCard
+        eyebrow="Growth Drivers"
+        icon={<TrendingUp className="h-4 w-4 text-[color:var(--rev-primary)]" />}
+      >
+        <UnbackedSection
+          icon={TrendingUp}
+          title="Growth drivers coming soon"
+          description="The demand drivers and tailwinds behind the market's growth aren't extracted by the current pipeline."
+        />
+      </SectionCard>
+
+      <SectionCard
+        eyebrow="Market Risks"
+        icon={<ShieldAlert className="h-4 w-4 text-[color:var(--rev-primary)]" />}
+      >
+        <UnbackedSection
+          icon={ShieldAlert}
+          title="Market risks coming soon"
+          description="Structural, cyclical, or regulatory risks to the market aren't extracted by the current pipeline."
+        />
+      </SectionCard>
+
+      <SectionCard
+        eyebrow="Competitive Positioning Matrix"
+        icon={<LayoutGrid className="h-4 w-4 text-[color:var(--rev-primary)]" />}
+      >
+        <UnbackedSection
+          icon={LayoutGrid}
+          title="Positioning matrix coming soon"
+          description="A two-axis positioning of the company against its competitors isn't extracted by the current pipeline."
+        />
+      </SectionCard>
+
+      <SectionCard
+        eyebrow="Growth Strategy"
+        icon={<Rocket className="h-4 w-4 text-[color:var(--rev-primary)]" />}
+      >
+        <UnbackedSection
+          icon={Rocket}
+          title="Growth strategy coming soon"
+          description="The company's stated plan to expand within its market isn't extracted by the current pipeline."
+        />
       </SectionCard>
     </div>
   );
