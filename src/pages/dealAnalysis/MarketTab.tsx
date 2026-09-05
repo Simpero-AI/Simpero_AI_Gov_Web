@@ -1,54 +1,39 @@
-import { useMemo, type ReactNode } from "react";
+import { type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
-  AlertTriangle,
   BarChart3,
   Compass,
   Globe,
-  Grid3x3,
+  LayoutGrid,
+  Loader2,
   Rocket,
+  ShieldAlert,
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ProvenanceBadge } from "@/components/mvp/primitives/ProvenanceBadge";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
-import {
-  DenseTable,
-  DenseTableBody,
-  DenseTableCell,
-  DenseTableHead,
-  DenseTableHeaderRow,
-  DenseTableRow,
-} from "@/components/mvp/primitives/DenseTable";
-import {
-  CorroborationPanel,
-  type CorroborationSourceItem,
-} from "@/components/mvp/analysis/CorroborationPanel";
-import { useCitationSafe } from "@/contexts/CitationContext";
-import { formatUsdShort, formatBpAsPct } from "@/lib/dealMetricsFormat";
-import type { ICMemoResult, Sourced } from "@shared/simperoTypes";
+import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
+import { fetchMarket, marketQueryKey, type MarketFact, type MarketFactStatus } from "@/api/market";
 
 interface MarketTabProps {
-  memoTyped: Partial<ICMemoResult> | null;
+  dealId: string;
 }
 
 // ---------------------------------------------------------------------------
-// Shared card shell — duplicated from CompanyTab.tsx's own module-private
-// `SectionCard` (mockup's white/bordered/shadowed card + mono uppercase
-// eyebrow), matching that file's precedent of a one-site helper per tab
-// rather than a shared extraction.
+// Shared card shell — kept module-private, matching CompanyTab/FinancialsTab's
+// precedent of a one-site helper per tab (mockup's white/bordered/shadowed card
+// with a mono uppercase eyebrow).
 // ---------------------------------------------------------------------------
 
 function SectionCard({
   eyebrow,
   icon,
-  action,
   children,
   className,
 }: {
   eyebrow: ReactNode;
   icon?: ReactNode;
-  action?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
@@ -64,29 +49,9 @@ function SectionCard({
         <span className="flex-1 font-mono text-[10.5px] uppercase tracking-[0.6px] text-[color:var(--rev-text-6)]">
           {eyebrow}
         </span>
-        {action}
       </div>
       {children}
     </div>
-  );
-}
-
-/** ProvenanceBadge wrapper that also wires the citation-sidebar click when a CitationProvider is present. */
-function ProvenanceAction({
-  sourced,
-  fieldLabel,
-}: {
-  sourced: Sourced<unknown> | undefined;
-  fieldLabel: string;
-}) {
-  const citationCtx = useCitationSafe();
-  if (!sourced || sourced.provenance === "missing") return null;
-  return (
-    <ProvenanceBadge
-      provenance={sourced.provenance}
-      citationVerified={sourced.citation?.verified}
-      onClick={citationCtx ? () => citationCtx.openCitation({ fieldLabel, citation: sourced.citation ?? null }) : undefined}
-    />
   );
 }
 
@@ -102,260 +67,282 @@ function UnbackedSection({
   return <EmptyState icon={icon} title={title} description={description} className="border-none p-0" />;
 }
 
-// ---------------------------------------------------------------------------
-// Corroboration — derives real Verified/Partial counts from this tab's own
-// Sourced fields (marketCompetitive.*, plus the Market & Strategy due-
-// diligence category when present), same "use real per-field data, don't
-// fabricate" approach the other tabs established. Growth Drivers, Market
-// Risks, Competitive Positioning Matrix, and Growth Strategy have no backing
-// field (see MarketTab body below), so they contribute nothing here.
-// ---------------------------------------------------------------------------
+// A claim's trust status as a small pill. Verified is the earned status (success
+// tone); cited/partially_verified are shown honestly as neutral, never dressed up.
+// Record keyed on the union -> a renamed status is a compile error here.
+const STATUS_LABEL: Record<MarketFactStatus, string> = {
+  verified: "Verified",
+  partially_verified: "Partial",
+  cited: "Cited",
+};
 
-function collectMarketCorroboration(memoTyped: Partial<ICMemoResult> | null): {
-  items: CorroborationSourceItem[];
-  verifiedCount: number;
-  partialCount: number;
-  unverifiedCount: number;
-} {
-  const empty = { items: [] as CorroborationSourceItem[], verifiedCount: 0, partialCount: 0, unverifiedCount: 0 };
-  const mc = memoTyped?.deliverable?.marketCompetitive;
-  if (!mc) return empty;
-
-  const marketStrategyDd = memoTyped?.deliverable?.dueDiligenceSummary?.categories.find(
-    (c) => c.category === "Market & Strategy"
+function StatusPill({ status }: { status: MarketFactStatus }) {
+  // Rendered as the SAME inline --rev-* pill CompanyTab uses (verbatim), so the
+  // same "Cited" datum looks identical on the two adjacent claims-driven tabs
+  // rather than pulling StatusChip's pre-revamp badge palette. fetchMarket casts
+  // the API JSON unchecked, so look the label up as a plain string -- an unknown
+  // runtime status (a backend rename ahead of a deploy) still shows its raw value
+  // legibly, not a blank pill; the Record stays union-keyed for compile safety.
+  const label = (STATUS_LABEL as Record<string, string>)[status] ?? status;
+  const verified = status === "verified";
+  return (
+    <span
+      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.5px]"
+      style={{
+        color: verified ? "var(--rev-success)" : "var(--rev-text-6)",
+        background: verified ? "var(--rev-tint-success)" : "var(--rev-tint-neutral)",
+      }}
+    >
+      {label}
+    </span>
   );
-
-  const fields: Array<Sourced<unknown> | undefined> = [
-    mc.tamUsd,
-    mc.samUsd,
-    mc.somUsd,
-    mc.growthCagrPct,
-    mc.competitors,
-    mc.competitiveAdvantage,
-    marketStrategyDd?.findings,
-  ];
-
-  let verified = 0;
-  let partial = 0;
-  for (const f of fields) {
-    if (!f || f.provenance === "missing" || f.value == null) continue;
-    if (f.provenance === "extracted" && f.citation?.verified) verified += 1;
-    else partial += 1;
-  }
-  const total = verified + partial;
-  if (total === 0) return empty;
-
-  return {
-    items: [{ id: "source-doc", name: memoTyped?.fileName ?? "Source document", kind: "document", citeCount: total }],
-    verifiedCount: verified,
-    partialCount: partial,
-    unverifiedCount: 0,
-  };
 }
 
-export function MarketTab({ memoTyped }: MarketTabProps) {
-  const mc = memoTyped?.deliverable?.marketCompetitive;
-  const corroboration = useMemo(() => collectMarketCorroboration(memoTyped), [memoTyped]);
-
-  // Market Sizing — real, extracted/modeled fields (marketCompetitive.tamUsd/samUsd/somUsd).
-  const sizingCards = useMemo(() => {
-    if (!mc) return [];
-    return [
-      { id: "tam", label: "TAM", desc: "Total Addressable Market", sourced: mc.tamUsd },
-      { id: "sam", label: "SAM", desc: "Serviceable Addressable Market", sourced: mc.samUsd },
-      { id: "som", label: "SOM", desc: "Serviceable Obtainable Market", sourced: mc.somUsd },
-    ].filter((c) => c.sourced?.value != null);
-  }, [mc]);
-
-  const hasCagr = mc?.growthCagrPct?.value != null;
-
-  // Competitive Landscape — real (marketCompetitive.competitors: name + weakness + optional winRatePct).
-  const competitors = (mc?.competitors?.value ?? []) as Array<{
-    name: string;
-    weakness: string;
-    winRatePct?: number;
-  }>;
-  const hasCompetitiveAdvantage = mc?.competitiveAdvantage?.value != null;
-
-  // Market Context — the mockup's version is an analyst-written paragraph on overall
-  // market landscape; no such field exists on ICMemoDeliverable. The closest genuinely
-  // real, market-adjacent field is dueDiligenceSummary's "Market & Strategy" category
-  // (status/findings/completeness) — rendered here, honestly labeled as DD findings
-  // rather than passed off as a market-landscape writeup, mirroring CompanyTab's
-  // OFAC-under-"IP & Compliance" precedent.
-  const marketStrategyDd = memoTyped?.deliverable?.dueDiligenceSummary?.categories.find(
-    (c) => c.category === "Market & Strategy"
+function Citation({ citation }: { citation: string | null }) {
+  if (!citation) return null;
+  // --rev-text-5 at 12px clears WCAG AA on --rev-tint-primary; the prior
+  // --rev-text-7 at 10px measured 2.24:1 -- a fail on the very provenance this
+  // view exists to surface.
+  return (
+    <span className="font-mono text-[12px] text-[color:var(--rev-text-5)]">{citation}</span>
   );
-  const hasMarketContext = marketStrategyDd != null
-    && marketStrategyDd.findings.provenance !== "missing"
-    && marketStrategyDd.findings.value != null;
+}
+
+// A human-readable subtitle for the well-known sizing acronyms; unknown labels
+// (e.g. "Market Size", "Market Growth (CAGR)") stand on their own.
+const SIZING_DESC: Record<string, string> = {
+  TAM: "Total Addressable Market",
+  SAM: "Serviceable Addressable Market",
+  SOM: "Serviceable Obtainable Market",
+};
+
+function SizingCard({ fact }: { fact: MarketFact }) {
+  // A known acronym (TAM/SAM/SOM) gets its human description as the caption; an
+  // unknown label (e.g. "Market Size", "Market Growth (CAGR)") has no caption
+  // text. The citation always renders below via <Citation>, so it never doubles
+  // into the caption and an absent citation never leaves a blank caption line.
+  const description = SIZING_DESC[fact.label];
+  return (
+    <div
+      className="rounded-xl border border-[color:var(--rev-border)] p-5"
+      style={{ background: "var(--rev-tint-primary)" }}
+    >
+      <p className="mb-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.6px] text-[color:var(--rev-primary)]">
+        {fact.label}
+      </p>
+      <p className="mb-1.5 font-serif text-[28px] leading-tight text-[color:var(--rev-text-1)]">
+        {fact.value}
+      </p>
+      <div className="flex items-center justify-between gap-2 border-t border-[color:var(--rev-border)] pt-2.5">
+        <span className="text-[12px] text-[color:var(--rev-text-4)]">{description ?? ""}</span>
+        <StatusPill status={fact.status} />
+      </div>
+      {fact.citation ? (
+        <div className="mt-2">
+          <Citation citation={fact.citation} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AssertionRow({ fact }: { fact: MarketFact }) {
+  return (
+    <div className="rounded-lg border border-[color:var(--rev-border-subtle)] p-4">
+      <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{fact.value}</p>
+      <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-[color:var(--rev-border-subtle)] pt-2.5">
+        <span className="truncate text-[11.5px] text-[color:var(--rev-text-5)]">
+          {/* label is the row header the backend computes: the named entity, or a
+              class-appropriate fallback ("The market" / "Competitor") when the
+              assertion has no entity. Rendering the raw `entity` here dropped that
+              fallback and showed a bare em-dash for every unattributed assertion. */}
+          {fact.label || "—"}
+        </span>
+        <span className="flex shrink-0 items-center gap-2.5">
+          <Citation citation={fact.citation} />
+          <StatusPill status={fact.status} />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Market tab — claims-driven (GET /deals/{id}/market via build_market_view).
+ * Numeric sizing recovered by label, plus the qualitative market-definition and
+ * competitive-position assertions the parser's qualitative tier emits, each with
+ * its citation and trust status. Every section renders "information not
+ * available" when the deal has no backing claims rather than fabricating market
+ * intel. (Corroboration + web-search enrichment is a separate track once those
+ * engines produce data.)
+ */
+export function MarketTab({ dealId }: MarketTabProps) {
+  const marketQuery = useQuery({
+    queryKey: marketQueryKey(dealId),
+    queryFn: () => fetchMarket(dealId),
+  });
+  const market = marketQuery.data ?? null;
+  const sizing = market?.sizing ?? [];
+  const definition = market?.marketDefinition ?? [];
+  const competition = market?.competitivePosition ?? [];
+  const hasAnyData = sizing.length > 0 || definition.length > 0 || competition.length > 0;
+
+  // Guard the sections' definitive "not available" negatives against a load that
+  // hasn't produced figures yet -- on the initial load (isPending), and on a
+  // refetch that has nothing meaningful cached to show (isFetching && !hasAnyData,
+  // e.g. the post-analysis refetch DealDetail fires on completion). Without the
+  // second clause a user parked on the tab sees a false "no market data" flash
+  // before the figures pop in.
+  if (marketQuery.isPending || (marketQuery.isFetching && !hasAnyData)) {
+    return (
+      <div role="status" className="flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        Loading…
+      </div>
+    );
+  }
+
+  // A fetch that NEVER loaded (data === undefined) and errored blanks the tab. Key
+  // on `data === undefined`, NOT `market === null`: a 404 also coalesces to null
+  // (below), and a cached-404 deal whose refetch then fails must fall through to
+  // the neutral stale/unavailable states, not this red alert.
+  if (marketQuery.isError && marketQuery.data === undefined) {
+    return (
+      <QueryErrorAlert
+        message="Couldn't load market data for this deal."
+        error={marketQuery.error as Error | null}
+      />
+    );
+  }
+
+  // market === null is a 404. It is NOT proof the pipeline ran and extracted
+  // nothing -- it is also exactly what a route-not-found returns if the web is
+  // deployed ahead of backend #164. Either way we must NOT assert the confident
+  // per-section "nothing was extracted" negatives; show a neutral unavailable
+  // state instead. (The genuine extracted-and-empty case is a 200 with empty
+  // lists, handled by the sections below.)
+  if (market === null) {
+    return (
+      <EmptyState
+        icon={Globe}
+        title="Market data isn't available yet"
+        description="This deal's market view hasn't been produced yet. It appears here once the analysis has run and its results are deployed."
+      />
+    );
+  }
 
   return (
     <div className="space-y-5">
+      {/* Reaching here with isError set means a refetch failed while cached figures
+          remain -- react-query keeps `data` across a failed refetch and the
+          no-cached-data case returned above. Show the figures under a stale notice
+          rather than silently, or swapping in the error alert. */}
+      {marketQuery.isError ? (
+        <div
+          role="status"
+          className="rounded-[10px] border px-4 py-2.5 text-[12px] text-[color:var(--rev-text-6)]"
+          style={{ borderColor: "var(--rev-border)", background: "var(--rev-tint-neutral)" }}
+        >
+          Showing the last loaded market data — the latest refresh didn&apos;t go through.
+        </div>
+      ) : null}
       {/* Market Sizing */}
       <SectionCard eyebrow="Market Sizing" icon={<BarChart3 className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-        {sizingCards.length === 0 ? (
+        {sizing.length === 0 ? (
           <UnbackedSection
             icon={BarChart3}
-            title="Market sizing not yet extracted"
-            description="TAM, SAM, and SOM estimates will appear here once the source document is processed."
+            title="Market sizing not available"
+            description="No addressable-market figures (TAM, SAM, SOM, market size, or growth rate) were extracted from this deal's materials."
           />
         ) : (
-          <>
-            <div className="grid grid-cols-3 gap-3.5">
-              {sizingCards.map((c) => (
-                <div
-                  key={c.id}
-                  className="rounded-xl border border-[color:var(--rev-border)] p-5"
-                  style={{ background: "var(--rev-tint-primary)" }}
-                >
-                  <p className="mb-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.6px] text-[color:var(--rev-primary)]">
-                    {c.label}
-                  </p>
-                  <p className="mb-1.5 font-serif text-[28px] leading-tight text-[color:var(--rev-text-1)]">
-                    {formatUsdShort(c.sourced.value as number)}
-                  </p>
-                  <div className="flex items-center justify-between gap-2 border-t border-[color:var(--rev-border)] pt-2.5">
-                    <span className="text-[12px] text-[color:var(--rev-text-4)]">{c.desc}</span>
-                    <ProvenanceAction sourced={c.sourced} fieldLabel={`${c.label} — ${c.desc}`} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            {hasCagr && (
-              <div className="mt-3.5 flex items-center justify-between rounded-lg border border-[color:var(--rev-border-subtle)] bg-[color:var(--rev-tint-neutral-subtle)] px-5 py-3">
-                <span className="text-[13px] font-medium text-[color:var(--rev-text-3)]">Market Growth CAGR</span>
-                <span className="inline-flex items-center gap-2 font-serif text-lg text-[color:var(--rev-text-1)]">
-                  {formatBpAsPct(mc!.growthCagrPct.value as number)}
-                  <ProvenanceAction sourced={mc!.growthCagrPct} fieldLabel="Market Growth CAGR" />
-                </span>
-              </div>
-            )}
-          </>
-        )}
-      </SectionCard>
-
-      {/* Growth Drivers + Market Risks */}
-      <div className="grid grid-cols-2 gap-5">
-        <SectionCard eyebrow="Growth Drivers" icon={<TrendingUp className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection
-            icon={TrendingUp}
-            title="Growth drivers not yet extracted"
-            description="Named structural or demand-side tailwinds behind this market aren't extracted by the current pipeline."
-          />
-        </SectionCard>
-
-        <SectionCard eyebrow="Market Risks" icon={<AlertTriangle className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection
-            icon={AlertTriangle}
-            title="Market risks not yet extracted"
-            description="Risks captured in the Summary tab's risk register aren't tagged by category, so a market-specific subset can't be honestly split out here yet."
-          />
-        </SectionCard>
-      </div>
-
-      {/* Competitive Landscape */}
-      <SectionCard eyebrow="Competitive Landscape" icon={<Globe className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-        {competitors.length === 0 ? (
-          <UnbackedSection
-            icon={Globe}
-            title="Competitive landscape not yet extracted"
-            description="Named competitors, their weaknesses, and win rates will appear here once the source document is processed."
-          />
-        ) : (
-          <div className="space-y-3.5">
-            <div className="overflow-hidden rounded-lg border border-[color:var(--rev-border-subtle)]">
-              <DenseTable>
-                <DenseTableHeaderRow>
-                  <DenseTableRow>
-                    <DenseTableHead>Competitor</DenseTableHead>
-                    <DenseTableHead>Weakness</DenseTableHead>
-                    <DenseTableHead className="text-right">Win Rate</DenseTableHead>
-                  </DenseTableRow>
-                </DenseTableHeaderRow>
-                <DenseTableBody>
-                  {competitors.map((c, i) => (
-                    <DenseTableRow key={i}>
-                      <DenseTableCell className="font-medium text-[color:var(--rev-text-1)]">{c.name}</DenseTableCell>
-                      <DenseTableCell className="text-[color:var(--rev-text-4)]">{c.weakness || "—"}</DenseTableCell>
-                      <DenseTableCell numeric>
-                        {c.winRatePct != null ? formatBpAsPct(c.winRatePct) : "—"}
-                      </DenseTableCell>
-                    </DenseTableRow>
-                  ))}
-                </DenseTableBody>
-              </DenseTable>
-              <div className="flex items-center justify-between border-t border-[color:var(--rev-border-subtle)] bg-[color:var(--rev-tint-neutral)] px-5 py-2.5">
-                <span className="text-[10px] italic text-[color:var(--rev-text-7)]">Named competitors and their disclosed weaknesses</span>
-                <ProvenanceAction sourced={mc?.competitors} fieldLabel="Competitive Landscape" />
-              </div>
-            </div>
-            {hasCompetitiveAdvantage && (
-              <div
-                className="rounded-md border px-4 py-3 text-[13px]"
-                style={{ borderColor: "color-mix(in srgb, var(--rev-success) 30%, white)", background: "var(--rev-tint-success)", color: "var(--rev-success)" }}
-              >
-                <strong>Competitive Advantage:</strong> {mc!.competitiveAdvantage.value as string}
-              </div>
-            )}
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+            {sizing.map((f, i) => (
+              <SizingCard key={`${f.label}-${i}`} fact={f} />
+            ))}
           </div>
         )}
       </SectionCard>
 
-      {/* Competitive Positioning Matrix */}
-      <SectionCard eyebrow="Competitive Positioning Matrix" icon={<Grid3x3 className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-        <UnbackedSection
-          icon={Grid3x3}
-          title="Per-dimension positioning not available"
-          description="The pipeline extracts one free-text weakness and an optional win rate per competitor (shown above in Competitive Landscape) — not a structured, per-dimension Advantage/Partial/Disadvantage score. Rendering that grid would mean inventing dimensions and scores the source data doesn't contain, so this section is intentionally left empty rather than fabricated."
-        />
-      </SectionCard>
-
-      {/* Market Context */}
-      <SectionCard eyebrow="Market Context" icon={<Compass className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-        {!hasMarketContext ? (
+      {/* Market Definition */}
+      <SectionCard eyebrow="Market Definition" icon={<Compass className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
+        {definition.length === 0 ? (
           <UnbackedSection
             icon={Compass}
-            title="Market context not yet available"
-            description="An analyst-written summary of overall market size, fragmentation, and demand drivers isn't produced by the current pipeline."
+            title="Market definition not available"
+            description="No market-structure, sizing-narrative, or demand-driver assertions were extracted from this deal's materials."
           />
         ) : (
           <div className="space-y-3">
-            <p className="text-[11.5px] italic text-[color:var(--rev-text-7)]">
-              No dedicated market-landscape writeup is produced by the current pipeline — this reflects the due
-              diligence summary&apos;s Market &amp; Strategy category findings instead.
-            </p>
-            <p className="text-[14px] leading-[1.75] text-[color:var(--rev-text-2)]">
-              {marketStrategyDd!.findings.value as string}
-            </p>
-            <div className="flex items-center gap-3 border-t border-[color:var(--rev-border-subtle)] pt-3">
-              <span className="text-[11px] text-[color:var(--rev-text-6)]">
-                DD completeness: {marketStrategyDd!.completenessPct.value as number}%
-                {(marketStrategyDd!.flaggedCount.value as number) > 0
-                  ? ` · ${marketStrategyDd!.flaggedCount.value} flagged`
-                  : ""}
-              </span>
-              <ProvenanceAction sourced={marketStrategyDd!.findings} fieldLabel="Market Context" />
-            </div>
+            {definition.map((f, i) => (
+              <AssertionRow key={i} fact={f} />
+            ))}
           </div>
         )}
       </SectionCard>
 
-      {/* Growth Strategy */}
-      <SectionCard eyebrow="Growth Strategy" icon={<Rocket className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
+      {/* Competitive Position */}
+      <SectionCard eyebrow="Competitive Position" icon={<Globe className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
+        {competition.length === 0 ? (
+          <UnbackedSection
+            icon={Globe}
+            title="Competitive position not available"
+            description="No assertions about competitors, market share, or competitive advantage were extracted from this deal's materials."
+          />
+        ) : (
+          <div className="space-y-3">
+            {competition.map((f, i) => (
+              <AssertionRow key={i} fact={f} />
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Mockup sections the claims pipeline has no source for -- kept as honest
+          "coming soon" placeholders (CLAUDE.md structure rule), never faked,
+          mirroring CompanyTab's not-yet-sourced sections. */}
+      <SectionCard
+        eyebrow="Growth Drivers"
+        icon={<TrendingUp className="h-4 w-4 text-[color:var(--rev-primary)]" />}
+      >
         <UnbackedSection
-          icon={Rocket}
-          title="Growth strategy not yet extracted"
-          description="Management's forward-looking expansion plans aren't extracted by the current pipeline."
+          icon={TrendingUp}
+          title="Growth drivers coming soon"
+          description="The demand drivers and tailwinds behind the market's growth aren't extracted by the current pipeline."
         />
       </SectionCard>
 
-      <CorroborationPanel
-        items={corroboration.items}
-        verifiedCount={corroboration.verifiedCount}
-        partialCount={corroboration.partialCount}
-        unverifiedCount={corroboration.unverifiedCount}
-      />
+      <SectionCard
+        eyebrow="Market Risks"
+        icon={<ShieldAlert className="h-4 w-4 text-[color:var(--rev-primary)]" />}
+      >
+        <UnbackedSection
+          icon={ShieldAlert}
+          title="Market risks coming soon"
+          description="Structural, cyclical, or regulatory risks to the market aren't extracted by the current pipeline."
+        />
+      </SectionCard>
+
+      <SectionCard
+        eyebrow="Competitive Positioning Matrix"
+        icon={<LayoutGrid className="h-4 w-4 text-[color:var(--rev-primary)]" />}
+      >
+        <UnbackedSection
+          icon={LayoutGrid}
+          title="Positioning matrix coming soon"
+          description="A two-axis positioning of the company against its competitors isn't extracted by the current pipeline."
+        />
+      </SectionCard>
+
+      <SectionCard
+        eyebrow="Growth Strategy"
+        icon={<Rocket className="h-4 w-4 text-[color:var(--rev-primary)]" />}
+      >
+        <UnbackedSection
+          icon={Rocket}
+          title="Growth strategy coming soon"
+          description="The company's stated plan to expand within its market isn't extracted by the current pipeline."
+        />
+      </SectionCard>
     </div>
   );
 }
