@@ -140,15 +140,17 @@ describe("MarketTab", () => {
     expect(screen.getByText("The market")).toBeInTheDocument();
   });
 
-  it("treats a 404 (null view) as 'no market data yet', not a deleted deal", async () => {
-    // fetchMarket maps a 404 to null. The parent DealDetail has already proven the
-    // deal exists, so the tab must render the neutral per-section empty states, not
-    // an alarming "no longer available / may have been deleted" prompt to abandon a
-    // valid deal.
+  it("treats a 404 (null view) as neutral 'unavailable', not the confident 'nothing extracted'", async () => {
+    // fetchMarket maps a 404 to null. A 404 is NOT proof the pipeline ran and
+    // extracted nothing -- it's also what a route-not-found returns if the web is
+    // deployed ahead of the backend -- so the tab must show a neutral "not
+    // available yet" state, never the per-section "no ... figures were extracted"
+    // negatives (which would be a false claim), and never a "deleted deal" prompt.
     mockFetchMarket.mockResolvedValue(null);
     renderMarketTab();
 
-    expect(await screen.findByText("Market sizing not available")).toBeInTheDocument();
+    expect(await screen.findByText("Market data isn't available yet")).toBeInTheDocument();
+    expect(screen.queryByText("Market sizing not available")).not.toBeInTheDocument();
     expect(screen.queryByText("This deal is no longer available")).not.toBeInTheDocument();
   });
 

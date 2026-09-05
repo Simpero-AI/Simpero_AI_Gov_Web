@@ -4,7 +4,6 @@ import { BarChart3, Compass, Globe, Loader2, type LucideIcon } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
 import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
-import { StatusChip } from "@/components/mvp/common/StatusChip";
 import { fetchMarket, marketQueryKey, type MarketFact, type MarketFactStatus } from "@/api/market";
 
 interface MarketTabProps {
@@ -58,36 +57,44 @@ function UnbackedSection({
   return <EmptyState icon={icon} title={title} description={description} className="border-none p-0" />;
 }
 
-// A claim's trust status, as the app's shared StatusChip. Verified is the earned
-// status (success tone); cited and partially_verified are shown honestly as
-// neutral, never dressed up. Records keyed on the union -> a new/renamed status
-// is a compile error here, not a silently unstyled pill.
+// A claim's trust status as a small pill. Verified is the earned status (success
+// tone); cited/partially_verified are shown honestly as neutral, never dressed up.
+// Record keyed on the union -> a renamed status is a compile error here.
 const STATUS_LABEL: Record<MarketFactStatus, string> = {
   verified: "Verified",
   partially_verified: "Partial",
   cited: "Cited",
 };
-const STATUS_TONE: Record<MarketFactStatus, "success" | "neutral"> = {
-  verified: "success",
-  partially_verified: "neutral",
-  cited: "neutral",
-};
 
 function StatusPill({ status }: { status: MarketFactStatus }) {
-  // fetchMarket casts the API JSON unchecked, so at runtime `status` may be a value
-  // outside the union (a backend rename ahead of a frontend deploy, or a bad row).
-  // Look it up as a plain string so an unknown value falls back to a legible neutral
-  // pill showing the raw value, not a blank, tone-less badge. The Records stay
-  // union-keyed, so a code-side typo is still a compile error.
-  const tone = (STATUS_TONE as Record<string, "success" | "neutral">)[status] ?? "neutral";
+  // Rendered as the SAME inline --rev-* pill CompanyTab uses (verbatim), so the
+  // same "Cited" datum looks identical on the two adjacent claims-driven tabs
+  // rather than pulling StatusChip's pre-revamp badge palette. fetchMarket casts
+  // the API JSON unchecked, so look the label up as a plain string -- an unknown
+  // runtime status (a backend rename ahead of a deploy) still shows its raw value
+  // legibly, not a blank pill; the Record stays union-keyed for compile safety.
   const label = (STATUS_LABEL as Record<string, string>)[status] ?? status;
-  return <StatusChip status={tone}>{label}</StatusChip>;
+  const verified = status === "verified";
+  return (
+    <span
+      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.5px]"
+      style={{
+        color: verified ? "var(--rev-success)" : "var(--rev-text-6)",
+        background: verified ? "var(--rev-tint-success)" : "var(--rev-tint-neutral)",
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 function Citation({ citation }: { citation: string | null }) {
   if (!citation) return null;
+  // --rev-text-5 at 12px clears WCAG AA on --rev-tint-primary; the prior
+  // --rev-text-7 at 10px measured 2.24:1 -- a fail on the very provenance this
+  // view exists to surface.
   return (
-    <span className="font-mono text-[10px] text-[color:var(--rev-text-7)]">{citation}</span>
+    <span className="font-mono text-[12px] text-[color:var(--rev-text-5)]">{citation}</span>
   );
 }
 
@@ -168,27 +175,28 @@ export function MarketTab({ dealId }: MarketTabProps) {
   const sizing = market?.sizing ?? [];
   const definition = market?.marketDefinition ?? [];
   const competition = market?.competitivePosition ?? [];
+  const hasAnyData = sizing.length > 0 || definition.length > 0 || competition.length > 0;
 
-  // Guard the fetch before the sections: their empty states are definitive
-  // negatives ("not available"), so rendering them while the query is still
-  // pending would flash a false "no market data" on a claim-rich deal (and again
-  // on every deal switch, since the query key is per-deal) before the real
-  // figures arrive.
-  if (marketQuery.isPending) {
+  // Guard the sections' definitive "not available" negatives against a load that
+  // hasn't produced figures yet -- on the initial load (isPending), and on a
+  // refetch that has nothing meaningful cached to show (isFetching && !hasAnyData,
+  // e.g. the post-analysis refetch DealDetail fires on completion). Without the
+  // second clause a user parked on the tab sees a false "no market data" flash
+  // before the figures pop in.
+  if (marketQuery.isPending || (marketQuery.isFetching && !hasAnyData)) {
     return (
-      <div className="flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]">
-        <Loader2 className="h-4 w-4 animate-spin" />
+      <div role="status" className="flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         Loading…
       </div>
     );
   }
 
-  // A fetch error with nothing cached blanks the tab. react-query retains `data`
-  // across a failed refetch and only reports isError when there is no cached data,
-  // so a transient refetch failure after figures have loaded (e.g. right after a
-  // re-analysis invalidates the query) keeps rendering them rather than replacing
-  // real figures with an error alert.
-  if (marketQuery.isError && market === null) {
+  // A fetch that NEVER loaded (data === undefined) and errored blanks the tab. Key
+  // on `data === undefined`, NOT `market === null`: a 404 also coalesces to null
+  // (below), and a cached-404 deal whose refetch then fails must fall through to
+  // the neutral stale/unavailable states, not this red alert.
+  if (marketQuery.isError && marketQuery.data === undefined) {
     return (
       <QueryErrorAlert
         message="Couldn't load market data for this deal."
@@ -197,13 +205,22 @@ export function MarketTab({ dealId }: MarketTabProps) {
     );
   }
 
-  // A 404 also maps to null (fetchMarket), but the parent DealDetail has already
-  // proven the deal exists -- its own fetchDeal resolved before this tab mounts, and
-  // a deleted deal is caught there, not here. So a 404 means "no market view yet",
-  // not "deleted"; fall through to the sections' own "not available" empty states,
-  // matching every sibling tab (screening / materials / insights all treat their
-  // 404 -> null benignly), rather than telling the user to abandon a valid deal.
-  // `sizing`/`definition`/`competition` above already coalesce a null view to [].
+  // market === null is a 404. It is NOT proof the pipeline ran and extracted
+  // nothing -- it is also exactly what a route-not-found returns if the web is
+  // deployed ahead of backend #164. Either way we must NOT assert the confident
+  // per-section "nothing was extracted" negatives; show a neutral unavailable
+  // state instead. (The genuine extracted-and-empty case is a 200 with empty
+  // lists, handled by the sections below.)
+  if (market === null) {
+    return (
+      <EmptyState
+        icon={Globe}
+        title="Market data isn't available yet"
+        description="This deal's market view hasn't been produced yet. It appears here once the analysis has run and its results are deployed."
+      />
+    );
+  }
+
   return (
     <div className="space-y-5">
       {/* Reaching here with isError set means a refetch failed while cached figures

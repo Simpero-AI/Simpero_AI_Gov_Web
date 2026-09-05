@@ -116,11 +116,15 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
             ) : (
               <ExtractedGrid fields={extractedFields} />
             )}
-            {/* MandateFitPanel renders its own "not yet screened" empty state for
-                fit === null, so show it even on a screening error (the failure is
-                already surfaced in the verdict slot above) rather than leaving an
-                unexplained blank cell next to the error. */}
-            <MandateFitPanel fit={view?.fit ?? null} />
+            {/* MandateFitPanel's fit === null copy reads as "not scored yet",
+                which is MISLEADING on a load failure -- a screened deal hitting a
+                transient 500 would be shown as one the product can't score. So
+                don't render it when screening errored with nothing cached; the
+                failure is already surfaced in the verdict slot above, and this
+                cell stays empty rather than making a false claim. */}
+            {screeningQuery.isError && view === null ? null : (
+              <MandateFitPanel fit={view?.fit ?? null} />
+            )}
           </div>
         </>
       )}
@@ -130,8 +134,16 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
           so their already-loaded data shows even while the fast queries are still in
           flight. They sit empty until insights arrives. */}
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <HighlightsPanel items={insights?.highlights ?? null} />
-        <RiskFlagsPanel items={insights?.riskFlags ?? null} />
+        <HighlightsPanel
+          items={insights?.highlights ?? null}
+          isLoading={insightsQuery.isPending}
+          isError={insightsQuery.isError}
+        />
+        <RiskFlagsPanel
+          items={insights?.riskFlags ?? null}
+          isLoading={insightsQuery.isPending}
+          isError={insightsQuery.isError}
+        />
       </div>
 
       <div className="mt-5">

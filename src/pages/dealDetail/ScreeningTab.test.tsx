@@ -115,4 +115,42 @@ describe("ScreeningTab", () => {
     expect(screen.getByText("Customer concentration risk")).toBeInTheDocument();
     expect(screen.getByText("Loading…")).toBeInTheDocument();
   });
+
+  it("shows the insight panels analyzing, not a false 'no risk flags', while insights load", async () => {
+    // The fast queries settle; the insights pass (slow) is still running. The panels
+    // must NOT assert the empty negative -- a false "No risk flags" on a screening
+    // product reads as a settled fact.
+    mockScreening.mockResolvedValue(null);
+    mockMaterials.mockResolvedValue({ extractedFields: [] });
+    mockInsights.mockReturnValue(new Promise(() => {})); // insights still running
+    renderScreeningTab();
+
+    expect((await screen.findAllByText("Analyzing materials…")).length).toBe(2);
+    expect(screen.queryByText("No risk flags yet")).not.toBeInTheDocument();
+    expect(screen.queryByText("No highlights yet")).not.toBeInTheDocument();
+  });
+
+  it("shows an insights error, not a false 'no risk flags', when the insights pass fails", async () => {
+    mockScreening.mockResolvedValue(null);
+    mockMaterials.mockResolvedValue({ extractedFields: [] });
+    mockInsights.mockRejectedValue(new Error("insights 500"));
+    renderScreeningTab();
+
+    expect(await screen.findByText("Couldn't load risk flags")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load highlights")).toBeInTheDocument();
+    expect(screen.queryByText("No risk flags yet")).not.toBeInTheDocument();
+  });
+
+  it("does not render the mandate-fit 'coming soon' panel on a screening load error", async () => {
+    // A screening 500 with nothing cached must NOT show MandateFitPanel's
+    // fit===null "coming soon" copy -- that misrepresents a load failure as a deal
+    // the product can't score yet. The failure is surfaced in the verdict slot.
+    mockScreening.mockRejectedValue(new Error("screening 500"));
+    mockMaterials.mockResolvedValue({ extractedFields: [] });
+    mockInsights.mockResolvedValue({ highlights: [], riskFlags: [] });
+    renderScreeningTab();
+
+    expect(await screen.findByText("Couldn't load screening for this deal.")).toBeInTheDocument();
+    expect(screen.queryByText("Mandate fit coming soon")).not.toBeInTheDocument();
+  });
 });
