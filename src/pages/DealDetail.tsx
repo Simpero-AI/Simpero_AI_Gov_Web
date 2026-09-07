@@ -66,6 +66,7 @@ import { screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { screeningInsightsQueryKey } from "@/api/screeningInsights";
 import { marketQueryKey } from "@/api/market";
 import { companyQueryKey } from "@/api/company";
+import { financialsQueryKey } from "@/api/financials";
 import { corroborationQueryKey } from "@/api/corroboration";
 import { ScreeningTab } from "./dealDetail/ScreeningTab";
 import {
@@ -446,6 +447,7 @@ function AnalysisTabs({
         {/* FINANCIALS */}
         {tab === "financials" && (
           <FinancialsTab
+            dealId={dealId}
             memoTyped={memoTyped}
             dealMetrics={dealMetrics}
             dealMetricDiscrepancies={dealMetricDiscrepancies}
@@ -686,6 +688,9 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
       // pipeline just produced; invalidate it so a user parked there sees the
       // populated profile instead of the stale/empty pre-pipeline snapshot.
       void queryClient.invalidateQueries({ queryKey: companyQueryKey(dealId) });
+      // The Financials tab's figures section reads the same claims spine; refetch
+      // it too so its previously empty statement sections populate on completion.
+      void queryClient.invalidateQueries({ queryKey: financialsQueryKey(dealId) });
       // Corroboration runs as a chained stage of the same pipeline; invalidate
       // so a user on the Corroboration tab sees the checks once they land.
       void queryClient.invalidateQueries({ queryKey: corroborationQueryKey(dealId) });

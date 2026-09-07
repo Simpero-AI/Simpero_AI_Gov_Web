@@ -1,10 +1,12 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
   Calculator,
   GitCompare,
   Landmark,
   LineChart,
+  Loader2,
   Minus,
   PieChart,
   Scale,
@@ -19,6 +21,7 @@ import { ProvenanceGlyph } from "@/components/mvp/primitives/ProvenanceGlyph";
 import { CitationRef } from "@/components/mvp/primitives/CitationRef";
 import { DiscrepancyChip } from "@/components/mvp/primitives/DiscrepancyChip";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
+import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
 import { FieldValueList, type FieldValueItem } from "@/components/mvp/common/FieldValueList";
 import { ScenarioToggle } from "@/components/mvp/primitives/ScenarioToggle";
 import {
@@ -35,9 +38,16 @@ import {
 } from "@/components/mvp/analysis/CorroborationPanel";
 import { useCitationSafe } from "@/contexts/CitationContext";
 import { formatUsdShort, formatBpAsPct, formatRatio } from "@/lib/dealMetricsFormat";
+import {
+  fetchFinancials,
+  financialsQueryKey,
+  type FinancialFact,
+  type FinancialFactStatus,
+} from "@/api/financials";
 import type { ICMemoResult, DealMetrics, MetricDiscrepancy, MetricValue, Sourced } from "@shared/simperoTypes";
 
 interface FinancialsTabProps {
+  dealId: string;
   memoTyped: Partial<ICMemoResult> | null;
   dealMetrics: DealMetrics | undefined;
   dealMetricDiscrepancies: MetricDiscrepancy[];
@@ -116,6 +126,190 @@ function UnbackedSection({
   description: string;
 }) {
   return <EmptyState icon={icon} title={title} description={description} className="border-none p-0" />;
+}
+
+// ---------------------------------------------------------------------------
+// Financial Figures — claims-driven numeric facts (GET /deals/{id}/financials
+// via build_financials_view), self-contained in its own card at the top of the
+// tab. Copies MarketTab's StatusPill/Citation/loading-tree conventions verbatim
+// so the same "Cited"/"Verified" datum reads identically across the two
+// adjacent claims-driven tabs. Deliberately does NOT use CitationRef/citationCtx
+// (the sidebar-wired citation path the memo-backed cards below use) — these
+// facts carry a plain human citation string and an optional source URL, not a
+// Sourced<T> with page/section provenance.
+// ---------------------------------------------------------------------------
+
+// A claim's trust status as a small pill. Verified is the earned status (success
+// tone); cited/partially_verified are shown honestly as neutral, never dressed
+// up. Record keyed on the union -> a renamed status is a compile error here.
+const FINANCIAL_STATUS_LABEL: Record<FinancialFactStatus, string> = {
+  verified: "Verified",
+  partially_verified: "Partial",
+  cited: "Cited",
+};
+
+function StatusPill({ status }: { status: FinancialFactStatus }) {
+  // Rendered as the SAME inline --rev-* pill MarketTab/CompanyTab use (verbatim).
+  // fetchFinancials casts the API JSON unchecked, so look the label up as a plain
+  // string -- an unknown runtime status (a backend rename ahead of a deploy)
+  // still shows its raw value legibly, not a blank pill; the Record stays
+  // union-keyed for compile safety.
+  const label = (FINANCIAL_STATUS_LABEL as Record<string, string>)[status] ?? status;
+  const verified = status === "verified";
+  return (
+    <span
+      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.5px]"
+      style={{
+        color: verified ? "var(--rev-success)" : "var(--rev-text-6)",
+        background: verified ? "var(--rev-tint-success)" : "var(--rev-tint-neutral)",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function Citation({ citation, sourceUrl }: { citation: string | null; sourceUrl: string | null }) {
+  // A source URL renders as a link ONLY when it's a non-empty http(s) string --
+  // guarding against a javascript:/data: href reaching the anchor. The link text
+  // is the URL's hostname (falling back to the citation, then the raw href when a
+  // hostname can't be derived). Absent a usable URL, fall back to MarketTab's
+  // plain citation span; absent both, render nothing.
+  const href = sourceUrl && /^https?:\/\//i.test(sourceUrl) ? sourceUrl : null;
+  if (href) {
+    let text = citation ?? href;
+    try {
+      text = new URL(href).hostname || citation || href;
+    } catch {
+      text = citation ?? href;
+    }
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-mono text-[12px] text-[color:var(--rev-text-5)] underline underline-offset-2 hover:text-[color:var(--rev-text-3)]"
+      >
+        {text}
+      </a>
+    );
+  }
+  if (!citation) return null;
+  return <span className="font-mono text-[12px] text-[color:var(--rev-text-5)]">{citation}</span>;
+}
+
+function FinancialFactRow({ fact }: { fact: FinancialFact }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-[color:var(--rev-border-subtle)] py-2.5 last:border-b-0">
+      <div className="min-w-0">
+        <span className="text-[13.5px] text-[color:var(--rev-text-2)]">{fact.label}</span>
+        {fact.period ? (
+          <span className="ml-2 text-[11.5px] text-[color:var(--rev-text-6)]">{fact.period}</span>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-2.5">
+        <span className="font-medium tabular-nums text-[color:var(--rev-text-1)]">{fact.value}</span>
+        <StatusPill status={fact.status} />
+        <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The claims-backed financial-figures card. Self-contained: it owns its own
+ * loading/error/empty states inside a single SectionCard, mirroring
+ * MarketTab's loading decision tree. isPending (or a refetch with nothing to
+ * show) -> spinner; a never-loaded error -> QueryErrorAlert; a 404 (view ===
+ * null) -> neutral "not available yet" EmptyState (NOT the confident
+ * per-section negatives, since a 404 is also what a not-yet-deployed backend
+ * returns); a 200 with all-empty sections -> a single UnbackedSection. Each of
+ * the five statement groupings renders only when it has rows.
+ */
+function FinancialFiguresSection({ dealId }: { dealId: string }) {
+  const financialsQuery = useQuery({
+    queryKey: financialsQueryKey(dealId),
+    queryFn: () => fetchFinancials(dealId),
+  });
+  const view = financialsQuery.data ?? null;
+  const sections: Array<{ title: string; rows: FinancialFact[] }> = [
+    { title: "Income Statement", rows: view?.incomeStatement ?? [] },
+    { title: "Profitability", rows: view?.profitability ?? [] },
+    { title: "Balance Sheet", rows: view?.balanceSheet ?? [] },
+    { title: "Cash Flow", rows: view?.cashFlow ?? [] },
+    { title: "Operating", rows: view?.operating ?? [] },
+  ];
+  const hasAny = sections.some((s) => s.rows.length > 0);
+
+  let content: ReactNode;
+  // Guard the definitive "not available" negatives against a load that hasn't
+  // produced figures yet -- the initial load (isPending) and a refetch with
+  // nothing cached to show (isFetching && !hasAny, e.g. the post-analysis
+  // refetch DealDetail fires on completion).
+  if (financialsQuery.isPending || (financialsQuery.isFetching && !hasAny)) {
+    content = (
+      <div role="status" className="flex items-center gap-2 py-2 text-sm text-[color:var(--rev-text-6)]">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        Loading…
+      </div>
+    );
+  } else if (financialsQuery.isError && financialsQuery.data === undefined) {
+    // A fetch that NEVER loaded (data === undefined) and errored. Key on
+    // `data === undefined`, NOT `view === null`: a 404 also coalesces to null,
+    // and a cached-404 deal whose refetch then fails must fall through to the
+    // neutral unavailable state, not this alert.
+    content = (
+      <QueryErrorAlert
+        message="Couldn't load financial figures for this deal."
+        error={financialsQuery.error as Error | null}
+      />
+    );
+  } else if (view === null) {
+    // view === null is a 404. It is NOT proof the pipeline ran and extracted
+    // nothing -- it is also what a route-not-found returns if the web is
+    // deployed ahead of the backend endpoint. Either way, show a neutral
+    // unavailable state, not the confident all-empty negative below.
+    content = (
+      <EmptyState
+        icon={BarChart3}
+        title="Financial figures not available yet"
+        description="This deal's financial figures view hasn't been produced yet. It appears here once the analysis has run and its results are deployed."
+      />
+    );
+  } else if (!hasAny) {
+    content = (
+      <UnbackedSection
+        icon={BarChart3}
+        title="No financial figures extracted"
+        description="No income-statement, profitability, balance-sheet, cash-flow, or operating figures were extracted from this deal's materials."
+      />
+    );
+  } else {
+    content = (
+      <div className="space-y-5">
+        {sections
+          .filter((s) => s.rows.length > 0)
+          .map((s) => (
+            <div key={s.title}>
+              <p className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.6px] text-[color:var(--rev-text-7)]">
+                {s.title}
+              </p>
+              <div className="rounded-lg border border-[color:var(--rev-border-subtle)] px-4">
+                {s.rows.map((f, i) => (
+                  <FinancialFactRow key={`${f.label}-${i}`} fact={f} />
+                ))}
+              </div>
+            </div>
+          ))}
+      </div>
+    );
+  }
+
+  return (
+    <SectionCard eyebrow="Financial Figures" icon={<BarChart3 className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
+      {content}
+    </SectionCard>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -276,7 +470,7 @@ type ExitScenario = {
   irrPct: number;
 };
 
-export function FinancialsTab({ memoTyped, dealMetrics, dealMetricDiscrepancies }: FinancialsTabProps) {
+export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscrepancies }: FinancialsTabProps) {
   const d = memoTyped?.deliverable;
   const corroboration = useMemo(
     () => collectFinancialsCorroboration(memoTyped, dealMetrics),
@@ -296,6 +490,11 @@ export function FinancialsTab({ memoTyped, dealMetrics, dealMetricDiscrepancies 
 
   return (
     <div className="space-y-5">
+      {/* Claims-backed financial figures (GET /deals/{id}/financials) — self-
+          contained with its own loading/empty/error, placed above the memo-
+          derived cards below (which self-empty independently of this query). */}
+      <FinancialFiguresSection dealId={dealId} />
+
       {dealMetrics && (
         <HeadlineMetricsCard metrics={dealMetrics} discrepancies={dealMetricDiscrepancies} />
       )}
