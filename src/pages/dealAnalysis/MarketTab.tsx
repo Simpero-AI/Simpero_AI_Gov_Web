@@ -98,14 +98,35 @@ function StatusPill({ status }: { status: MarketFactStatus }) {
   );
 }
 
-function Citation({ citation }: { citation: string | null }) {
+function Citation({ citation, sourceUrl }: { citation: string | null; sourceUrl: string | null }) {
+  // A source URL renders as a link ONLY when it's a non-empty http(s) string --
+  // guarding against a javascript:/data: href reaching the anchor. The link text
+  // is the URL's hostname (falling back to the citation, then the raw href when a
+  // hostname can't be derived). Absent a usable URL, fall back to the plain
+  // citation span; absent both, render nothing. --rev-text-5 at 12px clears WCAG
+  // AA on --rev-tint-primary; the prior --rev-text-7 at 10px measured 2.24:1 -- a
+  // fail on the very provenance this view exists to surface.
+  const href = sourceUrl && /^https?:\/\//i.test(sourceUrl) ? sourceUrl : null;
+  if (href) {
+    let text = citation ?? href;
+    try {
+      text = new URL(href).hostname || citation || href;
+    } catch {
+      text = citation ?? href;
+    }
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-mono text-[12px] text-[color:var(--rev-text-5)] underline underline-offset-2 hover:text-[color:var(--rev-text-3)]"
+      >
+        {text}
+      </a>
+    );
+  }
   if (!citation) return null;
-  // --rev-text-5 at 12px clears WCAG AA on --rev-tint-primary; the prior
-  // --rev-text-7 at 10px measured 2.24:1 -- a fail on the very provenance this
-  // view exists to surface.
-  return (
-    <span className="font-mono text-[12px] text-[color:var(--rev-text-5)]">{citation}</span>
-  );
+  return <span className="font-mono text-[12px] text-[color:var(--rev-text-5)]">{citation}</span>;
 }
 
 // A human-readable subtitle for the well-known sizing acronyms; unknown labels
@@ -137,9 +158,9 @@ function SizingCard({ fact }: { fact: MarketFact }) {
         <span className="text-[12px] text-[color:var(--rev-text-4)]">{description ?? ""}</span>
         <StatusPill status={fact.status} />
       </div>
-      {fact.citation ? (
+      {fact.citation || fact.sourceUrl ? (
         <div className="mt-2">
-          <Citation citation={fact.citation} />
+          <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
         </div>
       ) : null}
     </div>
@@ -159,7 +180,7 @@ function AssertionRow({ fact }: { fact: MarketFact }) {
           {fact.label || "—"}
         </span>
         <span className="flex shrink-0 items-center gap-2.5">
-          <Citation citation={fact.citation} />
+          <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
           <StatusPill status={fact.status} />
         </span>
       </div>

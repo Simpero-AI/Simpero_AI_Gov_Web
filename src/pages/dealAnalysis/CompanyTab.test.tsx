@@ -53,8 +53,8 @@ describe("CompanyTab", () => {
   it("renders identity facts and grouped qualitative assertions with status", async () => {
     mockFetchCompany.mockResolvedValue({
       facts: [
-        { label: "Sector", value: "Gaming & Leisure", citation: null, status: "derived", entity: "AcmeCo" },
-        { label: "Headcount", value: "1,450", citation: "cim.pdf · p.4", status: "verified", entity: "AcmeCo" },
+        { label: "Sector", value: "Gaming & Leisure", citation: null, status: "derived", entity: "AcmeCo", sourceUrl: null },
+        { label: "Headcount", value: "1,450", citation: "cim.pdf · p.4", status: "verified", entity: "AcmeCo", sourceUrl: null },
       ],
       overview: [
         {
@@ -63,6 +63,7 @@ describe("CompanyTab", () => {
           citation: "cim.pdf · p.6",
           status: "verified",
           entity: "AcmeCo",
+          sourceUrl: null,
         },
       ],
       risks: [
@@ -72,6 +73,7 @@ describe("CompanyTab", () => {
           citation: "cim.pdf · p.7",
           status: "cited",
           entity: "AcmeCo",
+          sourceUrl: null,
         },
       ],
       commercial: [],
@@ -93,6 +95,47 @@ describe("CompanyTab", () => {
     expect(screen.queryByText("Company facts not available")).not.toBeInTheDocument();
     // A section with no claims still renders its honest empty-state.
     expect(screen.getByText("Commercial terms not available")).toBeInTheDocument();
+  });
+
+  it("renders a web sourceUrl as a link and a deck citation as plain text", async () => {
+    // A fact with a valid http(s) sourceUrl renders a hostname link (new tab,
+    // noopener), mirroring the Financials tab; a deck-sourced fact with no URL
+    // keeps its plain citation text and is never an anchor.
+    mockFetchCompany.mockResolvedValue({
+      facts: [
+        {
+          label: "Headcount",
+          value: "1,450",
+          citation: "example.com",
+          status: "cited",
+          entity: "AcmeCo",
+          sourceUrl: "https://example.com/x",
+        },
+        {
+          label: "Founded",
+          value: "2011",
+          citation: "deck.pdf · p.3",
+          status: "cited",
+          entity: "AcmeCo",
+          sourceUrl: null,
+        },
+      ],
+      overview: [],
+      risks: [],
+      commercial: [],
+      relatedParties: [],
+      plans: [],
+    });
+    renderCompanyTab();
+
+    const link = await screen.findByRole("link", { name: "example.com" });
+    expect(link).toHaveAttribute("href", "https://example.com/x");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+
+    // The deck-sourced fact stays plain text — not wrapped in an anchor.
+    const deckCitation = screen.getByText("deck.pdf · p.3");
+    expect(deckCitation.closest("a")).toBeNull();
   });
 
   it("shows an error state when the company fetch fails", async () => {

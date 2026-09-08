@@ -107,9 +107,33 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function Citation({ citation }: { citation: string | null }) {
+function Citation({ citation, sourceUrl }: { citation: string | null; sourceUrl: string | null }) {
+  // A source URL renders as a link ONLY when it's a non-empty http(s) string --
+  // guarding against a javascript:/data: href reaching the anchor. The link text
+  // is the URL's hostname (falling back to the citation, then the raw href when a
+  // hostname can't be derived). Absent a usable URL, fall back to the plain
+  // citation span; absent both, render nothing.
+  const href = sourceUrl && /^https?:\/\//i.test(sourceUrl) ? sourceUrl : null;
+  if (href) {
+    let text = citation ?? href;
+    try {
+      text = new URL(href).hostname || citation || href;
+    } catch {
+      text = citation ?? href;
+    }
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-mono text-[12px] text-[color:var(--rev-text-5)] underline underline-offset-2 hover:text-[color:var(--rev-text-3)]"
+      >
+        {text}
+      </a>
+    );
+  }
   if (!citation) return null;
-  return <span className="font-mono text-[10px] text-[color:var(--rev-text-7)]">{citation}</span>;
+  return <span className="font-mono text-[12px] text-[color:var(--rev-text-5)]">{citation}</span>;
 }
 
 function FactCard({ fact }: { fact: CompanyFact }) {
@@ -120,7 +144,7 @@ function FactCard({ fact }: { fact: CompanyFact }) {
       </p>
       <p className="text-[15px] font-medium text-[color:var(--rev-text-1)]">{fact.value}</p>
       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-[color:var(--rev-border-subtle)] pt-2">
-        <Citation citation={fact.citation} />
+        <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
         <StatusPill status={fact.status} />
       </div>
     </div>
@@ -134,7 +158,7 @@ function AssertionRow({ fact }: { fact: CompanyFact }) {
       <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-[color:var(--rev-border-subtle)] pt-2.5">
         <span className="truncate text-[11.5px] text-[color:var(--rev-text-5)]">{fact.entity || "—"}</span>
         <span className="flex shrink-0 items-center gap-2.5">
-          <Citation citation={fact.citation} />
+          <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
           <StatusPill status={fact.status} />
         </span>
       </div>
