@@ -42,8 +42,8 @@ describe("MarketTab", () => {
   it("renders extracted sizing, market-definition and competitive-position facts with status", async () => {
     mockFetchMarket.mockResolvedValue({
       sizing: [
-        { label: "TAM", value: "$5.00B", citation: "cim.pdf · p.12", status: "verified", entity: null },
-        { label: "SOM", value: "$400.00M", citation: "cim.pdf · p.13", status: "cited", entity: null },
+        { label: "TAM", value: "$5.00B", citation: "cim.pdf · p.12", status: "verified", entity: null, sourceUrl: null },
+        { label: "SOM", value: "$400.00M", citation: "cim.pdf · p.13", status: "cited", entity: null, sourceUrl: null },
       ],
       marketDefinition: [
         {
@@ -52,6 +52,7 @@ describe("MarketTab", () => {
           citation: "cim.pdf · p.8",
           status: "verified",
           entity: "UK student housing market",
+          sourceUrl: null,
         },
       ],
       competitivePosition: [
@@ -61,6 +62,7 @@ describe("MarketTab", () => {
           citation: "cim.pdf · p.9",
           status: "cited",
           entity: "AcmeCo",
+          sourceUrl: null,
         },
       ],
     });
@@ -79,6 +81,44 @@ describe("MarketTab", () => {
     expect(screen.queryByText("Competitive position not available")).not.toBeInTheDocument();
   });
 
+  it("renders a web sourceUrl as a link and a deck citation as plain text", async () => {
+    // A fact with a valid http(s) sourceUrl renders a hostname link (new tab,
+    // noopener), mirroring the Financials tab; a deck-sourced fact with no URL
+    // keeps its plain citation text and is never an anchor.
+    mockFetchMarket.mockResolvedValue({
+      sizing: [
+        {
+          label: "TAM",
+          value: "$5.00B",
+          citation: "example.com",
+          status: "cited",
+          entity: null,
+          sourceUrl: "https://example.com/x",
+        },
+        {
+          label: "SOM",
+          value: "$400.00M",
+          citation: "deck.pdf · p.3",
+          status: "cited",
+          entity: null,
+          sourceUrl: null,
+        },
+      ],
+      marketDefinition: [],
+      competitivePosition: [],
+    });
+    renderMarketTab();
+
+    const link = await screen.findByRole("link", { name: "example.com" });
+    expect(link).toHaveAttribute("href", "https://example.com/x");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+
+    // The deck-sourced fact stays plain text — not wrapped in an anchor.
+    const deckCitation = screen.getByText("deck.pdf · p.3");
+    expect(deckCitation.closest("a")).toBeNull();
+  });
+
   it("renders a non-acronym sizing label with a null citation cleanly (no blank/doubled caption)", async () => {
     // "Market Size" / "Market Growth (CAGR)" aren't in SIZING_DESC, so they have
     // no caption description. With a null citation the card still renders value +
@@ -86,8 +126,8 @@ describe("MarketTab", () => {
     // doubled into the caption).
     mockFetchMarket.mockResolvedValue({
       sizing: [
-        { label: "Market Size", value: "$1.20B", citation: null, status: "verified", entity: null },
-        { label: "Market Growth (CAGR)", value: "8%", citation: "cim.pdf · p.5", status: "cited", entity: null },
+        { label: "Market Size", value: "$1.20B", citation: null, status: "verified", entity: null, sourceUrl: null },
+        { label: "Market Growth (CAGR)", value: "8%", citation: "cim.pdf · p.5", status: "cited", entity: null, sourceUrl: null },
       ],
       marketDefinition: [],
       competitivePosition: [],
@@ -130,6 +170,7 @@ describe("MarketTab", () => {
           citation: null,
           status: "verified",
           entity: null,
+          sourceUrl: null,
         },
       ],
       competitivePosition: [],
@@ -162,7 +203,7 @@ describe("MarketTab", () => {
     // first load with nothing cached).
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     mockFetchMarket.mockResolvedValueOnce({
-      sizing: [{ label: "TAM", value: "$5.00B", citation: null, status: "verified", entity: null }],
+      sizing: [{ label: "TAM", value: "$5.00B", citation: null, status: "verified", entity: null, sourceUrl: null }],
       marketDefinition: [],
       competitivePosition: [],
     });
@@ -183,16 +224,20 @@ describe("MarketTab", () => {
     expect(screen.queryByText("Couldn't load market data for this deal.")).not.toBeInTheDocument();
   });
 
-  it("keeps the mockup's not-yet-sourced sections as honest placeholders", async () => {
-    // CLAUDE.md structure rule: a mockup section with no claims source is rendered
-    // as an UnbackedSection placeholder, not dropped (mirrors CompanyTab).
+  it("renders the uniform no-evidence state for the not-yet-sourced sections", async () => {
+    // A mockup section with no claims source keeps its eyebrow but shows the
+    // shared "No evidence found" body, never a per-box "coming soon" placeholder.
     mockFetchMarket.mockResolvedValue(EMPTY);
     renderMarketTab();
 
     await screen.findByText("Market sizing not available");
-    expect(screen.getByText("Growth drivers coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Market risks coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Positioning matrix coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Growth strategy coming soon")).toBeInTheDocument();
+    expect(screen.getAllByText("No evidence found")).toHaveLength(4);
+    expect(
+      screen.getAllByText("Nothing on this was found in the deal's materials or public sources.").length
+    ).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText("Growth drivers coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Market risks coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Positioning matrix coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Growth strategy coming soon")).not.toBeInTheDocument();
   });
 });

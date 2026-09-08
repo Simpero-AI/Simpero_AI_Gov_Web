@@ -49,13 +49,20 @@ describe("FinancialsTab", () => {
     mockFetchFinancials.mockResolvedValue(EMPTY_FINANCIALS);
     renderFinancialsTab({ memoTyped: null, dealMetrics: undefined, dealMetricDiscrepancies: [] });
     expect(screen.getByText("Financial projections not yet extracted")).toBeInTheDocument();
+    // The stray mock reference "(ref: G-42)" is gone from the projections copy.
+    expect(screen.queryByText(/ref: G-42/)).not.toBeInTheDocument();
     expect(screen.getByText("Unit economics not yet extracted")).toBeInTheDocument();
     expect(screen.getByText("See Company tab for revenue mix")).toBeInTheDocument();
     expect(screen.getByText("Multi-year financial trend not yet available")).toBeInTheDocument();
-    expect(screen.getByText("Balance sheet data coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Valuation & deal-structure figures coming soon")).toBeInTheDocument();
     expect(screen.getByText("Financial model not yet available")).toBeInTheDocument();
-    expect(screen.getByText("Valuation cross-check coming soon")).toBeInTheDocument();
+    // Valuation & Deal Structure and Valuation Cross-Check now show the shared
+    // no-evidence body; the removed Balance Sheet Snapshot box (which contradicted
+    // the populated Financial Figures › Balance Sheet section) is gone.
+    expect(screen.getAllByText("No evidence found")).toHaveLength(2);
+    expect(screen.queryByText("Balance Sheet Snapshot")).not.toBeInTheDocument();
+    expect(screen.queryByText("Balance sheet data coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Valuation & deal-structure figures coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Valuation cross-check coming soon")).not.toBeInTheDocument();
     expect(screen.getByText(/no structured source citations/i)).toBeInTheDocument();
   });
 
@@ -97,9 +104,12 @@ describe("FinancialsTab", () => {
     expect(screen.getByText("Magic #")).toBeInTheDocument();
     expect(screen.getByText("1.4")).toBeInTheDocument();
 
-    // Sections with genuinely no backing field stay honest even with a fully-populated memo.
-    expect(screen.getByText("Balance sheet data coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Valuation cross-check coming soon")).toBeInTheDocument();
+    // Sections with genuinely no backing field stay honest even with a fully-populated
+    // memo — Valuation & Deal Structure and Valuation Cross-Check show the shared
+    // no-evidence body; the removed Balance Sheet Snapshot box is gone.
+    expect(screen.getAllByText("No evidence found").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("Balance sheet data coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Valuation cross-check coming soon")).not.toBeInTheDocument();
   });
 
   it("builds the Financial Model scenario toggle from the memo's own scenario labels, without assuming a Downside/Base/Upside naming scheme", async () => {

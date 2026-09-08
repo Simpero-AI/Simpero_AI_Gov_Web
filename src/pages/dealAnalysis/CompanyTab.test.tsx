@@ -53,8 +53,8 @@ describe("CompanyTab", () => {
   it("renders identity facts and grouped qualitative assertions with status", async () => {
     mockFetchCompany.mockResolvedValue({
       facts: [
-        { label: "Sector", value: "Gaming & Leisure", citation: null, status: "derived", entity: "AcmeCo" },
-        { label: "Headcount", value: "1,450", citation: "cim.pdf · p.4", status: "verified", entity: "AcmeCo" },
+        { label: "Sector", value: "Gaming & Leisure", citation: null, status: "derived", entity: "AcmeCo", sourceUrl: null },
+        { label: "Headcount", value: "1,450", citation: "cim.pdf · p.4", status: "verified", entity: "AcmeCo", sourceUrl: null },
       ],
       overview: [
         {
@@ -63,6 +63,7 @@ describe("CompanyTab", () => {
           citation: "cim.pdf · p.6",
           status: "verified",
           entity: "AcmeCo",
+          sourceUrl: null,
         },
       ],
       risks: [
@@ -72,6 +73,7 @@ describe("CompanyTab", () => {
           citation: "cim.pdf · p.7",
           status: "cited",
           entity: "AcmeCo",
+          sourceUrl: null,
         },
       ],
       commercial: [],
@@ -95,6 +97,47 @@ describe("CompanyTab", () => {
     expect(screen.getByText("Commercial terms not available")).toBeInTheDocument();
   });
 
+  it("renders a web sourceUrl as a link and a deck citation as plain text", async () => {
+    // A fact with a valid http(s) sourceUrl renders a hostname link (new tab,
+    // noopener), mirroring the Financials tab; a deck-sourced fact with no URL
+    // keeps its plain citation text and is never an anchor.
+    mockFetchCompany.mockResolvedValue({
+      facts: [
+        {
+          label: "Headcount",
+          value: "1,450",
+          citation: "example.com",
+          status: "cited",
+          entity: "AcmeCo",
+          sourceUrl: "https://example.com/x",
+        },
+        {
+          label: "Founded",
+          value: "2011",
+          citation: "deck.pdf · p.3",
+          status: "cited",
+          entity: "AcmeCo",
+          sourceUrl: null,
+        },
+      ],
+      overview: [],
+      risks: [],
+      commercial: [],
+      relatedParties: [],
+      plans: [],
+    });
+    renderCompanyTab();
+
+    const link = await screen.findByRole("link", { name: "example.com" });
+    expect(link).toHaveAttribute("href", "https://example.com/x");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+
+    // The deck-sourced fact stays plain text — not wrapped in an anchor.
+    const deckCitation = screen.getByText("deck.pdf · p.3");
+    expect(deckCitation.closest("a")).toBeNull();
+  });
+
   it("shows an error state when the company fetch fails", async () => {
     mockFetchCompany.mockRejectedValue(new Error("boom"));
     renderCompanyTab();
@@ -111,17 +154,27 @@ describe("CompanyTab", () => {
     expect(screen.queryByText("Company facts not available")).not.toBeInTheDocument();
   });
 
-  it("keeps the mockup's not-yet-sourced sections as honest placeholders", async () => {
+  it("renders the uniform no-evidence state for not-yet-sourced sections and drops the redundant Technology & Operations box", async () => {
     mockFetchCompany.mockResolvedValue(EMPTY);
     renderCompanyTab();
 
     await screen.findByText("Company facts not available");
-    expect(screen.getByText("Co-investor data coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Key customer data coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Funding history coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Geographic breakdown coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Technology & operations details coming soon")).toBeInTheDocument();
-    // No memo OFAC data -> the compliance section shows its own placeholder.
+    // Co-Investors, Key Customers, Funding History, and Geographic Presence keep
+    // their eyebrow but show the shared "No evidence found" body, never a per-box
+    // "coming soon" placeholder.
+    expect(screen.getAllByText("No evidence found")).toHaveLength(4);
+    expect(
+      screen.getAllByText("Nothing on this was found in the deal's materials or public sources.").length
+    ).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText("Co-investor data coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Key customer data coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Funding history coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Geographic breakdown coming soon")).not.toBeInTheDocument();
+    // The redundant Technology & Operations box is removed entirely (its content
+    // is already routed into Business Overview).
+    expect(screen.queryByText("Technology & Operations")).not.toBeInTheDocument();
+    expect(screen.queryByText("Technology & operations details coming soon")).not.toBeInTheDocument();
+    // No memo OFAC data -> the compliance section is untouched and shows its own placeholder.
     expect(screen.getByText("IP & compliance data coming soon")).toBeInTheDocument();
   });
 

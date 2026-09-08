@@ -22,6 +22,7 @@ export interface MarketFact {
   citation: string | null;
   status: MarketFactStatus;
   entity: string | null;
+  sourceUrl: string | null;
 }
 
 export interface MarketView {

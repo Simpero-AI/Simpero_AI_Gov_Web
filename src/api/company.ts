@@ -17,6 +17,7 @@ export interface CompanyFact {
   /** Trust status: "verified" | "partially_verified" | "cited", or "derived" for sector/HQ. */
   status: string;
   entity: string | null;
+  sourceUrl: string | null;
 }
 
 export interface CompanyView {
