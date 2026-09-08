@@ -4,7 +4,6 @@ import {
   BarChart3,
   Calculator,
   GitCompare,
-  Landmark,
   LineChart,
   Loader2,
   Minus,
@@ -127,6 +126,12 @@ function UnbackedSection({
 }) {
   return <EmptyState icon={icon} title={title} description={description} className="border-none p-0" />;
 }
+
+// Uniform "no evidence" copy for a genuinely-unbuilt box (no deck claim AND no
+// web source) — shared across every converted section so the reader sees one
+// consistent empty state rather than a per-box "coming soon" placeholder.
+const NO_EVIDENCE_TITLE = "No evidence found";
+const NO_EVIDENCE_DESCRIPTION = "Nothing on this was found in the deal's materials or public sources.";
 
 // ---------------------------------------------------------------------------
 // Financial Figures — claims-driven numeric facts (GET /deals/{id}/financials
@@ -405,10 +410,10 @@ function HeadlineMetricsCard({
 // data: DealMetrics (extraction source citation) plus the Sourced fields on
 // ICMemoDeliverable (financialGrid, unitEconomics, retentionMetrics,
 // salesEfficiency, exitStrategy.scenarios). Same "use real per-field data,
-// don't fabricate" approach CompanyTab/MarketTab established. Balance Sheet
-// Snapshot, the 3-Year Financial Trend, Valuation & Deal Structure, and the
-// DCF-style projection table have no backing field, so they contribute
-// nothing here. (investmentStructure is deliberately not counted on this
+// don't fabricate" approach CompanyTab/MarketTab established. The 3-Year
+// Financial Trend, Valuation & Deal Structure, and the DCF-style projection
+// table have no backing field, so they contribute nothing here.
+// (investmentStructure is deliberately not counted on this
 // tab — it's CapTableTab's corroboration signal, not this one's; see the
 // note on the Valuation & Deal Structure card below.)
 // ---------------------------------------------------------------------------
@@ -508,7 +513,7 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
               <UnbackedSection
                 icon={LineChart}
                 title="Financial projections not yet extracted"
-                description="Year-by-year actuals, management estimates, and projections (ref: G-42) will appear here once the source document is processed."
+                description="Year-by-year actuals, management estimates, and projections will appear here once the source document is processed."
               />
             </SectionCard>
           );
@@ -674,17 +679,6 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
         />
       </SectionCard>
 
-      {/* Balance Sheet Snapshot — no assets/liabilities/cash/debt field exists
-          anywhere on ICMemoDeliverable; 100% unbacked, per the same
-          verify-against-the-real-type discipline as Company/Market tabs. */}
-      <SectionCard eyebrow="Balance Sheet Snapshot" icon={<Landmark className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-        <UnbackedSection
-          icon={Landmark}
-          title="Balance sheet data coming soon"
-          description="Cash, debt, working capital, and other balance-sheet line items aren't extracted by the current pipeline."
-        />
-      </SectionCard>
-
       {/* Valuation & Deal Structure (mockup ~L3087-3116: one card, figures
           grid — Enterprise Value / EV per Revenue / EV per EBITDA / Proposed
           Structure / Fund Allocation / Target Close — on top, methodology +
@@ -702,11 +696,7 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
           from SummaryTab. So the whole card, including the figures grid,
           stays 100% unbacked. */}
       <SectionCard eyebrow="Valuation &amp; Deal Structure" icon={<Scale className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-        <UnbackedSection
-          icon={Scale}
-          title="Valuation & deal-structure figures coming soon"
-          description="Enterprise value, EV/EBITDA, proposed structure, fund allocation, target close, an analyst-written valuation rationale, and a comparable-transactions multiple table aren't produced by the current pipeline. (Investment amount, pre/post-money valuation, ownership %, and governance rights are already shown under Cap Table → Key Deal Terms.)"
-        />
+        <UnbackedSection icon={Scale} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
       </SectionCard>
 
       {/* Financial Model — exitStrategy.scenarios has real per-scenario
@@ -783,11 +773,7 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
           are a known, accepted backend gap for this whole redesign. 100%
           unbacked; honest coming-soon state, no fabricated ranges. */}
       <SectionCard eyebrow="Valuation Cross-Check" icon={<GitCompare className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-        <UnbackedSection
-          icon={GitCompare}
-          title="Valuation cross-check coming soon"
-          description="A DCF build, precedent-transaction benchmarking, and comparable-companies EV/Revenue analysis are a known gap in the current pipeline — deferred to a future memo-synthesis/analysis-content engine, not silently dropped."
-        />
+        <UnbackedSection icon={GitCompare} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
       </SectionCard>
 
       <CorroborationPanel

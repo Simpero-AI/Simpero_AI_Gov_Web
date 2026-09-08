@@ -224,16 +224,20 @@ describe("MarketTab", () => {
     expect(screen.queryByText("Couldn't load market data for this deal.")).not.toBeInTheDocument();
   });
 
-  it("keeps the mockup's not-yet-sourced sections as honest placeholders", async () => {
-    // CLAUDE.md structure rule: a mockup section with no claims source is rendered
-    // as an UnbackedSection placeholder, not dropped (mirrors CompanyTab).
+  it("renders the uniform no-evidence state for the not-yet-sourced sections", async () => {
+    // A mockup section with no claims source keeps its eyebrow but shows the
+    // shared "No evidence found" body, never a per-box "coming soon" placeholder.
     mockFetchMarket.mockResolvedValue(EMPTY);
     renderMarketTab();
 
     await screen.findByText("Market sizing not available");
-    expect(screen.getByText("Growth drivers coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Market risks coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Positioning matrix coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Growth strategy coming soon")).toBeInTheDocument();
+    expect(screen.getAllByText("No evidence found")).toHaveLength(4);
+    expect(
+      screen.getAllByText("Nothing on this was found in the deal's materials or public sources.").length
+    ).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText("Growth drivers coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Market risks coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Positioning matrix coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Growth strategy coming soon")).not.toBeInTheDocument();
   });
 });

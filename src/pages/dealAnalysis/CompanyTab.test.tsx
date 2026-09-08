@@ -154,17 +154,27 @@ describe("CompanyTab", () => {
     expect(screen.queryByText("Company facts not available")).not.toBeInTheDocument();
   });
 
-  it("keeps the mockup's not-yet-sourced sections as honest placeholders", async () => {
+  it("renders the uniform no-evidence state for not-yet-sourced sections and drops the redundant Technology & Operations box", async () => {
     mockFetchCompany.mockResolvedValue(EMPTY);
     renderCompanyTab();
 
     await screen.findByText("Company facts not available");
-    expect(screen.getByText("Co-investor data coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Key customer data coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Funding history coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Geographic breakdown coming soon")).toBeInTheDocument();
-    expect(screen.getByText("Technology & operations details coming soon")).toBeInTheDocument();
-    // No memo OFAC data -> the compliance section shows its own placeholder.
+    // Co-Investors, Key Customers, Funding History, and Geographic Presence keep
+    // their eyebrow but show the shared "No evidence found" body, never a per-box
+    // "coming soon" placeholder.
+    expect(screen.getAllByText("No evidence found")).toHaveLength(4);
+    expect(
+      screen.getAllByText("Nothing on this was found in the deal's materials or public sources.").length
+    ).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText("Co-investor data coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Key customer data coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Funding history coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Geographic breakdown coming soon")).not.toBeInTheDocument();
+    // The redundant Technology & Operations box is removed entirely (its content
+    // is already routed into Business Overview).
+    expect(screen.queryByText("Technology & Operations")).not.toBeInTheDocument();
+    expect(screen.queryByText("Technology & operations details coming soon")).not.toBeInTheDocument();
+    // No memo OFAC data -> the compliance section is untouched and shows its own placeholder.
     expect(screen.getByText("IP & compliance data coming soon")).toBeInTheDocument();
   });
 

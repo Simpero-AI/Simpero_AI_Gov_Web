@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
   Compass,
-  Cpu,
   Globe,
   Handshake,
   Layers,
@@ -79,6 +78,12 @@ function UnbackedSection({
 }) {
   return <EmptyState icon={icon} title={title} description={description} className="border-none p-0" />;
 }
+
+// Uniform "no evidence" copy for a genuinely-unbuilt box (no deck claim AND no
+// web source) — shared across every converted section so the reader sees one
+// consistent empty state rather than a per-box "coming soon" placeholder.
+const NO_EVIDENCE_TITLE = "No evidence found";
+const NO_EVIDENCE_DESCRIPTION = "Nothing on this was found in the deal's materials or public sources.";
 
 // A claim's trust status as a small pill. "derived" marks a deal-profile field
 // (sector/HQ) that came from the classifier, not a cited claim — shown honestly.
@@ -299,9 +304,9 @@ function OfacScreeningBlock({ memoTyped }: { memoTyped: Partial<ICMemoResult> | 
  * Business Overview tab — claims-driven (GET /deals/{id}/company via
  * build_company_view) for the identity facts and the qualitative assertion
  * sections, plus the memo-sourced OFAC/sanctions block (no claims source yet).
- * Sections the pipeline has no source for are kept as honest "coming soon"
- * placeholders so the tab still matches the mockup's structure rather than
- * silently dropping them; none fabricate content.
+ * Sections the pipeline has no source for keep their eyebrow but render the
+ * uniform "no evidence found" empty state rather than a per-box "coming soon"
+ * placeholder; none fabricate content.
  */
 export function CompanyTab({ dealId, memoTyped }: CompanyTabProps) {
   const companyQuery = useQuery({
@@ -405,49 +410,26 @@ export function CompanyTab({ dealId, memoTyped }: CompanyTabProps) {
         <OfacScreeningBlock memoTyped={memoTyped} />
       </SectionCard>
 
-      {/* Sections the pipeline has no source for yet — kept as honest placeholders
-          so the tab still matches the mockup's structure (CLAUDE.md), never faked. */}
+      {/* Sections the pipeline has no source for yet — the eyebrow stays so the
+          reader still sees the topic, but the body is the uniform no-evidence
+          state, never a "coming soon" placeholder. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <SectionCard eyebrow="Co-Investors" icon={<Handshake className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection
-            icon={Handshake}
-            title="Co-investor data coming soon"
-            description="Syndicate participants, their role in the round, and commitment size aren't extracted by the current pipeline."
-          />
+          <UnbackedSection icon={Handshake} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
         </SectionCard>
 
         <SectionCard eyebrow="Key Customers" icon={<Users className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection
-            icon={Users}
-            title="Key customer data coming soon"
-            description="Named customers, their industry, and annual contract value (ACV) aren't extracted by the current pipeline."
-          />
+          <UnbackedSection icon={Users} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
         </SectionCard>
 
         <SectionCard eyebrow="Funding History" icon={<TrendingUp className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection
-            icon={TrendingUp}
-            title="Funding history coming soon"
-            description="Prior rounds, amounts, post-money valuations, and lead investors aren't extracted by the current pipeline."
-          />
+          <UnbackedSection icon={TrendingUp} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
         </SectionCard>
 
         <SectionCard eyebrow="Geographic Presence" icon={<Globe className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection
-            icon={Globe}
-            title="Geographic breakdown coming soon"
-            description="Beyond the single HQ location shown in Company Facts, office and revenue-by-region breakdowns aren't extracted by the current pipeline."
-          />
+          <UnbackedSection icon={Globe} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
         </SectionCard>
       </div>
-
-      <SectionCard eyebrow="Technology & Operations" icon={<Cpu className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-        <UnbackedSection
-          icon={Cpu}
-          title="Technology & operations details coming soon"
-          description="Tech stack, infrastructure, and operational process details aren't extracted by the current pipeline."
-        />
-      </SectionCard>
     </div>
   );
 }

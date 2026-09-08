@@ -67,6 +67,12 @@ function UnbackedSection({
   return <EmptyState icon={icon} title={title} description={description} className="border-none p-0" />;
 }
 
+// Uniform "no evidence" copy for a genuinely-unbuilt box (no deck claim AND no
+// web source) — shared across every converted section so the reader sees one
+// consistent empty state rather than a per-box "coming soon" placeholder.
+const NO_EVIDENCE_TITLE = "No evidence found";
+const NO_EVIDENCE_DESCRIPTION = "Nothing on this was found in the deal's materials or public sources.";
+
 // A claim's trust status as a small pill. Verified is the earned status (success
 // tone); cited/partially_verified are shown honestly as neutral, never dressed up.
 // Record keyed on the union -> a renamed status is a compile error here.
@@ -318,51 +324,35 @@ export function MarketTab({ dealId }: MarketTabProps) {
         )}
       </SectionCard>
 
-      {/* Mockup sections the claims pipeline has no source for -- kept as honest
-          "coming soon" placeholders (CLAUDE.md structure rule), never faked,
-          mirroring CompanyTab's not-yet-sourced sections. */}
+      {/* Mockup sections the claims pipeline has no source for -- the eyebrow
+          stays so the reader still sees the topic, but the body is the uniform
+          no-evidence state, never a "coming soon" placeholder. */}
       <SectionCard
         eyebrow="Growth Drivers"
         icon={<TrendingUp className="h-4 w-4 text-[color:var(--rev-primary)]" />}
       >
-        <UnbackedSection
-          icon={TrendingUp}
-          title="Growth drivers coming soon"
-          description="The demand drivers and tailwinds behind the market's growth aren't extracted by the current pipeline."
-        />
+        <UnbackedSection icon={TrendingUp} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
       </SectionCard>
 
       <SectionCard
         eyebrow="Market Risks"
         icon={<ShieldAlert className="h-4 w-4 text-[color:var(--rev-primary)]" />}
       >
-        <UnbackedSection
-          icon={ShieldAlert}
-          title="Market risks coming soon"
-          description="Structural, cyclical, or regulatory risks to the market aren't extracted by the current pipeline."
-        />
+        <UnbackedSection icon={ShieldAlert} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
       </SectionCard>
 
       <SectionCard
         eyebrow="Competitive Positioning Matrix"
         icon={<LayoutGrid className="h-4 w-4 text-[color:var(--rev-primary)]" />}
       >
-        <UnbackedSection
-          icon={LayoutGrid}
-          title="Positioning matrix coming soon"
-          description="A two-axis positioning of the company against its competitors isn't extracted by the current pipeline."
-        />
+        <UnbackedSection icon={LayoutGrid} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
       </SectionCard>
 
       <SectionCard
         eyebrow="Growth Strategy"
         icon={<Rocket className="h-4 w-4 text-[color:var(--rev-primary)]" />}
       >
-        <UnbackedSection
-          icon={Rocket}
-          title="Growth strategy coming soon"
-          description="The company's stated plan to expand within its market isn't extracted by the current pipeline."
-        />
+        <UnbackedSection icon={Rocket} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
       </SectionCard>
     </div>
   );
