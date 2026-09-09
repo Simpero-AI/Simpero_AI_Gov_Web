@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CompanyTab } from "./CompanyTab";
 import { fetchCompany, type CompanyView } from "@/api/company";
+import { fetchScreeningInsights } from "@/api/screeningInsights";
 import type { ICMemoResult } from "@shared/simperoTypes";
 
 // CompanyTab fetches GET /deals/{id}/company via react-query — mock the client so
@@ -12,7 +13,20 @@ vi.mock("@/api/company", async importOriginal => {
   return { ...actual, fetchCompany: vi.fn() };
 });
 
+// Business Overview + Key Business Risks now reuse the screening-insights pass
+// (Agent Highlights / Risk Flags), so the tab also fetches that endpoint.
+vi.mock("@/api/screeningInsights", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/screeningInsights")>();
+  return { ...actual, fetchScreeningInsights: vi.fn() };
+});
+
 const mockFetchCompany = vi.mocked(fetchCompany);
+const mockFetchScreeningInsights = vi.mocked(fetchScreeningInsights);
+
+beforeEach(() => {
+  // Default: no insights (empty panels). Tests that exercise the panels override.
+  mockFetchScreeningInsights.mockResolvedValue({ highlights: [], riskFlags: [] });
+});
 
 afterEach(() => {
   cleanup();
@@ -43,39 +57,23 @@ describe("CompanyTab", () => {
     renderCompanyTab();
 
     expect(await screen.findByText("Company facts not available")).toBeInTheDocument();
-    expect(screen.getByText("Business overview not available")).toBeInTheDocument();
-    expect(screen.getByText("Business risks not available")).toBeInTheDocument();
+    // Business Overview + Key Business Risks are the screening panels now; with no
+    // insights they show their own (loading-aware) empty state, not a claim empty.
+    expect(await screen.findByText("No highlights yet")).toBeInTheDocument();
+    expect(screen.getByText("No risk flags yet")).toBeInTheDocument();
     expect(screen.getByText("Commercial terms not available")).toBeInTheDocument();
     expect(screen.getByText("Related parties not available")).toBeInTheDocument();
     expect(screen.getByText("Plans & commitments not available")).toBeInTheDocument();
   });
 
-  it("renders identity facts and grouped qualitative assertions with status", async () => {
+  it("renders identity facts with their trust status and citations", async () => {
     mockFetchCompany.mockResolvedValue({
       facts: [
         { label: "Sector", value: "Gaming & Leisure", citation: null, status: "derived", entity: "AcmeCo", sourceUrl: null },
         { label: "Headcount", value: "1,450", citation: "cim.pdf · p.4", status: "verified", entity: "AcmeCo", sourceUrl: null },
       ],
-      overview: [
-        {
-          label: "AcmeCo",
-          value: "Revenue is 70% recurring subscription.",
-          citation: "cim.pdf · p.6",
-          status: "verified",
-          entity: "AcmeCo",
-          sourceUrl: null,
-        },
-      ],
-      risks: [
-        {
-          label: "AcmeCo",
-          value: "Heavily dependent on a single supplier.",
-          citation: "cim.pdf · p.7",
-          status: "cited",
-          entity: "AcmeCo",
-          sourceUrl: null,
-        },
-      ],
+      overview: [],
+      risks: [],
       commercial: [],
       relatedParties: [],
       plans: [],
@@ -84,17 +82,31 @@ describe("CompanyTab", () => {
 
     expect(await screen.findByText("Gaming & Leisure")).toBeInTheDocument();
     expect(screen.getByText("1,450")).toBeInTheDocument();
-    expect(screen.getByText("Revenue is 70% recurring subscription.")).toBeInTheDocument();
-    expect(screen.getByText("Heavily dependent on a single supplier.")).toBeInTheDocument();
-    // Trust status is surfaced (derived for sector/HQ, verified/cited for claims).
+    // Trust status is surfaced (derived for sector/HQ, verified for a cited claim).
     expect(screen.getByText("Derived")).toBeInTheDocument();
     expect(screen.getAllByText("Verified").length).toBeGreaterThan(0);
-    expect(screen.getByText("Cited")).toBeInTheDocument();
     expect(screen.getByText("cim.pdf · p.4")).toBeInTheDocument();
 
     expect(screen.queryByText("Company facts not available")).not.toBeInTheDocument();
     // A section with no claims still renders its honest empty-state.
     expect(screen.getByText("Commercial terms not available")).toBeInTheDocument();
+  });
+
+  it("shows the screening Agent Highlights + Risk Flags as Business Overview and Key Business Risks", async () => {
+    mockFetchCompany.mockResolvedValue(EMPTY);
+    mockFetchScreeningInsights.mockResolvedValue({
+      highlights: ["Services gross margin expanded in 2025."],
+      riskFlags: ["Key components are sourced from single or limited suppliers."],
+    });
+    renderCompanyTab();
+
+    // The two boxes reuse the curated screening insights, not the raw claim dump.
+    expect(await screen.findByText("Services gross margin expanded in 2025.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Key components are sourced from single or limited suppliers.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Agent Highlights")).toBeInTheDocument();
+    expect(screen.getByText("Risk Flags")).toBeInTheDocument();
   });
 
   it("renders a web sourceUrl as a link and a deck citation as plain text", async () => {
