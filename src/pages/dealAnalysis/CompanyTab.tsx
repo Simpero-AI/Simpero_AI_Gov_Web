@@ -2,7 +2,6 @@ import { type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
-  Compass,
   Globe,
   Handshake,
   Layers,
@@ -24,6 +23,9 @@ import {
   DenseTableRow,
 } from "@/components/mvp/primitives/DenseTable";
 import { fetchCompany, companyQueryKey, type CompanyFact } from "@/api/company";
+import { fetchScreeningInsights, screeningInsightsQueryKey } from "@/api/screeningInsights";
+import { HighlightsPanel } from "@/components/mvp/screening/HighlightsPanel";
+import { RiskFlagsPanel } from "@/components/mvp/screening/RiskFlagsPanel";
 import type { ICMemoResult, OFACEntityResult } from "@shared/simperoTypes";
 
 interface CompanyTabProps {
@@ -314,6 +316,14 @@ export function CompanyTab({ dealId, memoTyped }: CompanyTabProps) {
     queryFn: () => fetchCompany(dealId),
   });
 
+  // Business Overview + Key Business Risks reuse the Initial Screening tab's
+  // curated LLM insights (Agent Highlights / Risk Flags) rather than the raw
+  // claim dump -- same query key, so the two tabs share one fetch/cache.
+  const insightsQuery = useQuery({
+    queryKey: screeningInsightsQueryKey(dealId),
+    queryFn: () => fetchScreeningInsights(dealId),
+  });
+
   if (companyQuery.isLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-[color:var(--rev-text-6)]">
@@ -345,6 +355,7 @@ export function CompanyTab({ dealId, memoTyped }: CompanyTabProps) {
 
   const company = companyQuery.data ?? null;
   const facts = company?.facts ?? [];
+  const insights = insightsQuery.data ?? null;
 
   return (
     <div className="space-y-5">
@@ -365,20 +376,19 @@ export function CompanyTab({ dealId, memoTyped }: CompanyTabProps) {
         )}
       </SectionCard>
 
-      <AssertionSection
-        eyebrow="Business Overview"
-        icon={Compass}
-        facts={company?.overview ?? []}
-        emptyTitle="Business overview not available"
-        emptyDescription="No assertions about what the business is, how it operates, or how it makes money were extracted from this deal's materials."
+      {/* Business Overview + Key Business Risks are the screening agent's curated
+          Highlights / Risk Flags (the same grounded LLM insights the Initial
+          Screening tab shows), not the raw claim list. */}
+      <HighlightsPanel
+        items={insights?.highlights ?? null}
+        isLoading={insightsQuery.isPending}
+        isError={insightsQuery.isError}
       />
 
-      <AssertionSection
-        eyebrow="Key Business Risks"
-        icon={ShieldCheck}
-        facts={company?.risks ?? []}
-        emptyTitle="Business risks not available"
-        emptyDescription="No risk or dependency assertions were extracted from this deal's materials."
+      <RiskFlagsPanel
+        items={insights?.riskFlags ?? null}
+        isLoading={insightsQuery.isPending}
+        isError={insightsQuery.isError}
       />
 
       <AssertionSection
