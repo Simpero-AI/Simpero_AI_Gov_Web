@@ -42,6 +42,7 @@ import {
   financialsQueryKey,
   type FinancialFact,
   type FinancialFactStatus,
+  type FinancialTrendMetric,
 } from "@/api/financials";
 import type { ICMemoResult, DealMetrics, MetricDiscrepancy, MetricValue, Sourced } from "@shared/simperoTypes";
 
@@ -317,6 +318,58 @@ function FinancialFiguresSection({ dealId }: { dealId: string }) {
   );
 }
 
+// 3-Year Financial Trend — a real multi-year series per headline P&L metric from
+// the claims spine (GET /deals/{id}/financials → trend), replacing the dead
+// memo_json this box used to read. Metrics are rows, periods are the columns (the
+// union of every metric's years); a metric with no value for a year shows "—".
+function TrendTable({ trend }: { trend: FinancialTrendMetric[] }) {
+  if (trend.length === 0) {
+    return (
+      <UnbackedSection icon={LineChart} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
+    );
+  }
+  const years = Array.from(new Set(trend.flatMap((m) => m.points.map((p) => p.year)))).sort(
+    (a, b) => a - b
+  );
+  const periodLabel = new Map<number, string>();
+  for (const m of trend) {
+    for (const p of m.points) if (!periodLabel.has(p.year)) periodLabel.set(p.year, p.period);
+  }
+  return (
+    <div className="overflow-x-auto">
+      <DenseTable>
+        <DenseTableHeaderRow>
+          <DenseTableRow>
+            <DenseTableHead>Metric</DenseTableHead>
+            {years.map((y) => (
+              <DenseTableHead key={y} className="text-right">
+                {periodLabel.get(y) ?? `FY${y}`}
+              </DenseTableHead>
+            ))}
+          </DenseTableRow>
+        </DenseTableHeaderRow>
+        <DenseTableBody>
+          {trend.map((m) => {
+            const byYear = new Map(m.points.map((p) => [p.year, p.value]));
+            return (
+              <DenseTableRow key={m.label}>
+                <DenseTableCell className="font-medium text-[color:var(--rev-text-1)]">
+                  {m.label}
+                </DenseTableCell>
+                {years.map((y) => (
+                  <DenseTableCell key={y} className="text-right tabular-nums">
+                    {byYear.get(y) ?? "—"}
+                  </DenseTableCell>
+                ))}
+              </DenseTableRow>
+            );
+          })}
+        </DenseTableBody>
+      </DenseTable>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Headline Metrics — real, extracted/xlsx-backed fields (DealMetrics), plus
 // cross-source discrepancy flags. Logic unchanged from the pre-restyle
@@ -477,6 +530,13 @@ type ExitScenario = {
 
 export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscrepancies }: FinancialsTabProps) {
   const d = memoTyped?.deliverable;
+  // Same query key as FinancialFiguresSection -> one shared fetch/cache; used
+  // here for the claims-driven 3-Year Financial Trend below.
+  const financialsQuery = useQuery({
+    queryKey: financialsQueryKey(dealId),
+    queryFn: () => fetchFinancials(dealId),
+  });
+  const trend = financialsQuery.data?.trend ?? [];
   const corroboration = useMemo(
     () => collectFinancialsCorroboration(memoTyped, dealMetrics),
     [memoTyped, dealMetrics]
@@ -665,18 +725,13 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
         );
       })()}
 
-      {/* 3-Year Financial Trend (mockup: Meridian Diligence.dc.html
-          ~L3061-3073, Revenue/EBITDA/EBITDA Margin by historical year) — no
-          per-year historical-actuals array exists anywhere on DealMetrics or
-          ICMemoDeliverable. financialGrid (the Financial Projections card
-          above) is forward-looking A/E/P columns for a different purpose,
-          not a 3-year actuals trend, so it isn't reused here; 100% unbacked. */}
+      {/* 3-Year Financial Trend — now claims-driven (GET /deals/{id}/financials
+          → trend): a real multi-year series per headline P&L metric, built from
+          the same multi-period revenue/EBITDA/net-income claims the statement
+          sections use. Empty (honest "no evidence") when the deal reports no
+          metric across >= 2 periods. */}
       <SectionCard eyebrow="3-Year Financial Trend" icon={<LineChart className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-        <UnbackedSection
-          icon={LineChart}
-          title="Multi-year financial trend not yet available"
-          description="A 3-year historical revenue/EBITDA trend isn't produced by the current pipeline — only latest-period figures (Headline Metrics) and forward projections (Financial Projections) are extracted today."
-        />
+        <TrendTable trend={trend} />
       </SectionCard>
 
       {/* Valuation & Deal Structure (mockup ~L3087-3116: one card, figures

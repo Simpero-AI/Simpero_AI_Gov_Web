@@ -26,12 +26,25 @@ export interface FinancialFact {
   sourceUrl: string | null;
 }
 
+export interface FinancialTrendPoint {
+  period: string; // "FY2023" / "FY2024E"
+  value: string; // pre-formatted, e.g. "$497.20M" / "42%"
+  year: number; // raw period year, for x-axis ordering
+}
+
+export interface FinancialTrendMetric {
+  label: string; // "Revenue", "EBITDA", ...
+  points: FinancialTrendPoint[]; // ascending by year; only metrics with >= 2 years appear
+}
+
 export interface FinancialsView {
   incomeStatement: FinancialFact[];
   profitability: FinancialFact[];
   balanceSheet: FinancialFact[];
   cashFlow: FinancialFact[];
   operating: FinancialFact[];
+  /** Multi-year series per headline P&L metric, from the claims spine. */
+  trend?: FinancialTrendMetric[];
 }
 
 export const financialsQueryKey = (dealId: string) => ["deals", "financials", dealId] as const;
