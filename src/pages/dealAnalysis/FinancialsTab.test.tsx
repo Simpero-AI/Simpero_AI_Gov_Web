@@ -53,17 +53,41 @@ describe("FinancialsTab", () => {
     expect(screen.queryByText(/ref: G-42/)).not.toBeInTheDocument();
     expect(screen.getByText("Unit economics not yet extracted")).toBeInTheDocument();
     expect(screen.getByText("See Company tab for revenue mix")).toBeInTheDocument();
-    expect(screen.getByText("Multi-year financial trend not yet available")).toBeInTheDocument();
     expect(screen.getByText("Financial model not yet available")).toBeInTheDocument();
-    // Valuation & Deal Structure and Valuation Cross-Check now show the shared
-    // no-evidence body; the removed Balance Sheet Snapshot box (which contradicted
-    // the populated Financial Figures › Balance Sheet section) is gone.
-    expect(screen.getAllByText("No evidence found")).toHaveLength(2);
+    // Valuation & Deal Structure, Valuation Cross-Check, AND the now-claims-driven
+    // 3-Year Financial Trend (empty here) show the shared no-evidence body; the
+    // removed Balance Sheet Snapshot box is gone.
+    expect(screen.getAllByText("No evidence found")).toHaveLength(3);
     expect(screen.queryByText("Balance Sheet Snapshot")).not.toBeInTheDocument();
     expect(screen.queryByText("Balance sheet data coming soon")).not.toBeInTheDocument();
     expect(screen.queryByText("Valuation & deal-structure figures coming soon")).not.toBeInTheDocument();
     expect(screen.queryByText("Valuation cross-check coming soon")).not.toBeInTheDocument();
     expect(screen.getByText(/no structured source citations/i)).toBeInTheDocument();
+  });
+
+  it("renders a claims-driven 3-Year Financial Trend when the deal reports multi-year metrics", async () => {
+    mockFetchFinancials.mockResolvedValue({
+      ...EMPTY_FINANCIALS,
+      trend: [
+        {
+          label: "Revenue",
+          points: [
+            { period: "FY2022", value: "$400.00M", year: 2022 },
+            { period: "FY2023", value: "$497.20M", year: 2023 },
+          ],
+        },
+      ],
+    });
+    renderFinancialsTab({ memoTyped: null, dealMetrics: undefined, dealMetricDiscrepancies: [] });
+
+    // The trend table renders the metric row, period columns, and values once the
+    // financials query resolves (it replaces the old memo_json placeholder).
+    expect(await screen.findByText("$497.20M")).toBeInTheDocument();
+    expect(screen.getByText("$400.00M")).toBeInTheDocument();
+    expect(screen.getByText("FY2022")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Multi-year financial trend not yet available")
+    ).not.toBeInTheDocument();
   });
 
   it("renders real DealMetrics headline rows plus a discrepancy chip when cross-source values disagree", () => {
