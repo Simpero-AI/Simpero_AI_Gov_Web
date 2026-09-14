@@ -336,24 +336,30 @@ export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
             );
           };
 
+          // A missing metric reads "Not available", never "From pipeline" -- the
+          // latter falsely implies a live value flowed from the analysis pipeline
+          // when the memo producer simply has not written one. Honest, stable
+          // empty-state rather than a silent em-dash that looks like live data.
+          const NA_SUB = "Not available";
+
           const arrEntry = dm?.revenueLatestUsd?.value != null
             ? { label: "Total Revenue", value: formatUsdShort(dm.revenueLatestUsd.value), sub: "From pipeline", citation: dm.revenueLatestUsd.citation }
-            : { label: "Total Revenue", value: "—", sub: "From pipeline", citation: undefined };
+            : { label: "Total Revenue", value: "—", sub: NA_SUB, citation: undefined };
 
           const gmEntry = dm?.grossMarginPct?.value != null
             ? { label: "Gross Margin", value: formatBpAsPct(dm.grossMarginPct.value), sub: "From pipeline", citation: dm.grossMarginPct.citation }
-            : { label: "Gross Margin", value: "—", sub: "From pipeline", citation: undefined };
+            : { label: "Gross Margin", value: "—", sub: NA_SUB, citation: undefined };
 
           const nrrEntry = (() => {
             const hit = findRm("nrr") ?? findRm("net revenue retention") ?? findUe("nrr") ?? findUe("net revenue retention");
             if (hit) return { label: "NRR", value: String(hit.value ?? "—"), sub: (hit as { trend?: string }).trend ?? "", citation: undefined };
-            return { label: "NRR", value: "—", sub: "From pipeline", citation: undefined };
+            return { label: "NRR", value: "—", sub: NA_SUB, citation: undefined };
           })();
 
           const ltvEntry = (() => {
             const hit = findUe("ltv") ?? findUe("ltv/cac") ?? findUe("ltv / cac");
             if (hit) return { label: "LTV / CAC", value: String(hit.value ?? "—"), sub: hit.trend ?? "", citation: undefined };
-            return { label: "LTV / CAC", value: "—", sub: "From pipeline", citation: undefined };
+            return { label: "LTV / CAC", value: "—", sub: NA_SUB, citation: undefined };
           })();
 
           const metrics = [arrEntry, gmEntry, nrrEntry, ltvEntry];
