@@ -566,6 +566,12 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
   const nav = buildMvpNav({ id: user?.id ?? "anon", role, isPlatformAdmin: Boolean(user?.is_platform_admin) });
   const { userInitial, userName, userRoleLabel } = useUserDisplay();
   const navigate = useNavigate();
+  // The new-deal upload flow lands here with ?from=upload so the post-analysis
+  // redirect to Initial Screening fires reliably even when the pipeline finishes
+  // before the first status poll (no processing→complete transition to observe).
+  // A deliberate revisit to a completed deal carries no such flag, so it is never
+  // redirected — the Analysis tabs stay freely browsable.
+  const cameFromUpload = new URLSearchParams(useLocation().search).get("from") === "upload";
 
   const dealQuery = useQuery({
     queryKey: dealQueryKey(dealId),
@@ -596,16 +602,21 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
   const queryClient = useQueryClient();
   const jobStatus = statusQuery.data?.jobStatus;
   const prevJobStatusRef = useRef(jobStatus);
-  // The instant jobStatus flips processing/queued → complete in this same mounted
-  // component (never on a fresh mount that already finds the job complete), refresh
-  // the pipeline-derived queries and route to Initial Screening.
+  const redirectedRef = useRef(false);
+  // Route to Initial Screening once analysis is done, then refresh the
+  // pipeline-derived queries so screening shows fresh data. Fires on the live
+  // queued/processing → complete transition, OR on a post-upload landing that is
+  // ALREADY complete (?from=upload — the pipeline finished before the first poll,
+  // so there is no transition to observe). A deliberate revisit to a completed
+  // deal carries no upload flag and saw no transition, so it is never redirected.
   useEffect(() => {
     const prev = prevJobStatusRef.current;
     prevJobStatusRef.current = jobStatus;
-    if (
-      (prev === "processing" || prev === "queued") &&
-      jobStatus === "complete"
-    ) {
+    const transitioned =
+      (prev === "processing" || prev === "queued") && jobStatus === "complete";
+    const arrivedCompleteFromUpload = cameFromUpload && jobStatus === "complete";
+    if ((transitioned || arrivedCompleteFromUpload) && !redirectedRef.current) {
+      redirectedRef.current = true;
       void queryClient.invalidateQueries({ queryKey: dealQueryKey(dealId) });
       // Screening and Market both land from the same pipeline; refetch them too
       // so a user parked on either tab sees the fresh result without a manual
@@ -634,7 +645,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
       // only appeared once the status poll noticed completion, so it lagged).
       navigate(`/deals/${dealId}/screening`, { replace: true });
     }
-  }, [jobStatus, dealId, queryClient, navigate]);
+  }, [jobStatus, dealId, queryClient, navigate, cameFromUpload]);
 
   const deal = dealQuery.data?.deal;
   const latestMemoSession = dealQuery.data?.latestMemoSession;

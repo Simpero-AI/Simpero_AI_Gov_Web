@@ -161,6 +161,43 @@ describe("DealDetail — completion routes to Initial Screening", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("redirects a post-upload landing (?from=upload) to screening even when the deal is already complete on arrival (no transition to observe)", async () => {
+    // The fast-pipeline / first-poll-already-complete case: the upload flow lands
+    // on /analysis?from=upload with the job already done, so there is no
+    // processing→complete transition. The upload flag makes the redirect fire
+    // anyway. Rendered at the screening tab so the analysis shell (which needs
+    // fuller memo data than the fixture provides) doesn't crash the probe.
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponseNoMemo("Acme Corp"));
+    vi.mocked(fetchDealStatus).mockResolvedValue(completeStatus);
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/deals/deal-5/screening?from=upload"]}>
+          <DealDetail dealId="deal-5" tab="screening" />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    await waitFor(() =>
+      expect(navigateSpy).toHaveBeenCalledWith("/deals/deal-5/screening", { replace: true })
+    );
+  });
+
+  it("does NOT redirect a deliberate revisit to an already-complete deal (no upload flag, no transition)", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponseNoMemo("Acme Corp"));
+    vi.mocked(fetchDealStatus).mockResolvedValue(completeStatus);
+
+    renderDealDetail("deal-6", "screening");
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Quick fit check against the investment mandate/i)
+      ).toBeInTheDocument()
+    );
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
   it("invalidates the extracted-figures + insights queries on completion, not just the verdict", async () => {
     // The Screening tab's ExtractedGrid/Highlights/RiskFlags read their OWN queries
     // (materials + insights), not screeningQueryKey. If completion invalidates only

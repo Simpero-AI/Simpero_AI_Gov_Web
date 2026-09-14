@@ -424,7 +424,11 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
     if (attachDealIdFromUrl == null && authUser?.id != null) {
       clearDraft(authUser.id);
     }
-    navigate(`/analysis/${dealId}`);
+    // Canonical route + a post-upload flag: DealDetail routes to Initial Screening
+    // once analysis completes (or immediately, if the pipeline already finished
+    // before the first status poll). The flag is what makes that reliable without
+    // redirecting a later, deliberate revisit to the deal's analysis tabs.
+    navigate(`/deals/${dealId}/analysis?from=upload`);
   };
 
   // P5-05 (F10 fix): regenerate a link when a submitted response left no
