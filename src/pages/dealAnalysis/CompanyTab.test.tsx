@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CompanyTab } from "./CompanyTab";
 import { fetchCompany, type CompanyView } from "@/api/company";
+import { fetchCompanySynthesis } from "@/api/companySynthesis";
 import type { ICMemoResult } from "@shared/simperoTypes";
 
 // CompanyTab fetches GET /deals/{id}/company via react-query — mock the client so
@@ -12,7 +13,20 @@ vi.mock("@/api/company", async importOriginal => {
   return { ...actual, fetchCompany: vi.fn() };
 });
 
+// The narrative sections prefer GET /deals/{id}/company-synthesis and fall back
+// to the claims sections when it produced nothing.
+vi.mock("@/api/companySynthesis", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/companySynthesis")>();
+  return { ...actual, fetchCompanySynthesis: vi.fn() };
+});
+
 const mockFetchCompany = vi.mocked(fetchCompany);
+const mockFetchCompanySynthesis = vi.mocked(fetchCompanySynthesis);
+
+beforeEach(() => {
+  // Default: no synthesis -> every narrative section falls back to its claims.
+  mockFetchCompanySynthesis.mockResolvedValue({ sections: [] });
+});
 
 afterEach(() => {
   cleanup();
@@ -48,6 +62,62 @@ describe("CompanyTab", () => {
     expect(screen.getByText("Commercial terms not available")).toBeInTheDocument();
     expect(screen.getByText("Related parties not available")).toBeInTheDocument();
     expect(screen.getByText("Plans & commitments not available")).toBeInTheDocument();
+  });
+
+  it("prefers the grounded AI synthesis for the narrative sections, with citations", async () => {
+    mockFetchCompany.mockResolvedValue(EMPTY);
+    mockFetchCompanySynthesis.mockResolvedValue({
+      sections: [
+        {
+          key: "overview",
+          title: "Business Overview",
+          points: [
+            { text: "The company sells a consumption-based cloud data platform.", citation: "cim.pdf · p.5" },
+          ],
+        },
+        {
+          key: "risks",
+          title: "Risks & Dependencies",
+          points: [{ text: "Revenue is variable with customer usage.", citation: "cim.pdf · p.15" }],
+        },
+      ],
+    });
+    renderCompanyTab();
+
+    expect(
+      await screen.findByText("The company sells a consumption-based cloud data platform.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Revenue is variable with customer usage.")).toBeInTheDocument();
+    expect(screen.getByText("cim.pdf · p.5")).toBeInTheDocument();
+    // Labelled as an AI summary, and the claims-fallback empty state is NOT shown
+    // for a section the synthesis filled.
+    expect(screen.getAllByText(/AI summary/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Business overview not available")).not.toBeInTheDocument();
+    expect(screen.queryByText("Business risks not available")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the claims-driven section when synthesis is empty", async () => {
+    // Synthesis unavailable (default empty mock) but the claims spine has an
+    // overview assertion -> the box renders the cited claim, not an empty state.
+    mockFetchCompany.mockResolvedValue({
+      ...EMPTY,
+      overview: [
+        {
+          label: "AcmeCo",
+          value: "AcmeCo operates a cloud data warehouse.",
+          citation: "cim.pdf · p.2",
+          status: "verified",
+          entity: "AcmeCo",
+          sourceUrl: null,
+        },
+      ],
+    });
+    renderCompanyTab();
+
+    expect(await screen.findByText("AcmeCo operates a cloud data warehouse.")).toBeInTheDocument();
+    expect(screen.getByText("cim.pdf · p.2")).toBeInTheDocument();
+    expect(screen.queryByText(/AI summary/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Business overview not available")).not.toBeInTheDocument();
   });
 
   it("renders identity facts and grouped qualitative assertions with status", async () => {

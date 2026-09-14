@@ -24,6 +24,12 @@ import {
   DenseTableRow,
 } from "@/components/mvp/primitives/DenseTable";
 import { fetchCompany, companyQueryKey, type CompanyFact } from "@/api/company";
+import {
+  fetchCompanySynthesis,
+  companySynthesisQueryKey,
+  type CompanySynthPoint,
+  type CompanySynthesis,
+} from "@/api/companySynthesis";
 import type { ICMemoResult, OFACEntityResult } from "@shared/simperoTypes";
 
 interface CompanyTabProps {
@@ -199,6 +205,69 @@ function AssertionSection({
   );
 }
 
+// A narrative section that PREFERS the grounded AI synthesis (cohesive, cited
+// sentences from GET /deals/{id}/company-synthesis) and falls back to the raw
+// claims-driven AssertionSection when synthesis produced nothing for this section
+// -- no Anthropic key, no ingested chunks, or nothing survived the grounding
+// gate. The synthesis path is labelled so a reader knows it's an AI summary
+// grounded in the deal's documents, not an atomic extracted claim (which read as
+// disconnected fragments).
+function NarrativeSection({
+  eyebrow,
+  icon: Icon,
+  points,
+  fallbackFacts,
+  emptyTitle,
+  emptyDescription,
+}: {
+  eyebrow: string;
+  icon: LucideIcon;
+  points: CompanySynthPoint[] | undefined;
+  fallbackFacts: CompanyFact[];
+  emptyTitle: string;
+  emptyDescription: string;
+}) {
+  if (!points || points.length === 0) {
+    return (
+      <AssertionSection
+        eyebrow={eyebrow}
+        icon={Icon}
+        facts={fallbackFacts}
+        emptyTitle={emptyTitle}
+        emptyDescription={emptyDescription}
+      />
+    );
+  }
+  return (
+    <SectionCard eyebrow={eyebrow} icon={<Icon className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
+      <p className="mb-3 text-[11px] italic text-[color:var(--rev-text-6)]">
+        AI summary — grounded in this deal&apos;s documents; each point is verified against the
+        cited source.
+      </p>
+      <div className="space-y-3">
+        {points.map((p, i) => (
+          <div key={i} className="rounded-lg border border-[color:var(--rev-border-subtle)] p-4">
+            <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{p.text}</p>
+            {p.citation ? (
+              <div className="mt-2.5 flex items-center justify-end border-t border-[color:var(--rev-border-subtle)] pt-2.5">
+                <Citation citation={p.citation} sourceUrl={null} />
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </SectionCard>
+  );
+}
+
+/** The synthesis section whose `key` matches, or undefined when absent. */
+function synthSection(
+  synthesis: CompanySynthesis | null,
+  key: string
+): CompanySynthPoint[] | undefined {
+  return synthesis?.sections.find((s) => s.key === key)?.points;
+}
+
 // ---------------------------------------------------------------------------
 // IP & Compliance — sanctions (OFAC) screening. This is the ONE compliance
 // surface in the redesigned deal-analysis tabs, so it must not be dropped: a
@@ -314,6 +383,14 @@ export function CompanyTab({ dealId, memoTyped }: CompanyTabProps) {
     queryFn: () => fetchCompany(dealId),
   });
 
+  // Grounded AI synthesis for the narrative sections, preferred over the raw
+  // claims when available. Its own isolated query: it can be slow or empty and
+  // must never block the claims-driven identity facts or gate the tab.
+  const synthesisQuery = useQuery({
+    queryKey: companySynthesisQueryKey(dealId),
+    queryFn: () => fetchCompanySynthesis(dealId),
+  });
+
   if (companyQuery.isLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-[color:var(--rev-text-6)]">
@@ -345,6 +422,7 @@ export function CompanyTab({ dealId, memoTyped }: CompanyTabProps) {
 
   const company = companyQuery.data ?? null;
   const facts = company?.facts ?? [];
+  const synthesis = synthesisQuery.data ?? null;
 
   return (
     <div className="space-y-5">
@@ -365,26 +443,29 @@ export function CompanyTab({ dealId, memoTyped }: CompanyTabProps) {
         )}
       </SectionCard>
 
-      <AssertionSection
+      <NarrativeSection
         eyebrow="Business Overview"
         icon={Compass}
-        facts={company?.overview ?? []}
+        points={synthSection(synthesis, "overview")}
+        fallbackFacts={company?.overview ?? []}
         emptyTitle="Business overview not available"
         emptyDescription="No assertions about what the business is, how it operates, or how it makes money were extracted from this deal's materials."
       />
 
-      <AssertionSection
+      <NarrativeSection
         eyebrow="Key Business Risks"
         icon={ShieldCheck}
-        facts={company?.risks ?? []}
+        points={synthSection(synthesis, "risks")}
+        fallbackFacts={company?.risks ?? []}
         emptyTitle="Business risks not available"
         emptyDescription="No risk or dependency assertions were extracted from this deal's materials."
       />
 
-      <AssertionSection
+      <NarrativeSection
         eyebrow="Commercial Terms"
         icon={Layers}
-        facts={company?.commercial ?? []}
+        points={synthSection(synthesis, "commercial")}
+        fallbackFacts={company?.commercial ?? []}
         emptyTitle="Commercial terms not available"
         emptyDescription="No customer, pricing, or contract-term assertions were extracted from this deal's materials."
       />
