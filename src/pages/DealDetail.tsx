@@ -431,7 +431,7 @@ function AnalysisTabs({
 
       <div>
         {/* SUMMARY */}
-        {tab === "summary" && <SummaryTab memoTyped={memoTyped} />}{" "}
+        {tab === "summary" && <SummaryTab dealId={dealId} memoTyped={memoTyped} />}{" "}
         {/* SCORECARD */}
         {tab === "scorecard" && (
           <ScorecardTab
