@@ -1,5 +1,11 @@
 import { useMemo, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Star } from "lucide-react";
+import {
+  fetchCompanySynthesis,
+  companySynthesisQueryKey,
+  type CompanySynthPoint,
+} from "@/api/companySynthesis";
 import { cn } from "@/lib/utils";
 import { CitationRef } from "@/components/mvp/primitives/CitationRef";
 import { SourcedValue } from "@/components/mvp/primitives/SourcedValue";
@@ -31,6 +37,7 @@ import {
 } from "@shared/simperoTypes";
 
 interface SummaryTabProps {
+  dealId: string;
   memoTyped: Partial<ICMemoResult> | null;
 }
 
@@ -229,8 +236,18 @@ function collectSummaryCorroboration(memoTyped: Partial<ICMemoResult> | null): {
   };
 }
 
-export function SummaryTab({ memoTyped }: SummaryTabProps) {
+export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
   const citationCtx = useCitationSafe();
+  // Grounded AI synthesis, shared (same query key) with the Company tab. The
+  // deal-level "executive_summary" section backs the Executive Summary when the
+  // memo composer hasn't written one (it currently never does).
+  const synthesisQuery = useQuery({
+    queryKey: companySynthesisQueryKey(dealId),
+    queryFn: () => fetchCompanySynthesis(dealId),
+  });
+  const execSummaryPoints: CompanySynthPoint[] | undefined = synthesisQuery.data?.sections.find(
+    s => s.key === "executive_summary",
+  )?.points;
   const allClaims = useMemo<Claim[]>(
     () => (memoTyped?.sections ?? []).flatMap(s => s.claims ?? []),
     [memoTyped],
@@ -269,6 +286,30 @@ export function SummaryTab({ memoTyped }: SummaryTabProps) {
                   </p>
                 </div>
               )}
+          </>
+        ) : execSummaryPoints && execSummaryPoints.length > 0 ? (
+          // No memo-composed summary -> the grounded AI synthesis, each point
+          // verified against its cited source in the deal's own documents.
+          <>
+            <p className="mb-3 text-[11px] italic text-[color:var(--rev-text-6)]">
+              AI summary — grounded in this deal&apos;s documents; each point is verified against the
+              cited source.
+            </p>
+            <ul className="space-y-2.5">
+              {execSummaryPoints.map((p, i) => (
+                <li key={i} className="flex gap-2.5 text-[14.5px] leading-[1.8] text-[color:var(--rev-text-3)]">
+                  <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--rev-primary)]" />
+                  <span>
+                    {p.text}
+                    {p.citation ? (
+                      <span className="ml-2 whitespace-nowrap font-mono text-[11.5px] text-[color:var(--rev-text-5)]">
+                        {p.citation}
+                      </span>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </>
         ) : (
           <MissingDataPlaceholder gapRef="G-42" />
