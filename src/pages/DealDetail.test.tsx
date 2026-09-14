@@ -3,7 +3,7 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router";
 import { useEffect } from "react";
-import DealDetail from "./DealDetail";
+import DealDetail, { nextDealStatusPollMs } from "./DealDetail";
 import { dealStatusQueryKey, fetchDeal, fetchDealStatus } from "@/api/deals";
 import type { DealWithLatestMemo } from "@/api/deals";
 import { screeningMaterialsQueryKey } from "@/api/screeningMaterials";
@@ -128,6 +128,37 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+describe("nextDealStatusPollMs — keeps polling through the screening stage", () => {
+  it("keeps polling while jobStatus is processing at currentPhase 'governance' (screening still running)", () => {
+    // Regression: the screening stage reports current_phase='governance' while
+    // still queued/in-progress (jobStatus='processing'). An earlier version
+    // stopped polling here, so the client never saw the processing→complete tick
+    // and the post-analysis redirect never fired. It must keep polling.
+    expect(
+      nextDealStatusPollMs({ ...processingStatus, currentPhase: "governance" })
+    ).toBe(2000);
+  });
+
+  it("keeps polling a plain processing/queued status", () => {
+    expect(nextDealStatusPollMs(processingStatus)).toBe(2000);
+    expect(nextDealStatusPollMs({ ...processingStatus, jobStatus: "queued" })).toBe(2000);
+  });
+
+  it("stops on a terminal jobStatus (complete/error/no_job) regardless of phase", () => {
+    expect(nextDealStatusPollMs(completeStatus)).toBe(false);
+    expect(
+      nextDealStatusPollMs({ ...completeStatus, jobStatus: "error" })
+    ).toBe(false);
+    expect(
+      nextDealStatusPollMs({ ...completeStatus, jobStatus: "no_job" })
+    ).toBe(false);
+  });
+
+  it("stops when there is no data yet (undefined)", () => {
+    expect(nextDealStatusPollMs(undefined)).toBe(false);
+  });
 });
 
 describe("DealDetail — completion routes to Initial Screening", () => {
