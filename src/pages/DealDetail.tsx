@@ -6,7 +6,6 @@ import { toast } from "@/components/mvp/primitives/sonner";
 import {
   ArrowRight,
   Award,
-  CheckCircle,
   ClipboardList,
   Download,
   FileText,
@@ -60,7 +59,6 @@ import { CitationRef } from "@/components/mvp/primitives/CitationRef";
 import { FinancialGridRenderer } from "@/components/mvp/icMemo/FinancialGridRenderer";
 import { TeamMemberCard } from "@/components/mvp/icMemo/TeamMemberCard";
 import { DealHeaderCard } from "@/components/mvp/dealDetail/DealHeaderCard";
-import { apiFetch } from "@/api/http";
 import { screeningQueryKey } from "@/api/screening";
 import { screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { screeningInsightsQueryKey } from "@/api/screeningInsights";
@@ -531,68 +529,6 @@ function DealDetailTabSwitcher({
   );
 }
 
-/**
- * Brief interstitial shown once, right when a deal's analysis job
- * transitions to "complete" (plan §5 Q3 — a deliberate change from the old
- * behavior of auto-revealing AnalysisTabs in place). Disappears the moment
- * the user navigates into the shell (via this button, or later from the
- * Deals table); see the `justCompleted` state in `DealDetailInner` below.
- */
-function CompletionInterstitial({
-  dealName,
-  dealId,
-  onViewScreening,
-}: {
-  dealName: string;
-  dealId: string;
-  onViewScreening: () => void;
-}) {
-  // The Pipeline Inspector is a standalone, backend-rendered diagnostic page
-  // (GET /api/inspector/{dealId}). It is Bearer-authed, so a raw tab would 401:
-  // fetch it with the session token, then open the returned HTML in a new tab as
-  // a blob. Runs on a real click, so it is never popup-blocked. Best-effort — a
-  // failure here must never affect the completion screen.
-  async function openInspector() {
-    try {
-      const res = await apiFetch(`/api/inspector/${dealId}`);
-      if (!res.ok) return;
-      const html = await res.text();
-      const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
-      window.open(url, "_blank", "noopener");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch {
-      /* diagnostic only — swallow */
-    }
-  }
-
-  return (
-    <div className="mx-auto max-w-md px-6 py-16 text-center space-y-4">
-      <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 flex items-center justify-center">
-        <CheckCircle className="w-8 h-8 text-emerald-600" />
-      </div>
-      <div>
-        <p className="text-base font-semibold text-slate-700">
-          Analysis complete
-        </p>
-        <p className="text-sm text-slate-500 mt-1">
-          {dealName}&apos;s materials have been processed. Start with Initial
-          Screening to check mandate fit before moving into full diligence.
-        </p>
-      </div>
-      <Button onClick={onViewScreening}>View Initial Screening</Button>
-      <div>
-        <button
-          type="button"
-          onClick={openInspector}
-          className="text-sm text-slate-500 underline underline-offset-2 hover:text-slate-700"
-        >
-          See how the pipeline read the documents →
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
@@ -660,10 +596,9 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
   const queryClient = useQueryClient();
   const jobStatus = statusQuery.data?.jobStatus;
   const prevJobStatusRef = useRef(jobStatus);
-  // Set once, the instant jobStatus flips processing/queued → complete in
-  // this same mounted component (never on a fresh mount that already finds
-  // the job complete) — drives the one-shot CompletionInterstitial below.
-  const [justCompleted, setJustCompleted] = useState(false);
+  // The instant jobStatus flips processing/queued → complete in this same mounted
+  // component (never on a fresh mount that already finds the job complete), refresh
+  // the pipeline-derived queries and route to Initial Screening.
   useEffect(() => {
     const prev = prevJobStatusRef.current;
     prevJobStatusRef.current = jobStatus;
@@ -694,9 +629,12 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
       // Corroboration runs as a chained stage of the same pipeline; invalidate
       // so a user on the Corroboration tab sees the checks once they land.
       void queryClient.invalidateQueries({ queryKey: corroborationQueryKey(dealId) });
-      setJustCompleted(true);
+      // Go straight to the Initial Screening page the instant analysis completes,
+      // rather than an interstitial with a "View Initial Screening" button (which
+      // only appeared once the status poll noticed completion, so it lagged).
+      navigate(`/deals/${dealId}/screening`, { replace: true });
     }
-  }, [jobStatus, dealId, queryClient]);
+  }, [jobStatus, dealId, queryClient, navigate]);
 
   const deal = dealQuery.data?.deal;
   const latestMemoSession = dealQuery.data?.latestMemoSession;
@@ -813,19 +751,6 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
         endedAt={status.endedAt}
         stepDurations={status.stepDurations}
         jobComments={status.jobComments}
-      />
-    );
-  } else if (justCompleted) {
-    // One-shot completion interstitial (plan §5 Q3) — replaces the old
-    // behavior of dropping straight into AnalysisTabs the instant the job
-    // finishes. Only fires on the live processing/queued → complete
-    // transition; a fresh visit to an already-complete deal skips straight
-    // to the tab shell below.
-    body = (
-      <CompletionInterstitial
-        dealName={deal.name}
-        dealId={dealId}
-        onViewScreening={() => navigate(`/deals/${dealId}/screening`)}
       />
     );
   } else {
