@@ -6,6 +6,8 @@ import {
   companySynthesisQueryKey,
   type CompanySynthPoint,
 } from "@/api/companySynthesis";
+import { fetchFinancials, financialsQueryKey, type FinancialFact } from "@/api/financials";
+import { fetchScreeningInsights, screeningInsightsQueryKey } from "@/api/screeningInsights";
 import { cn } from "@/lib/utils";
 import { CitationRef } from "@/components/mvp/primitives/CitationRef";
 import { SourcedValue } from "@/components/mvp/primitives/SourcedValue";
@@ -248,11 +250,28 @@ export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
   const execSummaryPoints: CompanySynthPoint[] | undefined = synthesisQuery.data?.sections.find(
     s => s.key === "executive_summary",
   )?.points;
+  // Real, claims-driven data to fill the memo-shaped Summary sections the IC-memo
+  // composer never populates: the financial figures back the Key Metrics cards,
+  // and the screening risk flags back Risk Assessment. Same endpoints the
+  // Financials and Screening tabs already read, so the Summary is a genuine
+  // read-out of the other tabs instead of a sea of N/A.
+  const financialsQuery = useQuery({
+    queryKey: financialsQueryKey(dealId),
+    queryFn: () => fetchFinancials(dealId),
+  });
+  const screeningInsightsQuery = useQuery({
+    queryKey: screeningInsightsQueryKey(dealId),
+    queryFn: () => fetchScreeningInsights(dealId),
+  });
   const allClaims = useMemo<Claim[]>(
     () => (memoTyped?.sections ?? []).flatMap(s => s.claims ?? []),
     [memoTyped],
   );
   const riskRows = useMemo(() => buildRiskAssessmentRows(memoTyped, allClaims), [memoTyped, allClaims]);
+  // The memo-driven risk table is empty without a composed memo; fall back to the
+  // Initial Screening tab's own risk flags (real, claims-grounded) so Risk
+  // Assessment shows the concerns a partner would actually see.
+  const screeningRiskFlags = screeningInsightsQuery.data?.riskFlags ?? [];
   const corroboration = useMemo(() => collectSummaryCorroboration(memoTyped), [memoTyped]);
   const riskRegister = memoTyped?.deliverable?.riskRegister;
 
@@ -336,24 +355,46 @@ export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
             );
           };
 
+          // A missing metric reads "Not available", never "From pipeline" -- the
+          // latter falsely implies a live value flowed from the analysis pipeline
+          // when the memo producer simply has not written one. Honest, stable
+          // empty-state rather than a silent em-dash that looks like live data.
+          const NA_SUB = "Not available";
+
+          // Real claims-driven figures from the Financials tab's own endpoint --
+          // the memo composer never runs, so this is what actually populates
+          // Revenue / Gross Margin. The value is already formatted; `sub` shows the
+          // period (e.g. "FY2023"). No clickable citation object here (the
+          // financials citation is a plain "file · p.N" string, and the figure is
+          // fully cited on the Financials tab).
+          const fin = financialsQuery.data;
+          const finFact = (facts: FinancialFact[] | undefined, label: string): FinancialFact | null =>
+            (facts ?? []).find(f => f.label.toLowerCase() === label.toLowerCase()) ?? null;
+          const revFact = finFact(fin?.incomeStatement, "Revenue");
+          const gmFact = finFact(fin?.profitability, "Gross Margin");
+
           const arrEntry = dm?.revenueLatestUsd?.value != null
             ? { label: "Total Revenue", value: formatUsdShort(dm.revenueLatestUsd.value), sub: "From pipeline", citation: dm.revenueLatestUsd.citation }
-            : { label: "Total Revenue", value: "—", sub: "From pipeline", citation: undefined };
+            : revFact
+              ? { label: "Total Revenue", value: revFact.value, sub: revFact.period || "From documents", citation: undefined }
+              : { label: "Total Revenue", value: "—", sub: NA_SUB, citation: undefined };
 
           const gmEntry = dm?.grossMarginPct?.value != null
             ? { label: "Gross Margin", value: formatBpAsPct(dm.grossMarginPct.value), sub: "From pipeline", citation: dm.grossMarginPct.citation }
-            : { label: "Gross Margin", value: "—", sub: "From pipeline", citation: undefined };
+            : gmFact
+              ? { label: "Gross Margin", value: gmFact.value, sub: gmFact.period || "From documents", citation: undefined }
+              : { label: "Gross Margin", value: "—", sub: NA_SUB, citation: undefined };
 
           const nrrEntry = (() => {
             const hit = findRm("nrr") ?? findRm("net revenue retention") ?? findUe("nrr") ?? findUe("net revenue retention");
             if (hit) return { label: "NRR", value: String(hit.value ?? "—"), sub: (hit as { trend?: string }).trend ?? "", citation: undefined };
-            return { label: "NRR", value: "—", sub: "From pipeline", citation: undefined };
+            return { label: "NRR", value: "—", sub: NA_SUB, citation: undefined };
           })();
 
           const ltvEntry = (() => {
             const hit = findUe("ltv") ?? findUe("ltv/cac") ?? findUe("ltv / cac");
             if (hit) return { label: "LTV / CAC", value: String(hit.value ?? "—"), sub: hit.trend ?? "", citation: undefined };
-            return { label: "LTV / CAC", value: "—", sub: "From pipeline", citation: undefined };
+            return { label: "LTV / CAC", value: "—", sub: NA_SUB, citation: undefined };
           })();
 
           const metrics = [arrEntry, gmEntry, nrrEntry, ltvEntry];
@@ -604,7 +645,28 @@ export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
         }
       >
         {riskRows.length === 0 ? (
-          <MissingDataPlaceholder />
+          screeningRiskFlags.length > 0 ? (
+            // No composed memo -> the Initial Screening risk flags, grounded in the
+            // same extracted facts.
+            <>
+              <p className="mb-3 text-[11px] italic text-[color:var(--rev-text-6)]">
+                From the initial screening&apos;s risk flags.
+              </p>
+              <ul className="space-y-2">
+                {screeningRiskFlags.map((flag, i) => (
+                  <li
+                    key={i}
+                    className="flex gap-2.5 text-[13.5px] leading-relaxed text-[color:var(--rev-text-3)]"
+                  >
+                    <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--rev-danger)]" />
+                    <span>{flag}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <MissingDataPlaceholder />
+          )
         ) : (
           <div className="overflow-hidden rounded-lg border border-[color:var(--rev-border-subtle)]">
             <DenseTable>
