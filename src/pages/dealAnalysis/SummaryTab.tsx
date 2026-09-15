@@ -8,6 +8,7 @@ import {
 } from "@/api/companySynthesis";
 import { fetchFinancials, financialsQueryKey, type FinancialFact } from "@/api/financials";
 import { fetchScreeningInsights, screeningInsightsQueryKey } from "@/api/screeningInsights";
+import { TrustStatusPill } from "@/components/mvp/primitives/TrustStatusPill";
 import { cn } from "@/lib/utils";
 import { CitationRef } from "@/components/mvp/primitives/CitationRef";
 import { SourcedValue } from "@/components/mvp/primitives/SourcedValue";
@@ -87,12 +88,15 @@ function MetricCard({
   sub,
   citation,
   onCiteClick,
+  status,
 }: {
   label: string;
   value: string;
   sub?: string;
   citation?: { page: number | null; section: string | null; verified: boolean } | null;
   onCiteClick?: () => void;
+  /** Claim trust status for a claims-sourced metric (verified/partial/conflicted/...). */
+  status?: string;
 }) {
   return (
     <div className="rounded-xl border border-[color:var(--rev-border)] bg-[color:var(--rev-surface)] px-5 py-4">
@@ -100,7 +104,9 @@ function MetricCard({
         <p className="font-mono text-[9.5px] uppercase tracking-[0.6px] text-[color:var(--rev-text-6)]">
           {label}
         </p>
-        {citation && onCiteClick ? (
+        {status ? (
+          <TrustStatusPill status={status} />
+        ) : citation && onCiteClick ? (
           <CitationRef
             page={citation.page}
             section={citation.section}
@@ -373,28 +379,33 @@ export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
           const revFact = finFact(fin?.incomeStatement, "Revenue");
           const gmFact = finFact(fin?.profitability, "Gross Margin");
 
+          // `status` carries the claim trust label (verified/partial/conflicted/...)
+          // for the financials-sourced figures, rendered as a TrustStatusPill so the
+          // Summary shows the same corroboration outcome as the Financials tab (e.g.
+          // Total Revenue reads "Verified" when EDGAR confirmed it). undefined for
+          // memo/empty entries, which carry no claim status.
           const arrEntry = dm?.revenueLatestUsd?.value != null
-            ? { label: "Total Revenue", value: formatUsdShort(dm.revenueLatestUsd.value), sub: "From pipeline", citation: dm.revenueLatestUsd.citation }
+            ? { label: "Total Revenue", value: formatUsdShort(dm.revenueLatestUsd.value), sub: "From pipeline", citation: dm.revenueLatestUsd.citation, status: undefined as string | undefined }
             : revFact
-              ? { label: "Total Revenue", value: revFact.value, sub: revFact.period || "From documents", citation: undefined }
-              : { label: "Total Revenue", value: "—", sub: NA_SUB, citation: undefined };
+              ? { label: "Total Revenue", value: revFact.value, sub: revFact.period || "From documents", citation: undefined, status: revFact.status as string | undefined }
+              : { label: "Total Revenue", value: "—", sub: NA_SUB, citation: undefined, status: undefined as string | undefined };
 
           const gmEntry = dm?.grossMarginPct?.value != null
-            ? { label: "Gross Margin", value: formatBpAsPct(dm.grossMarginPct.value), sub: "From pipeline", citation: dm.grossMarginPct.citation }
+            ? { label: "Gross Margin", value: formatBpAsPct(dm.grossMarginPct.value), sub: "From pipeline", citation: dm.grossMarginPct.citation, status: undefined as string | undefined }
             : gmFact
-              ? { label: "Gross Margin", value: gmFact.value, sub: gmFact.period || "From documents", citation: undefined }
-              : { label: "Gross Margin", value: "—", sub: NA_SUB, citation: undefined };
+              ? { label: "Gross Margin", value: gmFact.value, sub: gmFact.period || "From documents", citation: undefined, status: gmFact.status as string | undefined }
+              : { label: "Gross Margin", value: "—", sub: NA_SUB, citation: undefined, status: undefined as string | undefined };
 
           const nrrEntry = (() => {
             const hit = findRm("nrr") ?? findRm("net revenue retention") ?? findUe("nrr") ?? findUe("net revenue retention");
-            if (hit) return { label: "NRR", value: String(hit.value ?? "—"), sub: (hit as { trend?: string }).trend ?? "", citation: undefined };
-            return { label: "NRR", value: "—", sub: NA_SUB, citation: undefined };
+            if (hit) return { label: "NRR", value: String(hit.value ?? "—"), sub: (hit as { trend?: string }).trend ?? "", citation: undefined, status: undefined as string | undefined };
+            return { label: "NRR", value: "—", sub: NA_SUB, citation: undefined, status: undefined as string | undefined };
           })();
 
           const ltvEntry = (() => {
             const hit = findUe("ltv") ?? findUe("ltv/cac") ?? findUe("ltv / cac");
-            if (hit) return { label: "LTV / CAC", value: String(hit.value ?? "—"), sub: hit.trend ?? "", citation: undefined };
-            return { label: "LTV / CAC", value: "—", sub: NA_SUB, citation: undefined };
+            if (hit) return { label: "LTV / CAC", value: String(hit.value ?? "—"), sub: hit.trend ?? "", citation: undefined, status: undefined as string | undefined };
+            return { label: "LTV / CAC", value: "—", sub: NA_SUB, citation: undefined, status: undefined as string | undefined };
           })();
 
           const metrics = [arrEntry, gmEntry, nrrEntry, ltvEntry];
@@ -407,6 +418,7 @@ export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
                   value={m.value}
                   sub={m.sub}
                   citation={m.citation}
+                  status={m.status}
                   onCiteClick={m.citation ? () => citationCtx?.openCitation({ fieldLabel: m.label, citation: m.citation! }) : undefined}
                 />
               ))}
