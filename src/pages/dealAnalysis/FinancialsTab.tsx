@@ -41,9 +41,9 @@ import {
   fetchFinancials,
   financialsQueryKey,
   type FinancialFact,
-  type FinancialFactStatus,
   type FinancialTrendMetric,
 } from "@/api/financials";
+import { TrustStatusPill } from "@/components/mvp/primitives/TrustStatusPill";
 import type { ICMemoResult, DealMetrics, MetricDiscrepancy, MetricValue, Sourced } from "@shared/simperoTypes";
 
 interface FinancialsTabProps {
@@ -137,43 +137,17 @@ const NO_EVIDENCE_DESCRIPTION = "Nothing on this was found in the deal's materia
 // ---------------------------------------------------------------------------
 // Financial Figures — claims-driven numeric facts (GET /deals/{id}/financials
 // via build_financials_view), self-contained in its own card at the top of the
-// tab. Copies MarketTab's StatusPill/Citation/loading-tree conventions verbatim
-// so the same "Cited"/"Verified" datum reads identically across the two
-// adjacent claims-driven tabs. Deliberately does NOT use CitationRef/citationCtx
+// tab. Copies MarketTab's Citation/loading-tree conventions verbatim, and uses
+// the shared TrustStatusPill, so the same "Cited"/"Verified" datum reads
+// identically across the adjacent claims-driven tabs. Deliberately does NOT use
+// CitationRef/citationCtx
 // (the sidebar-wired citation path the memo-backed cards below use) — these
 // facts carry a plain human citation string and an optional source URL, not a
 // Sourced<T> with page/section provenance.
 // ---------------------------------------------------------------------------
 
-// A claim's trust status as a small pill. Verified is the earned status (success
-// tone); cited/partially_verified are shown honestly as neutral, never dressed
-// up. Record keyed on the union -> a renamed status is a compile error here.
-const FINANCIAL_STATUS_LABEL: Record<FinancialFactStatus, string> = {
-  verified: "Verified",
-  partially_verified: "Partial",
-  cited: "Cited",
-};
-
-function StatusPill({ status }: { status: FinancialFactStatus }) {
-  // Rendered as the SAME inline --rev-* pill MarketTab/CompanyTab use (verbatim).
-  // fetchFinancials casts the API JSON unchecked, so look the label up as a plain
-  // string -- an unknown runtime status (a backend rename ahead of a deploy)
-  // still shows its raw value legibly, not a blank pill; the Record stays
-  // union-keyed for compile safety.
-  const label = (FINANCIAL_STATUS_LABEL as Record<string, string>)[status] ?? status;
-  const verified = status === "verified";
-  return (
-    <span
-      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.5px]"
-      style={{
-        color: verified ? "var(--rev-success)" : "var(--rev-text-6)",
-        background: verified ? "var(--rev-tint-success)" : "var(--rev-tint-neutral)",
-      }}
-    >
-      {label}
-    </span>
-  );
-}
+// Trust-status pill is the shared TrustStatusPill primitive, so the same status
+// reads identically across Company / Market / Financials.
 
 function Citation({ citation, sourceUrl }: { citation: string | null; sourceUrl: string | null }) {
   // A source URL renders as a link ONLY when it's a non-empty http(s) string --
@@ -215,7 +189,7 @@ function FinancialFactRow({ fact }: { fact: FinancialFact }) {
       </div>
       <div className="flex shrink-0 items-center gap-2.5">
         <span className="font-medium tabular-nums text-[color:var(--rev-text-1)]">{fact.value}</span>
-        <StatusPill status={fact.status} />
+        <TrustStatusPill status={fact.status} />
         <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
       </div>
     </div>

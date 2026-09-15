@@ -11,7 +11,12 @@ import { apiFetch } from "@/api/http";
 /** The trust statuses build_financials_view emits -- only a claim that earned
  * one of these reaches the tab. A literal union so a renamed/added value is a
  * compile error at the StatusPill mapping, not a silently unstyled raw string. */
-export type FinancialFactStatus = "verified" | "partially_verified" | "cited";
+export type FinancialFactStatus =
+  | "verified"
+  | "partially_verified"
+  | "cited"
+  | "conflicted"
+  | "inconclusive";
 
 export interface FinancialFact {
   /** Metric name (e.g. "Revenue", "Gross Margin"). */
