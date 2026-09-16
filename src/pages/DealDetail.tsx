@@ -82,6 +82,7 @@ import type {
 } from "@shared/simperoTypes";
 import { proseFieldToString } from "@shared/simperoTypes";
 import type { FrameworkResult } from "@shared/complianceFrameworks";
+import type { DealStatusPayload } from "@shared/dealsStatus";
 import { buildE2eUxMemo } from "@shared/e2eUxMemoFixture";
 import { SummaryTab } from "./dealAnalysis/SummaryTab";
 import { ScorecardTab } from "./dealAnalysis/ScorecardTab";
@@ -559,6 +560,26 @@ function DealDetailCitationSidebar() {
   );
 }
 
+/**
+ * Poll delay (ms) for the deal-status query, or false to stop polling.
+ *
+ * Stops ONLY on a terminal jobStatus (complete / error / no_job). It must NOT
+ * stop on currentPhase === "governance": the screening stage reports
+ * current_phase="governance" in BOTH states -- jobStatus="processing" while it
+ * is queued/in-progress AND jobStatus="complete" when it finishes (see the
+ * backend deal-status machine). An earlier version stopped at
+ * governance-while-processing, which froze the poll before screening completed,
+ * so the client never observed the processing→complete transition and the
+ * post-analysis redirect to Initial Screening never fired.
+ */
+export function nextDealStatusPollMs(
+  data: Pick<DealStatusPayload, "jobStatus"> | undefined
+): number | false {
+  const s = data?.jobStatus;
+  if (s === "complete" || s === "error" || s === "no_job") return false;
+  return s === "processing" || s === "queued" ? 2000 : false;
+}
+
 function DealDetailInner({ dealId, tab }: DealDetailProps) {
   usePageTitle(tab === "screening" ? "Initial Screening" : "Deal Analysis");
   const { user } = useAuth();
@@ -580,18 +601,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
   const statusQuery = useQuery({
     queryKey: dealStatusQueryKey(dealId),
     queryFn: () => fetchDealStatus(dealId),
-    refetchInterval: q => {
-      const data = q.state.data;
-      const s = data?.jobStatus;
-      // Stop immediately on any terminal state — do not wait for next cycle.
-      // currentPhase === "governance" is also terminal-for-now even though
-      // jobStatus stays "processing": verification succeeded and nothing
-      // past governance has a job behind it yet, so nothing will ever move
-      // this further -- polling forever here would just waste requests.
-      if (s === "complete" || s === "error" || s === "no_job") return false;
-      if (data?.currentPhase === "governance") return false;
-      return s === "processing" || s === "queued" ? 2000 : false;
-    },
+    refetchInterval: q => nextDealStatusPollMs(q.state.data),
   });
 
   // dealQuery (which carries the freshly persisted memoJson) doesn't poll,
