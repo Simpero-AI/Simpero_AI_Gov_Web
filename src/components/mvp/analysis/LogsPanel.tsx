@@ -1,45 +1,27 @@
-import { trpc } from "@/lib/trpc";
+import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/mvp/primitives/tabs";
 import { ScrollArea } from "@/components/mvp/primitives/scroll-area";
-import { Loader2, CheckCircle2, Clock, Circle, AlertCircle } from "lucide-react";
+import { Loader2, CheckCircle2, Circle, AlertCircle } from "lucide-react";
+import { fetchDealAudit, dealAuditQueryKey } from "@/api/logs";
+import { fetchDealStatus, dealStatusQueryKey } from "@/api/deals";
 
 // ---------------------------------------------------------------------------
-// Phase config
+// Step-status visuals (Agent Activity renders the backend's canonical
+// PipelineStepWithStatus[] from GET /deals/{id}/status, not a hardcoded list)
 // ---------------------------------------------------------------------------
 
-const PHASE_ORDER = [
-  "queued",
-  "parsing",
-  "classify",
-  "pass1",
-  "pass2",
-  "governance",
-  "ofac",
-  "pass3_compose",
-  "pass4_score",
-  "finalize",
-] as const;
-
-type Phase = (typeof PHASE_ORDER)[number];
-
-const PHASE_LABELS: Record<Phase, string> = {
-  queued: "Queued",
-  parsing: "Document Parsing",
-  classify: "Document Classification",
-  pass1: "Pass 1 — Extraction",
-  pass2: "Pass 2 — Verification",
-  governance: "Governance Review",
-  ofac: "OFAC Screening",
-  pass3_compose: "Pass 3 — Composition",
-  pass4_score: "Pass 4 — Scoring",
-  finalize: "Finalizing",
-};
+const STEP_ICON = {
+  done: <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />,
+  current: <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" />,
+  failed: <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />,
+  pending: <Circle className="w-4 h-4 text-slate-300 flex-shrink-0" />,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Relative-time helper
 // ---------------------------------------------------------------------------
 
-function relativeTime(date: Date): string {
+function relativeTime(date: Date | string): string {
   const diff = Date.now() - new Date(date).getTime();
   const secs = Math.floor(diff / 1000);
   if (secs < 60) return `${secs}s ago`;
@@ -51,7 +33,7 @@ function relativeTime(date: Date): string {
   return `${days}d ago`;
 }
 
-function formatAbsolute(date: Date): string {
+function formatAbsolute(date: Date | string): string {
   return new Date(date).toLocaleString();
 }
 
@@ -107,13 +89,16 @@ function MetaPreview({ meta }: { meta: Record<string, unknown> | null }) {
 // ---------------------------------------------------------------------------
 
 function AuditTrailTab({ dealId }: { dealId: string }) {
-  // ponytail: trpc.logs.auditTrail still expects the frozen legacy numeric
-  // dealId (untouched, Phase 3 territory) — this returns no rows against the
-  // new UUID deal space until this file migrates off tRPC.
-  const { data, isLoading, isError } = trpc.logs.auditTrail.useQuery(
-    { dealId: Number(dealId) },
-    { refetchOnWindowFocus: false, retry: 1 }
-  );
+  // Migrated off the retired tRPC logs.auditTrail -- that route keyed on a
+  // legacy NUMERIC deal id, so a UUID deal coerced with Number() reached it as
+  // NaN and the tab always failed to load. Reads the FastAPI backend +
+  // human_audit_log with the UUID string intact.
+  const { data, isLoading, isError } = useQuery({
+    queryKey: dealAuditQueryKey(dealId),
+    queryFn: () => fetchDealAudit(dealId),
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
 
   if (isLoading) {
     return (
@@ -164,7 +149,7 @@ function AuditTrailTab({ dealId }: { dealId: string }) {
                 </div>
               </td>
               <td className="px-3 py-2">
-                <MetaPreview meta={row.metadata ?? null} />
+                <MetaPreview meta={row.payload ?? null} />
               </td>
             </tr>
           ))}
@@ -178,34 +163,16 @@ function AuditTrailTab({ dealId }: { dealId: string }) {
 // Agent Activity tab
 // ---------------------------------------------------------------------------
 
-function phaseStatus(
-  phaseKey: Phase,
-  currentPhase: string,
-  jobStatus: string
-): "completed" | "in-progress" | "pending" {
-  if (jobStatus === "complete") return "completed";
-  if (jobStatus === "error") {
-    const currentIdx = PHASE_ORDER.indexOf(currentPhase as Phase);
-    const phaseIdx = PHASE_ORDER.indexOf(phaseKey);
-    if (currentIdx === -1) return "pending";
-    if (phaseIdx < currentIdx) return "completed";
-    if (phaseIdx === currentIdx) return "in-progress";
-    return "pending";
-  }
-  const currentIdx = PHASE_ORDER.indexOf(currentPhase as Phase);
-  const phaseIdx = PHASE_ORDER.indexOf(phaseKey);
-  if (currentIdx === -1) return "pending";
-  if (phaseIdx < currentIdx) return "completed";
-  if (phaseIdx === currentIdx) return "in-progress";
-  return "pending";
-}
-
 function AgentActivityTab({ dealId }: { dealId: string }) {
-  // ponytail: same legacy-numeric-dealId caveat as AuditTrailTab above.
-  const { data, isLoading, isError } = trpc.logs.jobActivity.useQuery(
-    { dealId: Number(dealId) },
-    { refetchOnWindowFocus: false, retry: 1 }
-  );
+  // Migrated off the retired tRPC logs.jobActivity onto GET /deals/{id}/status,
+  // which serves the canonical pipeline steps (each with its own status) for the
+  // claims-era backend. The old numeric-dealId NaN caveat is gone.
+  const { data, isLoading, isError } = useQuery({
+    queryKey: dealStatusQueryKey(dealId),
+    queryFn: () => fetchDealStatus(dealId),
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
 
   if (isLoading) {
     return (
@@ -223,7 +190,7 @@ function AgentActivityTab({ dealId }: { dealId: string }) {
       </div>
     );
   }
-  if (!data) {
+  if (!data || data.jobStatus === "no_job") {
     return (
       <div className="p-6 text-center text-slate-400 text-sm">
         No pipeline runs recorded yet for this deal.
@@ -231,8 +198,12 @@ function AgentActivityTab({ dealId }: { dealId: string }) {
     );
   }
 
-  const rollup = data.usageRollup;
-  const totalTokens = rollup?.totalTokens ?? null;
+  const statusColor =
+    data.jobStatus === "complete"
+      ? "text-emerald-600 font-medium"
+      : data.jobStatus === "error"
+        ? "text-red-600 font-medium"
+        : "text-amber-600 font-medium";
 
   return (
     <ScrollArea className="h-full">
@@ -240,73 +211,67 @@ function AgentActivityTab({ dealId }: { dealId: string }) {
         {/* Job meta row */}
         <div className="mb-4 p-3 rounded-lg bg-slate-50 border border-slate-100 text-xs text-slate-600 flex flex-wrap gap-x-4 gap-y-1">
           <span>
-            <span className="text-slate-400">Job</span>{" "}
-            <span className="font-mono">{data.jobId.slice(0, 8)}…</span>
-          </span>
-          <span>
             <span className="text-slate-400">Status</span>{" "}
-            <span
-              className={
-                data.status === "complete"
-                  ? "text-emerald-600 font-medium"
-                  : data.status === "error"
-                    ? "text-red-600 font-medium"
-                    : "text-amber-600 font-medium"
-              }
-            >
-              {data.status}
-            </span>
+            <span className={statusColor}>{data.jobStatus}</span>
           </span>
-          <span>
-            <span className="text-slate-400">Started</span>{" "}
-            {relativeTime(data.createdAt)}
-          </span>
-          {totalTokens != null && (
+          {data.startedAt && (
             <span>
-              <span className="text-slate-400">Tokens</span>{" "}
-              {totalTokens.toLocaleString()}
+              <span className="text-slate-400">Started</span>{" "}
+              <span title={formatAbsolute(data.startedAt)}>{relativeTime(data.startedAt)}</span>
+            </span>
+          )}
+          {data.endedAt && (
+            <span>
+              <span className="text-slate-400">Ended</span>{" "}
+              <span title={formatAbsolute(data.endedAt)}>{relativeTime(data.endedAt)}</span>
             </span>
           )}
         </div>
 
-        {PHASE_ORDER.map((phase) => {
-          const status = phaseStatus(phase, data.phase, data.status);
+        {data.errorMessage && (
+          <div className="mb-3 flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-100 text-xs text-red-700">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+            <span>{data.errorMessage}</span>
+          </div>
+        )}
+
+        {data.steps.map((step) => {
+          const dur = data.stepDurations?.[step.phase];
           return (
             <div
-              key={phase}
+              key={step.phase}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                status === "in-progress"
+                step.status === "current"
                   ? "bg-blue-50 border border-blue-100"
-                  : status === "completed"
+                  : step.status === "done"
                     ? "bg-emerald-50/40"
-                    : "bg-transparent"
+                    : step.status === "failed"
+                      ? "bg-red-50/40"
+                      : "bg-transparent"
               }`}
             >
-              {status === "completed" ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-              ) : status === "in-progress" ? (
-                <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" />
-              ) : (
-                <Circle className="w-4 h-4 text-slate-300 flex-shrink-0" />
+              {STEP_ICON[step.status]}
+              <div className="min-w-0">
+                <div
+                  className={`text-sm ${
+                    step.status === "done"
+                      ? "text-emerald-700"
+                      : step.status === "current"
+                        ? "text-blue-700 font-medium"
+                        : step.status === "failed"
+                          ? "text-red-700 font-medium"
+                          : "text-slate-400"
+                  }`}
+                >
+                  {step.title}
+                </div>
+                <div className="text-xs text-slate-400 truncate">{step.detail}</div>
+              </div>
+              {step.status === "current" && (
+                <span className="ml-auto text-xs text-blue-500 flex-shrink-0">Running…</span>
               )}
-              <span
-                className={`text-sm ${
-                  status === "completed"
-                    ? "text-emerald-700"
-                    : status === "in-progress"
-                      ? "text-blue-700 font-medium"
-                      : "text-slate-400"
-                }`}
-              >
-                {PHASE_LABELS[phase]}
-              </span>
-              {status === "in-progress" && (
-                <span className="ml-auto text-xs text-blue-500">Running…</span>
-              )}
-              {status === "completed" && phase === data.phase && data.status === "complete" && (
-                <span className="ml-auto" title={formatAbsolute(data.updatedAt)}>
-                  <Clock className="w-3 h-3 text-slate-300" />
-                </span>
+              {step.status === "done" && dur != null && (
+                <span className="ml-auto text-xs text-slate-400 flex-shrink-0">{dur}s</span>
               )}
             </div>
           );
