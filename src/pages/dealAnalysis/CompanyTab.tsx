@@ -470,18 +470,20 @@ export function CompanyTab({ dealId, memoTyped }: CompanyTabProps) {
         emptyDescription="No customer, pricing, or contract-term assertions were extracted from this deal's materials."
       />
 
-      <AssertionSection
+      <NarrativeSection
         eyebrow="Related Parties"
         icon={Handshake}
-        facts={company?.relatedParties ?? []}
+        points={synthSection(synthesis, "related_parties")}
+        fallbackFacts={company?.relatedParties ?? []}
         emptyTitle="Related parties not available"
         emptyDescription="No related-party relationships or transactions were extracted from this deal's materials."
       />
 
-      <AssertionSection
+      <NarrativeSection
         eyebrow="Plans & Commitments"
         icon={Rocket}
-        facts={company?.plans ?? []}
+        points={synthSection(synthesis, "plans")}
+        fallbackFacts={company?.plans ?? []}
         emptyTitle="Plans & commitments not available"
         emptyDescription="No forward-looking plans or commitments were extracted from this deal's materials."
       />
