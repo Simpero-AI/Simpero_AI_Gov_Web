@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
+import { TrustStatusPill } from "@/components/mvp/primitives/TrustStatusPill";
 import {
   DenseTable,
   DenseTableBody,
@@ -93,30 +94,9 @@ const NO_EVIDENCE_DESCRIPTION = "Nothing on this was found in the deal's materia
 
 // A claim's trust status as a small pill. "derived" marks a deal-profile field
 // (sector/HQ) that came from the classifier, not a cited claim — shown honestly.
-function StatusPill({ status }: { status: string }) {
-  const label =
-    status === "verified"
-      ? "Verified"
-      : status === "partially_verified"
-        ? "Partial"
-        : status === "cited"
-          ? "Cited"
-          : status === "derived"
-            ? "Derived"
-            : status;
-  const verified = status === "verified";
-  return (
-    <span
-      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.5px]"
-      style={{
-        color: verified ? "var(--rev-success)" : "var(--rev-text-6)",
-        background: verified ? "var(--rev-tint-success)" : "var(--rev-tint-neutral)",
-      }}
-    >
-      {label}
-    </span>
-  );
-}
+// Trust-status pill is the shared TrustStatusPill primitive (verified / partial /
+// conflicted / inconclusive / cited / derived, colour-coded), so every analysis
+// tab renders the same status identically.
 
 function Citation({ citation, sourceUrl }: { citation: string | null; sourceUrl: string | null }) {
   // A source URL renders as a link ONLY when it's a non-empty http(s) string --
@@ -156,7 +136,7 @@ function FactCard({ fact }: { fact: CompanyFact }) {
       <p className="text-[15px] font-medium text-[color:var(--rev-text-1)]">{fact.value}</p>
       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-[color:var(--rev-border-subtle)] pt-2">
         <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
-        <StatusPill status={fact.status} />
+        <TrustStatusPill status={fact.status} />
       </div>
     </div>
   );
@@ -170,7 +150,7 @@ function AssertionRow({ fact }: { fact: CompanyFact }) {
         <span className="truncate text-[11.5px] text-[color:var(--rev-text-5)]">{fact.entity || "—"}</span>
         <span className="flex shrink-0 items-center gap-2.5">
           <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
-          <StatusPill status={fact.status} />
+          <TrustStatusPill status={fact.status} />
         </span>
       </div>
     </div>

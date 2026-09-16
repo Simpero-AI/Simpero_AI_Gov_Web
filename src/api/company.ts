@@ -14,7 +14,8 @@ export interface CompanyFact {
   /** The value ("Gaming & Leisure", "1,450") or the assertion text. */
   value: string;
   citation: string | null;
-  /** Trust status: "verified" | "partially_verified" | "cited", or "derived" for sector/HQ. */
+  /** Trust status: "verified" | "partially_verified" | "conflicted" | "inconclusive" |
+   * "cited", or "derived" for sector/HQ. Rendered by the shared TrustStatusPill. */
   status: string;
   entity: string | null;
   sourceUrl: string | null;

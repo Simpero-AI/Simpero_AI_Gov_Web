@@ -14,7 +14,8 @@ import {
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
 import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
-import { fetchMarket, marketQueryKey, type MarketFact, type MarketFactStatus } from "@/api/market";
+import { fetchMarket, marketQueryKey, type MarketFact } from "@/api/market";
+import { TrustStatusPill } from "@/components/mvp/primitives/TrustStatusPill";
 
 interface MarketTabProps {
   dealId: string;
@@ -72,37 +73,6 @@ function UnbackedSection({
 // consistent empty state rather than a per-box "coming soon" placeholder.
 const NO_EVIDENCE_TITLE = "No evidence found";
 const NO_EVIDENCE_DESCRIPTION = "Nothing on this was found in the deal's materials or public sources.";
-
-// A claim's trust status as a small pill. Verified is the earned status (success
-// tone); cited/partially_verified are shown honestly as neutral, never dressed up.
-// Record keyed on the union -> a renamed status is a compile error here.
-const STATUS_LABEL: Record<MarketFactStatus, string> = {
-  verified: "Verified",
-  partially_verified: "Partial",
-  cited: "Cited",
-};
-
-function StatusPill({ status }: { status: MarketFactStatus }) {
-  // Rendered as the SAME inline --rev-* pill CompanyTab uses (verbatim), so the
-  // same "Cited" datum looks identical on the two adjacent claims-driven tabs
-  // rather than pulling StatusChip's pre-revamp badge palette. fetchMarket casts
-  // the API JSON unchecked, so look the label up as a plain string -- an unknown
-  // runtime status (a backend rename ahead of a deploy) still shows its raw value
-  // legibly, not a blank pill; the Record stays union-keyed for compile safety.
-  const label = (STATUS_LABEL as Record<string, string>)[status] ?? status;
-  const verified = status === "verified";
-  return (
-    <span
-      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.5px]"
-      style={{
-        color: verified ? "var(--rev-success)" : "var(--rev-text-6)",
-        background: verified ? "var(--rev-tint-success)" : "var(--rev-tint-neutral)",
-      }}
-    >
-      {label}
-    </span>
-  );
-}
 
 function Citation({ citation, sourceUrl }: { citation: string | null; sourceUrl: string | null }) {
   // A source URL renders as a link ONLY when it's a non-empty http(s) string --
@@ -162,7 +132,7 @@ function SizingCard({ fact }: { fact: MarketFact }) {
       </p>
       <div className="flex items-center justify-between gap-2 border-t border-[color:var(--rev-border)] pt-2.5">
         <span className="text-[12px] text-[color:var(--rev-text-4)]">{description ?? ""}</span>
-        <StatusPill status={fact.status} />
+        <TrustStatusPill status={fact.status} />
       </div>
       {fact.citation || fact.sourceUrl ? (
         <div className="mt-2">
@@ -187,7 +157,7 @@ function AssertionRow({ fact }: { fact: MarketFact }) {
         </span>
         <span className="flex shrink-0 items-center gap-2.5">
           <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
-          <StatusPill status={fact.status} />
+          <TrustStatusPill status={fact.status} />
         </span>
       </div>
     </div>
