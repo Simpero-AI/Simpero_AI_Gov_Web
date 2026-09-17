@@ -14,6 +14,15 @@ export interface AnalysisProgressViewProps {
   stepDurations?: Record<string, number>;
   /** Frontend-facing findings summary, one entry per document. Only rendered when non-empty. */
   jobComments?: JobComment[] | null;
+  /**
+   * jobStatus === "error" -- stops the elapsed timer and swaps the
+   * "Analyzing your document / Getting started…" in-progress framing for an
+   * honest failed state (FE-7). Without this, a failed step's status is
+   * "failed", never "current", so `currentStep` below finds nothing and
+   * silently falls back to "Getting started…" -- reading as still-running
+   * right next to the caller's own failure banner.
+   */
+  failed?: boolean;
 }
 
 const PHASE_LABELS: Record<string, string> = {
@@ -34,15 +43,16 @@ function formatDuration(totalSeconds: number): string {
  */
 function useElapsedLabel(
   startedAt?: string | null,
-  endedAt?: string | null
+  endedAt?: string | null,
+  frozen?: boolean
 ): string | null {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (!startedAt || endedAt) return;
+    if (!startedAt || endedAt || frozen) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [startedAt, endedAt]);
+  }, [startedAt, endedAt, frozen]);
 
   if (!startedAt) return null;
   const endMs = endedAt ? new Date(endedAt).getTime() : now;
@@ -60,16 +70,19 @@ export function AnalysisProgressView({
   endedAt,
   stepDurations,
   jobComments,
+  failed,
 }: AnalysisProgressViewProps) {
-  const elapsedLabel = useElapsedLabel(startedAt, endedAt);
+  const elapsedLabel = useElapsedLabel(startedAt, endedAt, failed);
   const doneCount = steps.filter(s => s.status === "done").length;
   const allDone = doneCount === steps.length;
   const currentStep = steps.find(s => s.status === "current");
-  const subtitle = currentStep
-    ? (PHASE_LABELS[currentStep.phase] ?? currentStep.title)
-    : allDone
-      ? "Wrapping up — preparing your results…"
-      : "Getting started…";
+  const subtitle = failed
+    ? "See the failure reason above."
+    : currentStep
+      ? (PHASE_LABELS[currentStep.phase] ?? currentStep.title)
+      : allDone
+        ? "Wrapping up — preparing your results…"
+        : "Getting started…";
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
@@ -83,14 +96,14 @@ export function AnalysisProgressView({
 
         <div className="mt-5">
           <h1 className="text-xl font-bold text-slate-900">
-            Analyzing your document
+            {failed ? "Analysis failed" : "Analyzing your document"}
           </h1>
           <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
         </div>
 
         <div className="mt-6 flex items-center justify-between text-xs text-slate-500">
-          <span>This usually takes a few minutes</span>
-          <span>
+          {!failed && <span>Can take up to ~15 minutes for large documents</span>}
+          <span className={failed ? "ml-auto" : undefined}>
             {doneCount} / {steps.length} steps
           </span>
         </div>

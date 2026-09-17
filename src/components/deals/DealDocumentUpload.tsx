@@ -1,9 +1,10 @@
 import { useCallback, useState } from "react";
-import { useDropzone } from "react-dropzone";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import { FileUp } from "lucide-react";
 import { Spinner } from "@/components/mvp/primitives";
+import { toast } from "@/components/mvp/primitives/sonner";
 import { useUploadDocument } from "@/hooks/useUploadDocument";
-import { DEFAULT_MAX_UPLOAD_BYTES } from "@/lib/fileValidation";
+import { DEFAULT_MAX_UPLOAD_BYTES, validateUploadFile } from "@/lib/fileValidation";
 import type { CompletedUpload } from "@/api/documents";
 
 // Mirrors the backend's `_ALLOWED_EXTENSIONS` (app/api/uploads.py) exactly — no .ppt, includes .csv.
@@ -40,13 +41,25 @@ export function DealDocumentUpload({ dealId, onUploaded, maxBytes = DEFAULT_MAX_
   const mutation = useUploadDocument(dealId, { maxBytes });
 
   const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
+    (acceptedFiles: File[], fileRejections: FileRejection[]) => {
+      // react-dropzone's own accept/maxSize gate routes an oversized or
+      // wrong-type file into fileRejections, never into acceptedFiles -- so
+      // it never reached runDocumentUpload's validateUploadFile check (whose
+      // clear "File too large — exceeds 10MB." message this reuses) and the
+      // drop was previously silently swallowed with no feedback at all
+      // (FE-9). Re-validating the rejected file surfaces that same message.
+      if (fileRejections.length > 0) {
+        const rejected = fileRejections[0].file;
+        const result = validateUploadFile(rejected, { maxBytes });
+        toast.error(result.ok ? "File rejected" : result.reason);
+        return;
+      }
       const file = acceptedFiles[0];
       if (!file) return;
       setFileName(file.name);
       mutation.mutate(file, { onSuccess: (result) => onUploaded?.(result) });
     },
-    [mutation, onUploaded]
+    [mutation, onUploaded, maxBytes]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -82,7 +95,7 @@ export function DealDocumentUpload({ dealId, onUploaded, maxBytes = DEFAULT_MAX_
               Drag and drop or <span className="text-blue-600 underline font-medium">browse files</span>
             </p>
             <p className="text-xs text-gray-400">
-              PDF, DOC, DOCX, XLS, XLSX, CSV, PPTX — up to {Math.round(maxBytes / (1024 * 1024))} MB
+              PDF — up to {Math.round(maxBytes / (1024 * 1024))} MB, ~110 pages
             </p>
           </>
         )}

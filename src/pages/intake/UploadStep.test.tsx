@@ -53,4 +53,17 @@ describe("UploadStep", () => {
 
     expect(runPublicDocumentUpload).not.toHaveBeenCalled();
   });
+
+  it("shows a clear error entry for an oversized file instead of silently dropping it (FE-9)", async () => {
+    const user = userEvent.setup();
+    render(<UploadStep onSubmitted={vi.fn()} onUnavailable={vi.fn()} onBack={vi.fn()} />);
+
+    const oversized = new File([new Uint8Array(11 * 1024 * 1024)], "huge.pdf", { type: "application/pdf" });
+    const input = screen.getByTestId("intake-upload-input");
+    await user.upload(input, oversized);
+
+    expect(await screen.findByText("huge.pdf")).toBeInTheDocument();
+    expect(screen.getByText(/File too large — exceeds 10MB\./)).toBeInTheDocument();
+    expect(runPublicDocumentUpload).not.toHaveBeenCalled();
+  });
 });
