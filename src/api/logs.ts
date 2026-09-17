@@ -31,3 +31,36 @@ export async function fetchRecentActivity(limit: number): Promise<RecentActivity
   if (!res.ok) throw new Error(`GET /logs/recent-activity failed: ${res.status}`);
   return (await res.json()) as RecentActivity;
 }
+
+/**
+ * One row of a deal's audit trail (Logs drawer -> "Audit Trail" tab), from
+ * GET /deals/{id}/audit (backend human_audit_log, mirror of ActivityRowResponse).
+ * `action` is the event_type; `payload` is the event's arbitrary JSON detail.
+ *
+ * Replaces the retired tRPC `logs.auditTrail`, which keyed on a legacy NUMERIC
+ * deal id -- a UUID deal coerced with Number() reached it as NaN, so every
+ * deal's Audit Trail failed to load.
+ */
+export type DealAuditRow = {
+  id: string;
+  createdAt: string; // ISO
+  action: string;
+  sessionId: string | null;
+  jobId: string | null;
+  actorEmail: string | null;
+  payload: Record<string, unknown> | null;
+};
+
+export const dealAuditQueryKey = (dealId: string) => ["deals", "audit", dealId] as const;
+
+/**
+ * GET /deals/{id}/audit. An event-less deal returns [] (never 404); a 404 means
+ * the deal itself is gone, mapped to [] too since the drawer renders the same
+ * empty state either way.
+ */
+export async function fetchDealAudit(dealId: string): Promise<DealAuditRow[]> {
+  const res = await apiFetch(`/api/deals/${dealId}/audit`);
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`GET /deals/${dealId}/audit failed: ${res.status}`);
+  return (await res.json()) as DealAuditRow[];
+}
