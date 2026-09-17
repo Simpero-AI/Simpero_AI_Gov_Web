@@ -229,13 +229,13 @@ describe("CompanyTab", () => {
     renderCompanyTab();
 
     await screen.findByText("Company facts not available");
-    // Co-Investors, Key Customers, Funding History, and Geographic Presence keep
-    // their eyebrow but show the shared "No evidence found" body, never a per-box
-    // "coming soon" placeholder.
-    expect(screen.getAllByText("No evidence found")).toHaveLength(4);
-    expect(
-      screen.getAllByText("Nothing on this was found in the deal's materials or public sources.").length
-    ).toBeGreaterThanOrEqual(4);
+    // Co-Investors, Key Customers, Funding History and Geographic Presence are now
+    // claims-driven sections; with no backing claims each shows its own honest
+    // empty state (not a hardcoded shared body, and never a "coming soon" box).
+    expect(screen.getByText("Co-investors not available")).toBeInTheDocument();
+    expect(screen.getByText("Key customers not available")).toBeInTheDocument();
+    expect(screen.getByText("Funding history not available")).toBeInTheDocument();
+    expect(screen.getByText("Geographic presence not available")).toBeInTheDocument();
     expect(screen.queryByText("Co-investor data coming soon")).not.toBeInTheDocument();
     expect(screen.queryByText("Key customer data coming soon")).not.toBeInTheDocument();
     expect(screen.queryByText("Funding history coming soon")).not.toBeInTheDocument();

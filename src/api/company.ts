@@ -28,6 +28,10 @@ export interface CompanyView {
   commercial: CompanyFact[];
   relatedParties: CompanyFact[];
   plans: CompanyFact[];
+  coInvestors: CompanyFact[];
+  fundingHistory: CompanyFact[];
+  keyCustomers: CompanyFact[];
+  geographicPresence: CompanyFact[];
 }
 
 export const companyQueryKey = (dealId: string) => ["deals", "company", dealId] as const;

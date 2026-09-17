@@ -477,21 +477,34 @@ export function CompanyTab({ dealId, memoTyped }: CompanyTabProps) {
           reader still sees the topic, but the body is the uniform no-evidence
           state, never a "coming soon" placeholder. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <SectionCard eyebrow="Co-Investors" icon={<Handshake className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection icon={Handshake} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
-        </SectionCard>
-
-        <SectionCard eyebrow="Key Customers" icon={<Users className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection icon={Users} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
-        </SectionCard>
-
-        <SectionCard eyebrow="Funding History" icon={<TrendingUp className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection icon={TrendingUp} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
-        </SectionCard>
-
-        <SectionCard eyebrow="Geographic Presence" icon={<Globe className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection icon={Globe} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
-        </SectionCard>
+        <AssertionSection
+          eyebrow="Co-Investors"
+          icon={Handshake}
+          facts={company?.coInvestors ?? []}
+          emptyTitle="Co-investors not available"
+          emptyDescription="No co-investor or syndicate assertions were extracted from this deal's materials (a public company has no investment syndicate)."
+        />
+        <AssertionSection
+          eyebrow="Key Customers"
+          icon={Users}
+          facts={company?.keyCustomers ?? []}
+          emptyTitle="Key customers not available"
+          emptyDescription="No named-customer or customer-concentration assertions were extracted from this deal's materials."
+        />
+        <AssertionSection
+          eyebrow="Funding History"
+          icon={TrendingUp}
+          facts={company?.fundingHistory ?? []}
+          emptyTitle="Funding history not available"
+          emptyDescription="No prior-round or capital-raise assertions were extracted from this deal's materials (a public company reports no private rounds)."
+        />
+        <AssertionSection
+          eyebrow="Geographic Presence"
+          icon={Globe}
+          facts={company?.geographicPresence ?? []}
+          emptyTitle="Geographic presence not available"
+          emptyDescription="No region-of-operation assertions were extracted from this deal's materials."
+        />
       </div>
     </div>
   );
