@@ -34,7 +34,11 @@ import { cn } from "@/lib/utils";
 
 type Section = "firm" | "mandate" | "framework" | "scorecard";
 const VALID_SECTIONS: Section[] = ["firm", "mandate", "framework", "scorecard"];
-const TAB_SECTIONS: Section[] = ["firm", "mandate", "framework", "scorecard"];
+// Scoring Framework and Deal Scorecard are hidden from the tab bar for all
+// users (still reachable directly, e.g. ScorecardTab's "Edit scores" deep
+// link into /mandate-scorecard/scorecard) -- VALID_SECTIONS above is
+// intentionally left untouched so those direct links keep working.
+const TAB_SECTIONS: Section[] = ["firm", "mandate"];
 const SECTION_LABELS: Record<Section, { short: string; long: string }> = {
   firm: { short: "Firm Profile", long: "Firm Profile" },
   mandate: { short: "Mandate", long: "Mandate Builder" },

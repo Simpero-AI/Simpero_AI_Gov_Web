@@ -7,54 +7,42 @@ const platformAdmin: MvpUser = { id: 3, role: "user", isPlatformAdmin: true };
 const adminPlatformAdmin: MvpUser = { id: 4, role: "admin", isPlatformAdmin: true };
 
 describe("buildMvpNav", () => {
-  it("returns Family Office, Deal Flow for a plain non-admin, non-platform-admin user", () => {
+  it("returns Deal Flow for a plain non-admin, non-platform-admin user", () => {
     const nav = buildMvpNav(nonAdmin);
-    expect(nav.map((d) => d.title)).toEqual(["Family Office", "Deal Flow"]);
+    expect(nav.map((d) => d.title)).toEqual(["Deal Flow"]);
   });
 
   it("omits Admin divider for a product-admin who isn't a platform admin", () => {
     const nav = buildMvpNav(admin);
-    expect(nav.map((d) => d.title)).toEqual(["Family Office", "Deal Flow"]);
+    expect(nav.map((d) => d.title)).toEqual(["Deal Flow"]);
   });
 
   it("includes Intelligence (but not Admin) for a platform admin who isn't a product admin", () => {
     const nav = buildMvpNav(platformAdmin);
-    expect(nav.map((d) => d.title)).toEqual(["Family Office", "Deal Flow", "Intelligence"]);
+    expect(nav.map((d) => d.title)).toEqual(["Deal Flow", "Intelligence"]);
   });
 
   it("includes both Intelligence and Admin only when the user is both a product admin and a platform admin", () => {
     const nav = buildMvpNav(adminPlatformAdmin);
-    expect(nav.map((d) => d.title)).toEqual(["Family Office", "Deal Flow", "Intelligence", "Admin"]);
+    expect(nav.map((d) => d.title)).toEqual(["Deal Flow", "Intelligence", "Admin"]);
   });
 
-  it("Family Office contains exactly one disabled 'Data Consolidation' leaf", () => {
-    const [familyOffice] = buildMvpNav(nonAdmin);
-    expect(familyOffice.children).toHaveLength(1);
-    expect(familyOffice.children[0]).toMatchObject({
-      kind: "leaf",
-      key: "data-consolidation",
-      disabled: true,
-    });
-  });
-
-  it("Deal Flow is collapsible and contains 5 leaves (no Anti-Portfolio) for a non-platform-admin", () => {
-    const [, dealFlow] = buildMvpNav(nonAdmin);
+  it("Deal Flow is collapsible and contains 4 leaves (Initial Screening merged into Deal Analysis, no Anti-Portfolio) for a non-platform-admin", () => {
+    const [dealFlow] = buildMvpNav(nonAdmin);
     expect(dealFlow.collapsible).toBe(true);
     expect(dealFlow.children.map((c) => "key" in c && c.key)).toEqual([
       "deals",
       "new-deal",
-      "screening",
       "analysis",
       "mandate-scorecard",
     ]);
   });
 
   it("Deal Flow includes Anti-Portfolio, enabled with the real href, only for a platform admin", () => {
-    const [, dealFlow] = buildMvpNav(platformAdmin);
+    const [dealFlow] = buildMvpNav(platformAdmin);
     expect(dealFlow.children.map((c) => "key" in c && c.key)).toEqual([
       "deals",
       "new-deal",
-      "screening",
       "analysis",
       "mandate-scorecard",
       "anti-portfolio",
@@ -66,14 +54,14 @@ describe("buildMvpNav", () => {
 
   it("Anti-Portfolio is absent entirely (not just disabled) for non-platform-admins, admin or not", () => {
     for (const user of [nonAdmin, admin]) {
-      const [, dealFlow] = buildMvpNav(user);
+      const [dealFlow] = buildMvpNav(user);
       const antiPortfolio = dealFlow.children.find((c) => "key" in c && c.key === "anti-portfolio");
       expect(antiPortfolio).toBeUndefined();
     }
   });
 
   it("Deal Flow's 'deals' leaf points at the dashboard route, unconditionally enabled", () => {
-    const [, dealFlow] = buildMvpNav(nonAdmin);
+    const [dealFlow] = buildMvpNav(nonAdmin);
     const deals = dealFlow.children.find((c) => "key" in c && c.key === "deals");
     expect(deals).toMatchObject({ href: ROUTES.dashboard });
     expect((deals as { disabled?: boolean } | undefined)?.disabled).toBeFalsy();

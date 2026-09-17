@@ -95,8 +95,11 @@ describe("MandateScorecard — always-mounted sections", () => {
     fireEvent.change(firmNameInput, { target: { value: "Acme Test Capital" } });
     expect(firmNameInput).toHaveValue("Acme Test Capital");
 
-    fireEvent.click(screen.getByRole("tab", { name: "Scoring Framework" }));
-    expect(screen.getByTestId("framework-block-stub")).toBeInTheDocument();
+    // Scoring Framework is hidden from the tab bar (still always-mounted
+    // underneath) -- Mandate Builder is the other visible tab left to
+    // switch through.
+    fireEvent.click(screen.getByRole("tab", { name: "Mandate Builder" }));
+    expect(screen.getByTestId("mandate-block-stub")).toBeInTheDocument();
     // Firm Profile's input is still in the DOM (display:none), not unmounted.
     expect(screen.getByPlaceholderText("e.g. Vistara Growth Partners")).toHaveValue("Acme Test Capital");
 
@@ -205,12 +208,15 @@ describe("MandateScorecard — unsaved-changes navigation guard", () => {
     const firmNameInput = await screen.findByPlaceholderText("e.g. Vistara Growth Partners");
     fireEvent.change(firmNameInput, { target: { value: "Acme Test Capital" } });
 
-    for (const tabName of ["Mandate Builder", "Firm Profile", "Scoring Framework", "Deal Scorecard"]) {
+    // Scoring Framework and Deal Scorecard are hidden from the tab bar now
+    // (still directly linkable, just not tab-switchable) -- only Mandate
+    // Builder and Firm Profile remain clickable here.
+    for (const tabName of ["Mandate Builder", "Firm Profile"]) {
       await act(async () => {
         fireEvent.click(screen.getByRole("tab", { name: tabName }));
       });
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     }
-    expect(router.state.location.pathname).toBe("/mandate-scorecard/scorecard");
+    expect(router.state.location.pathname).toBe("/mandate-scorecard/firm");
   });
 });

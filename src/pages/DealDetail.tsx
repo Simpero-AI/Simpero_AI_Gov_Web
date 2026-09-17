@@ -2,14 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { CitationProvider, useCitationSafe } from "@/contexts/CitationContext";
 import { CitationSidebar } from "@/components/mvp/primitives/CitationSidebar";
 import { Link, useLocation, useNavigate } from "react-router";
-import { toast } from "@/components/mvp/primitives/sonner";
 import {
   ArrowRight,
   Award,
   ClipboardList,
   Download,
   FileText,
-  Loader2,
   ScrollText,
   ShieldCheck,
   TrendingDown,
@@ -83,7 +81,6 @@ import type {
 import { proseFieldToString } from "@shared/simperoTypes";
 import type { FrameworkResult } from "@shared/complianceFrameworks";
 import type { DealStatusPayload } from "@shared/dealsStatus";
-import { buildE2eUxMemo } from "@shared/e2eUxMemoFixture";
 import { SummaryTab } from "./dealAnalysis/SummaryTab";
 import { ScorecardTab } from "./dealAnalysis/ScorecardTab";
 import { CompanyTab } from "./dealAnalysis/CompanyTab";
@@ -344,20 +341,6 @@ function AnalysisTabs({
   const dealMetrics = memoTyped?.dealMetrics;
   const dealMetricDiscrepancies = memoTyped?.dealMetricDiscrepancies ?? [];
 
-  const handleGenerateMemo = () => {
-    if (sessionId) {
-      window.location.href = `/memo/${sessionId}`;
-      return;
-    }
-    const seeded = buildE2eUxMemo();
-    sessionStorage.setItem("simpero_memo", JSON.stringify(seeded));
-    toast.info("Opened seeded memo", {
-      description:
-        "No active memo was available, so a report-linked demo memo was loaded.",
-    });
-    window.location.href = `/memo/${seeded.sessionId}`;
-  };
-
   return (
     <>
       <Sheet open={logsOpen} onOpenChange={setLogsOpen}>
@@ -389,14 +372,6 @@ function AnalysisTabs({
           <Button variant="outline" disabled title="Coming soon">
             <Download className="mr-1.5 h-4 w-4" />
             Export PDF
-          </Button>
-          <Button onClick={handleGenerateMemo} disabled={sessionId === null}>
-            {sessionId === null ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-            ) : (
-              <FileText className="mr-1.5 h-4 w-4" />
-            )}
-            Generate IC Memo
           </Button>
         </div>
       </div>
@@ -477,14 +452,6 @@ function AnalysisTabs({
               <ClipboardList className="mr-1.5 h-4 w-4" />
               Memo History
             </Link>
-          </Button>
-          <Button onClick={handleGenerateMemo} disabled={sessionId === null}>
-            {sessionId === null ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-            ) : (
-              <FileText className="mr-1.5 h-4 w-4" />
-            )}
-            Generate IC Memo
           </Button>
         </div>
       </div>
