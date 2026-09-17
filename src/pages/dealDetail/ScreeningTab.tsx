@@ -6,7 +6,6 @@ import { ExtractedGrid } from "@/components/mvp/screening/ExtractedGrid";
 import { HighlightsPanel } from "@/components/mvp/screening/HighlightsPanel";
 import { RiskFlagsPanel } from "@/components/mvp/screening/RiskFlagsPanel";
 import { MandateFitPanel } from "@/components/mvp/screening/MandateFitPanel";
-import { ScreeningDecisionBar } from "@/components/mvp/screening/ScreeningDecisionBar";
 import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
 import { fetchScreening, screeningQueryKey } from "@/api/screening";
 import { fetchScreeningMaterials, screeningMaterialsQueryKey } from "@/api/screeningMaterials";
@@ -33,8 +32,8 @@ export interface ScreeningTabProps {
  *   LLM pass). A slow or failed model call only affects these two panels; the
  *   extracted grid is unaffected. Both render their empty state until (or if)
  *   the insights arrive.
- * ScreeningDecisionBar stays null -- a recorded advance/reject human decision
- * has no backend surface yet.
+ * The Reject/Advance decision bar is hidden here by explicit request -- a
+ * recorded advance/reject human decision has no backend surface yet anyway.
  */
 export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
   const screeningQuery = useQuery({
@@ -144,10 +143,6 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
           isLoading={insightsQuery.isPending}
           isError={insightsQuery.isError}
         />
-      </div>
-
-      <div className="mt-5">
-        <ScreeningDecisionBar decision={null} />
       </div>
     </div>
   );

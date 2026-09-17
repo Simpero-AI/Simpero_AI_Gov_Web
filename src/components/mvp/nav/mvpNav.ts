@@ -14,7 +14,7 @@ import {
   Target,
   Layers,
 } from "lucide-react";
-import { DealFlowIcon, FamilyOfficeIcon, IntelligenceIcon } from "@/components/mvp/icons";
+import { DealFlowIcon, IntelligenceIcon } from "@/components/mvp/icons";
 
 export const ROUTES = {
   dashboard: "/",
@@ -117,8 +117,6 @@ export interface MvpNavDivider {
 
 export type MvpNavModel = MvpNavDivider[];
 
-const COMING_SOON = "Coming soon";
-
 /**
  * Institutional Memory's 6 sub-tabs — single source of truth for both the
  * sidebar subnav (below) and the `/intelligence/memory/:sub?` host shell
@@ -137,45 +135,15 @@ export const INSTITUTIONAL_MEMORY_SUBTABS: ReadonlyArray<{ key: string; label: s
 export function buildMvpNav(user: MvpUser): MvpNavModel {
   const dividers: MvpNavModel = [
     {
-      title: "Family Office",
-      children: [
-        // Data Consolidation (net worth / entities / compliance) is ~35% of
-        // the mockup's surface and an entirely new backend domain with no
-        // overlap with the diligence product — recommended in the plan as
-        // its own epic, not part of this redesign. Kept visible (rather
-        // than omitted) for IA parity with the mockup's 3-group structure;
-        // disabled (rather than linked) since there's genuinely nowhere to
-        // send it yet.
-        {
-          kind: "leaf",
-          key: "data-consolidation",
-          label: "Data Consolidation",
-          icon: FamilyOfficeIcon,
-          href: "#",
-          disabled: true,
-          disabledReason: COMING_SOON,
-        },
-      ],
-    },
-    {
       title: "Deal Flow",
       collapsible: true,
       children: [
         { kind: "leaf", key: "deals", label: "Deals", icon: DealFlowIcon, href: ROUTES.dashboard },
         { kind: "leaf", key: "new-deal", label: "New Deal", icon: FilePlus, href: ROUTES.upload },
-        // Deal-scoped screening page now exists (plan's Phase 4). Wired the
-        // same way "Deal Analysis" already is below: a stable static href
-        // to a redirect page (ScreeningRedirect) that itself picks the most
-        // recent deal with a completed analysis, or shows a friendly empty
-        // state with none — rather than threading live deal-count data into
-        // this static `buildMvpNav(user)` function to drive a dynamic
-        // disabled+tooltip state (plan §5 Q2's literal recommendation).
-        // That would need every one of this function's ~6 call sites to
-        // also fetch the deals pipeline just to render the sidebar, and
-        // handle the loading state in between — a materially bigger, more
-        // fragile diff than reusing the mechanism that already ships this
-        // exact "no deals yet" UX for Deal Analysis.
-        { kind: "leaf", key: "screening", label: "Initial Screening", icon: Search, href: ROUTES.screening },
+        // Initial Screening and Deal Analysis are one nav entry — both live
+        // as tabs inside the same deal-scoped page (DealDetailTabSwitcher in
+        // DealDetail.tsx), so a single "Deal Analysis" link into that page
+        // covers both rather than listing them as two separate leaves.
         // /analysis (no :dealId) already has a real destination today —
         // AnalysisRedirect sends you to the most recent deal's analysis, or
         // a friendly empty state if none exist.
