@@ -6,10 +6,12 @@ import { ScorecardTab } from "./ScorecardTab";
 import { buildE2eDeliverableMemo } from "@shared/e2eUxMemoFixture";
 import type { ICMemoResult } from "@shared/simperoTypes";
 
-// The tRPC client is the legacy, frozen data layer this tab still depends on
-// (src/lib/trpc.ts) — mocked wholesale so these tests drive the tab's own
-// loading/error/configured/pending/error-mutation states without touching a
-// real tRPC/React Query client.
+// rescore is still the legacy, frozen tRPC data layer (src/lib/trpc.ts) —
+// mocked wholesale. The investment-profile read has since migrated off tRPC
+// (that route no longer resolves on the backend — see ScorecardTab.tsx) onto
+// GET /api/investment-profile via react-query's useQuery, so it's mocked at
+// that layer instead (ScorecardTab.tsx is this file's only useQuery call
+// site, so mocking the whole module is safe here).
 const { profileQueryMock, rescoreMutationMock, invalidateMock } = vi.hoisted(() => ({
   profileQueryMock: vi.fn(),
   rescoreMutationMock: vi.fn(),
@@ -19,10 +21,14 @@ const { profileQueryMock, rescoreMutationMock, invalidateMock } = vi.hoisted(() 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({ deals: { get: { invalidate: invalidateMock } } }),
-    investmentProfile: { get: { useQuery: profileQueryMock } },
     memo: { rescore: { useMutation: rescoreMutationMock } },
   },
 }));
+
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return { ...actual, useQuery: profileQueryMock };
+});
 
 // ScorecardTab renders a react-router <Link>, which needs router context
 // (wouter's <Link> fell back to the browser location and needed no wrapper).

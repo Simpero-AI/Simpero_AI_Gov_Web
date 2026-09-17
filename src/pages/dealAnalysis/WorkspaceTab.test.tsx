@@ -10,6 +10,11 @@ vi.mock("@/api/logs", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/logs")>();
   return { ...actual, fetchRecentActivity: vi.fn() };
 });
+// OverviewPane (the default pane) also fetches via react-query — same reason.
+vi.mock("@/api/documents", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/documents")>();
+  return { ...actual, fetchDealDocuments: vi.fn().mockResolvedValue([]) };
+});
 
 afterEach(cleanup);
 

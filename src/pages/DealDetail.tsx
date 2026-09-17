@@ -428,7 +428,7 @@ function AnalysisTabs({
           />
         )}{" "}
         {/* FOUNDERS */}
-        {tab === "founders" && <FoundersTab memoTyped={memoTyped} />}
+        {tab === "founders" && <FoundersTab memoTyped={memoTyped} dealId={dealId} />}
         {/* CAP TABLE */}
         {tab === "cap-table" && <CapTableTab memoTyped={memoTyped} />}
         {/* FINDINGS */}
@@ -787,7 +787,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
           onChange={t => navigate(`/deals/${dealId}/${t}`)}
         />
         {tab === "screening" ? (
-          <ScreeningTab dealId={dealId} fileName={latestMemoSession?.fileName ?? null} />
+          <ScreeningTab dealId={dealId} />
         ) : (
           <>
             {showPass3FailedBanner && (
