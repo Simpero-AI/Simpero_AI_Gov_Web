@@ -69,6 +69,17 @@ describe("useUploadDocument", () => {
     expect(toastSuccess).toHaveBeenCalledWith("Document already uploaded and verified for this deal");
   });
 
+  it("toasts the page-cap rejection instead of a success message for an over-cap PDF (FE-8)", async () => {
+    vi.mocked(pipeline.runDocumentUpload).mockResolvedValue({ id: "doc1", status: "pending", pageCount: 156 });
+    const { result } = renderHook(() => useUploadDocument("deal1"), { wrapper });
+
+    result.current.mutate(new File(["x"], "deck.pdf"));
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(toastError).toHaveBeenCalledWith("Too many pages — 156 exceeds the 110-page limit.");
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
   it("shows the raw error message for other failures", async () => {
     vi.mocked(pipeline.runDocumentUpload).mockRejectedValue(new Error("boom"));
     const { result } = renderHook(() => useUploadDocument("deal1"), { wrapper });

@@ -66,4 +66,17 @@ describe("UploadStep", () => {
     expect(screen.getByText(/File too large — exceeds 10MB\./)).toBeInTheDocument();
     expect(runPublicDocumentUpload).not.toHaveBeenCalled();
   });
+
+  it("shows an over-cap PDF as an error entry, not 'done', and keeps Submit disabled on it alone (FE-8)", async () => {
+    const user = userEvent.setup();
+    vi.mocked(runPublicDocumentUpload).mockResolvedValue({ id: "d1", status: "pending", pageCount: 156 });
+    render(<UploadStep onSubmitted={vi.fn()} onUnavailable={vi.fn()} onBack={vi.fn()} />);
+
+    const submitButton = screen.getByTestId("intake-submit-button");
+    const input = screen.getByTestId("intake-upload-input");
+    await user.upload(input, makeFile("deck.pdf"));
+
+    expect(await screen.findByText("Too many pages — 156 exceeds the 110-page limit.")).toBeInTheDocument();
+    expect(submitButton).toBeDisabled();
+  });
 });

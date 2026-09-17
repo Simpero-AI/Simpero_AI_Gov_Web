@@ -29,7 +29,12 @@ import {
   type CorroborationSourceItem,
 } from "@/components/mvp/analysis/CorroborationPanel";
 import { useCitationSafe } from "@/contexts/CitationContext";
-import { fetchCompanySynthesis, companySynthesisQueryKey } from "@/api/companySynthesis";
+import {
+  fetchCompanySynthesis,
+  companySynthesisQueryKey,
+  type CompanySynthPoint,
+  type CompanySynthPerson,
+} from "@/api/companySynthesis";
 import { fetchCompany, companyQueryKey, type CompanyFact } from "@/api/company";
 import type { Claim, ICMemoResult, Sourced, SourcedSentence } from "@shared/simperoTypes";
 
@@ -104,29 +109,42 @@ function ProvenanceAction({
 }
 
 // ---------------------------------------------------------------------------
-// Related Parties fallback — when no structured founder/leadership profile
-// exists on ICMemoDeliverable (managementTeam), the Company tab's Related
-// Parties data (grounded AI synthesis, or the claims-driven fallback) often
-// already names the same people (FE-5). Neither source splits into
-// name/title/background the way FounderMember below needs, so this renders
-// the SAME real assertions Company tab shows, honestly, rather than guessing
-// a name/title split that isn't actually in the data.
+// Leadership fallback — when no structured founder profile exists on
+// ICMemoDeliverable (managementTeam), prefer the backend's dedicated
+// "leadership" synthesis section (GET /deals/{id}/company-synthesis,
+// grounded name/title/background people, FE-5) over the flat Related
+// Parties data. Related Parties (AI synthesis prose, or the claims-driven
+// fact list) isn't split into name/title/background, so it's kept only as
+// a second-line fallback when leadership itself has nothing.
 // ---------------------------------------------------------------------------
 
-function RelatedPartiesFallback({ dealId }: { dealId: string }) {
-  const synthesisQuery = useQuery({
-    queryKey: companySynthesisQueryKey(dealId),
-    queryFn: () => fetchCompanySynthesis(dealId),
-  });
-  const companyQuery = useQuery({
-    queryKey: companyQueryKey(dealId),
-    queryFn: () => fetchCompany(dealId),
-  });
-  const points = synthesisQuery.data?.sections.find((s) => s.key === "related_parties")?.points;
-  const facts: CompanyFact[] = companyQuery.data?.relatedParties ?? [];
+function LeadershipPersonCard({ person }: { person: CompanySynthPerson }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-[color:var(--rev-border)] bg-[color:var(--rev-surface)] shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+      <div className="flex items-center gap-4 border-b border-[color:var(--rev-border-subtle)] p-5">
+        <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-[color:var(--rev-tint-primary)]">
+          <UserRound className="h-6 w-6 text-[color:var(--rev-primary)]" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-serif text-lg text-[color:var(--rev-text-1)]">{person.name}</p>
+          {person.title && <p className="text-[13px] text-[color:var(--rev-text-7)]">{person.title}</p>}
+        </div>
+      </div>
+      {person.background && (
+        <div className="p-5">
+          <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{person.background}</p>
+        </div>
+      )}
+      {person.citation && (
+        <div className="flex justify-end border-t border-[color:var(--rev-border-subtle)] px-5 py-2.5">
+          <span className="font-mono text-[12px] text-[color:var(--rev-text-5)]">{person.citation}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
-  if ((!points || points.length === 0) && facts.length === 0) return null;
-
+function RelatedPartiesFallback({ points, facts }: { points: CompanySynthPoint[]; facts: CompanyFact[] }) {
   return (
     <div className="overflow-hidden rounded-xl border border-[color:var(--rev-border)] bg-[color:var(--rev-surface)] p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
       <div className="mb-3.5 flex items-center gap-2.5">
@@ -139,7 +157,7 @@ function RelatedPartiesFallback({ dealId }: { dealId: string }) {
         From the Company tab&apos;s Related Parties — no per-person title/background split is available yet.
       </p>
       <div className="space-y-3">
-        {points && points.length > 0
+        {points.length > 0
           ? points.map((p, i) => (
               <div key={i} className="rounded-lg border border-[color:var(--rev-border-subtle)] p-4">
                 <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{p.text}</p>
@@ -160,6 +178,32 @@ function RelatedPartiesFallback({ dealId }: { dealId: string }) {
       </div>
     </div>
   );
+}
+
+function LeadershipFallback({ dealId }: { dealId: string }) {
+  const synthesisQuery = useQuery({
+    queryKey: companySynthesisQueryKey(dealId),
+    queryFn: () => fetchCompanySynthesis(dealId),
+  });
+  const companyQuery = useQuery({
+    queryKey: companyQueryKey(dealId),
+    queryFn: () => fetchCompany(dealId),
+  });
+  const people = synthesisQuery.data?.sections.find((s) => s.key === "leadership")?.people ?? [];
+  if (people.length > 0) {
+    return (
+      <div className="space-y-5">
+        {people.map((p, i) => (
+          <LeadershipPersonCard key={`${p.name}-${i}`} person={p} />
+        ))}
+      </div>
+    );
+  }
+
+  const points = synthesisQuery.data?.sections.find((s) => s.key === "related_parties")?.points ?? [];
+  const facts: CompanyFact[] = companyQuery.data?.relatedParties ?? [];
+  if (points.length === 0 && facts.length === 0) return null;
+  return <RelatedPartiesFallback points={points} facts={facts} />;
 }
 
 function UnbackedSection({
@@ -405,7 +449,7 @@ export function FoundersTab({ memoTyped, dealId }: FoundersTabProps) {
             description="Names, titles, background, and key achievements for founders/leadership will appear here once the source document is processed."
           />
         </SectionCard>
-        <RelatedPartiesFallback dealId={dealId} />
+        <LeadershipFallback dealId={dealId} />
         <CorroborationPanel
           items={corroboration.items}
           verifiedCount={corroboration.verifiedCount}

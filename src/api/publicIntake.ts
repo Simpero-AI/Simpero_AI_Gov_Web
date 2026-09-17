@@ -64,7 +64,8 @@ export async function postIntakeAnswers(answers: IntakeAnswer[]): Promise<void> 
 }
 
 export type PublicPresignedUploadResponse = { uploadId: string; presignedUrl: string; storageKey: string };
-export type PublicCompletedUpload = { id: string; status: string };
+/** `pageCount` (FE-8): null when the file isn't a PDF or the count couldn't be determined. */
+export type PublicCompletedUpload = { id: string; status: string; pageCount: number | null };
 
 /** POST /api/public/intake/uploads/presigned-url — dealId is derived server-side from the session. */
 export async function requestPublicPresignedUpload(body: {

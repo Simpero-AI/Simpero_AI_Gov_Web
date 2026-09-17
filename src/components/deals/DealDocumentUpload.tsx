@@ -4,7 +4,7 @@ import { FileUp } from "lucide-react";
 import { Spinner } from "@/components/mvp/primitives";
 import { toast } from "@/components/mvp/primitives/sonner";
 import { useUploadDocument } from "@/hooks/useUploadDocument";
-import { DEFAULT_MAX_UPLOAD_BYTES, validateUploadFile } from "@/lib/fileValidation";
+import { DEFAULT_MAX_UPLOAD_BYTES, describePageCountViolation, validateUploadFile } from "@/lib/fileValidation";
 import type { CompletedUpload } from "@/api/documents";
 
 // Mirrors the backend's `_ALLOWED_EXTENSIONS` (app/api/uploads.py) exactly — no .ppt, includes .csv.
@@ -57,7 +57,17 @@ export function DealDocumentUpload({ dealId, onUploaded, maxBytes = DEFAULT_MAX_
       const file = acceptedFiles[0];
       if (!file) return;
       setFileName(file.name);
-      mutation.mutate(file, { onSuccess: (result) => onUploaded?.(result) });
+      mutation.mutate(file, {
+        onSuccess: (result) => {
+          // FE-8: an over-cap file did genuinely upload (page count is only
+          // knowable after the fact), but the wizard must not treat it as an
+          // attached, analysis-ready document -- useUploadDocument's onSuccess
+          // already toasted the rejection reason instead of the usual success
+          // message.
+          if (describePageCountViolation(result.pageCount)) return;
+          onUploaded?.(result);
+        },
+      });
     },
     [mutation, onUploaded, maxBytes]
   );
@@ -102,13 +112,22 @@ export function DealDocumentUpload({ dealId, onUploaded, maxBytes = DEFAULT_MAX_
       </div>
 
       {mutation.isSuccess && mutation.data && (
-        <div
-          className="mt-3 px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800"
-          data-testid="deal-document-upload-status"
-        >
-          {fileName ? `${fileName} — ` : ""}
-          {statusLabel(mutation.data.status)}
-        </div>
+        (() => {
+          const pageCountReason = describePageCountViolation(mutation.data.pageCount);
+          return (
+            <div
+              className={
+                pageCountReason
+                  ? "mt-3 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800"
+                  : "mt-3 px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800"
+              }
+              data-testid="deal-document-upload-status"
+            >
+              {fileName ? `${fileName} — ` : ""}
+              {pageCountReason ?? statusLabel(mutation.data.status)}
+            </div>
+          );
+        })()
       )}
     </div>
   );

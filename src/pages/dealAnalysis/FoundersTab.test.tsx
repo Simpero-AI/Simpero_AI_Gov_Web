@@ -41,13 +41,45 @@ describe("FoundersTab", () => {
     expect(screen.queryByText("Related Parties")).not.toBeInTheDocument();
   });
 
-  it("falls back to the Company tab's Related Parties data when managementTeam is missing (FE-5)", async () => {
+  it("renders real per-person leadership cards from the backend's dedicated leadership synthesis section (FE-5)", async () => {
     mockSynthesis.mockResolvedValue({
       sections: [
+        {
+          key: "leadership",
+          title: "Leadership",
+          points: [],
+          people: [
+            { name: "Jen-Hsun Huang", title: "CEO and Co-Founder", background: "Led the company since founding.", citation: "10-K · p.4" },
+          ],
+        },
+      ],
+    });
+    mockCompany.mockResolvedValue(null);
+    renderFoundersTab(<FoundersTab memoTyped={null} dealId="deal-1" />);
+
+    expect(screen.getByText("Founder & leadership profiles not yet extracted")).toBeInTheDocument();
+    expect(await screen.findByText("Jen-Hsun Huang")).toBeInTheDocument();
+    expect(screen.getByText("CEO and Co-Founder")).toBeInTheDocument();
+    expect(screen.getByText("Led the company since founding.")).toBeInTheDocument();
+    expect(screen.getByText("10-K · p.4")).toBeInTheDocument();
+    // Leadership took priority -- the flatter Related Parties fallback never renders.
+    expect(screen.queryByText("Related Parties")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the Company tab's Related Parties data when both managementTeam AND the leadership section are empty (FE-5)", async () => {
+    mockSynthesis.mockResolvedValue({
+      sections: [
+        {
+          key: "leadership",
+          title: "Leadership",
+          points: [],
+          people: [],
+        },
         {
           key: "related_parties",
           title: "Related Parties",
           points: [{ text: "Jen-Hsun Huang serves as CEO and co-founder.", citation: "10-K · p.4" }],
+          people: [],
         },
       ],
     });
