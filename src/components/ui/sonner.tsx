@@ -15,6 +15,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
       // swallows the click (FE-6). top-right is clear of every CTA in this
       // app's layouts.
       position="top-right"
+      // A dismiss affordance on every toast so a user never has to wait out
+      // the auto-dismiss (or an accidental long-duration toast) — belt-and-
+      // suspenders alongside the top-right reposition for the click-swallow
+      // issue (FE-6).
+      closeButton
       style={
         {
           "--normal-bg": "var(--popover)",

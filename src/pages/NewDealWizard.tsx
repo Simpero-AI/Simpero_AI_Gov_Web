@@ -606,18 +606,11 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
                     <DealDocumentUpload
                       dealId={state.attachDealId}
                       onUploaded={() => {
+                        // The documents-list query is invalidated by
+                        // useUploadDocument's own onSuccess now (it owns that for
+                        // every call site), so this only flips the session-local
+                        // "a doc was uploaded in this session" flag.
                         dispatch({ type: "document_uploaded" });
-                        // `state.attachDealId` is narrowed for the JSX above by the
-                        // surrounding `!= null` check, but TS can't carry that
-                        // narrowing into this closure (the captured binding could
-                        // theoretically change before the callback fires) — same
-                        // idiom as `attachDealIdFromUrl as string` in dealQuery's
-                        // queryFn above.
-                        queryClient.invalidateQueries({
-                          queryKey: dealDocumentsQueryKey(
-                            state.attachDealId as string
-                          ),
-                        });
                       }}
                     />
                   </div>

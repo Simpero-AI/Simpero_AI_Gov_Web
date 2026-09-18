@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useUploadDocument } from "./useUploadDocument";
 import * as pipeline from "@/lib/documentUploadPipeline";
 import { PageCountExceededError } from "@/lib/fileValidation";
+import { dealDocumentsQueryKey } from "@/api/documents";
 
 vi.mock("@/lib/documentUploadPipeline", () => ({ runDocumentUpload: vi.fn() }));
 
@@ -94,5 +95,20 @@ describe("useUploadDocument", () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(toastError).toHaveBeenCalledWith("boom");
+  });
+
+  it("invalidates the per-deal documents list on a successful upload", async () => {
+    vi.mocked(pipeline.runDocumentUpload).mockResolvedValue({ id: "doc1", status: "pending" });
+    const queryClient = new QueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const localWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useUploadDocument("deal-42"), { wrapper: localWrapper });
+
+    result.current.mutate(new File(["x"], "deck.pdf"));
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: dealDocumentsQueryKey("deal-42") });
   });
 });
