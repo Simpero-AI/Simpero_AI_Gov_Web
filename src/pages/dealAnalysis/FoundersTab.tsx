@@ -185,11 +185,16 @@ function LeadershipFallback({ dealId }: { dealId: string }) {
     queryKey: companySynthesisQueryKey(dealId),
     queryFn: () => fetchCompanySynthesis(dealId),
   });
+  const people = synthesisQuery.data?.sections.find((s) => s.key === "leadership")?.people ?? [];
+  // Only fetched once synthesisQuery has settled AND leadership came back
+  // empty (PR #42 review) -- the common, successful case (real leadership
+  // data) never issues this request at all, instead of always firing both
+  // queries and discarding companyQuery's response on the happy path.
   const companyQuery = useQuery({
     queryKey: companyQueryKey(dealId),
     queryFn: () => fetchCompany(dealId),
+    enabled: !synthesisQuery.isPending && people.length === 0,
   });
-  const people = synthesisQuery.data?.sections.find((s) => s.key === "leadership")?.people ?? [];
   if (people.length > 0) {
     return (
       <div className="space-y-5">

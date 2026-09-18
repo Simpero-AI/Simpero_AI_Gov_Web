@@ -64,6 +64,10 @@ describe("FoundersTab", () => {
     expect(screen.getByText("10-K · p.4")).toBeInTheDocument();
     // Leadership took priority -- the flatter Related Parties fallback never renders.
     expect(screen.queryByText("Related Parties")).not.toBeInTheDocument();
+    // PR #42 review (efficiency): GET /api/company is never even requested
+    // on this common, successful path -- companyQuery is disabled once
+    // leadership people are known to be non-empty.
+    expect(mockCompany).not.toHaveBeenCalled();
   });
 
   it("falls back to the Company tab's Related Parties data when both managementTeam AND the leadership section are empty (FE-5)", async () => {
@@ -89,6 +93,8 @@ describe("FoundersTab", () => {
     expect(screen.getByText("Founder & leadership profiles not yet extracted")).toBeInTheDocument();
     expect(await screen.findByText("Related Parties")).toBeInTheDocument();
     expect(screen.getByText("Jen-Hsun Huang serves as CEO and co-founder.")).toBeInTheDocument();
+    // Leadership resolved empty, so the fallback DOES need company facts here.
+    expect(mockCompany).toHaveBeenCalledWith("deal-1");
   });
 
   it("renders real founder name/title/background and the keyAchievement as a pull-quote shown once, not duplicated into Track Record", () => {

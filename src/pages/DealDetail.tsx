@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CitationProvider, useCitationSafe } from "@/contexts/CitationContext";
 import { CitationSidebar } from "@/components/mvp/primitives/CitationSidebar";
-import { Link, useLocation, useNavigate } from "react-router";
+import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import {
   ArrowRight,
   Award,
@@ -292,7 +292,16 @@ function DealMetricsStrip({
 // AnalysisTabs — Figma-matched 9-tab view
 // ---------------------------------------------------------------------------
 
-export function useTabFromUrl(): [TabKey, (t: TabKey) => void] {
+/**
+ * `redirectTo` is non-null exactly when the current `?tab=` is present but
+ * unrecognized (e.g. "captable" instead of "cap-table") -- the caller
+ * renders `<Navigate to={redirectTo} replace />` for it, a single
+ * synchronous redirect (PR #42 review: this previously ran `tab`'s
+ * "summary" fallback synchronously for render AND a `useEffect` to correct
+ * the URL, two mechanisms for one job where MandateScorecard.tsx's own
+ * `?section=` handling uses just the one `<Navigate replace />`).
+ */
+export function useTabFromUrl(): [TabKey, (t: TabKey) => void, string | null] {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const rawTab = new URLSearchParams(search).get("tab");
@@ -304,16 +313,13 @@ export function useTabFromUrl(): [TabKey, (t: TabKey) => void] {
     // Replace search params, preserving the path
     navigate(`${pathname}?${params.toString()}`, { replace: true });
   };
-  // An unrecognized ?tab= (e.g. "captable" instead of "cap-table") used to
-  // silently render Summary while leaving the bad value sitting in the URL
-  // (FE-15) -- redirect to the real "summary" tab so the URL reflects what's
-  // actually showing, same pattern MandateScorecard.tsx uses for an invalid
-  // ?section=.
-  useEffect(() => {
-    if (rawTab != null && !isValid) setTab("summary" as TabKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawTab, isValid]);
-  return [tab, setTab];
+  let redirectTo: string | null = null;
+  if (rawTab != null && !isValid) {
+    const params = new URLSearchParams(search);
+    params.set("tab", "summary");
+    redirectTo = `${pathname}?${params.toString()}`;
+  }
+  return [tab, setTab, redirectTo];
 }
 
 function AnalysisTabs({
@@ -333,8 +339,10 @@ function AnalysisTabs({
   dealId: string;
   sessionId: string | null;
 }) {
-  const [tab, setTab] = useTabFromUrl();
+  const [tab, setTab, redirectTo] = useTabFromUrl();
   const [logsOpen, setLogsOpen] = useState(false);
+
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
 
   const memoTyped = memoData as Partial<ICMemoResult> | null;
   if (memoTyped && process.env.NODE_ENV === "development") {

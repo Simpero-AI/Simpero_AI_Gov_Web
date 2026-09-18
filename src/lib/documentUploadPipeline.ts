@@ -4,14 +4,32 @@ import {
   requestPublicPresignedUpload,
   type PublicCompletedUpload,
 } from "@/api/publicIntake";
-import { validateUploadFile } from "@/lib/fileValidation";
+import { describePageCountViolation, PageCountExceededError, validateUploadFile } from "@/lib/fileValidation";
 import { sha256Hex } from "@/lib/sha256";
 
+interface UploadOptions {
+  maxBytes?: number;
+  allowedExtensions?: string[];
+}
+
 /** Shared by both the authenticated and public presigned-URL upload flows — the part that actually matters for correctness lives here once. */
-async function validateAndHash(file: File, opts?: { maxBytes?: number }): Promise<string> {
-  const validation = validateUploadFile(file, { maxBytes: opts?.maxBytes });
+async function validateAndHash(file: File, opts?: UploadOptions): Promise<string> {
+  const validation = validateUploadFile(file, { maxBytes: opts?.maxBytes, allowedExtensions: opts?.allowedExtensions });
   if (!validation.ok) throw new Error(validation.reason);
   return sha256Hex(file);
+}
+
+/**
+ * Enforced once, here, rather than left to every downstream caller to
+ * remember (PR #42 review) -- a future upload surface that calls
+ * runDocumentUpload/runPublicDocumentUpload directly gets a REJECTED
+ * promise for an over-cap file, not a plain result it could forget to
+ * check.
+ */
+function enforcePageCount<T extends { pageCount: number | null }>(result: T): T {
+  const reason = describePageCountViolation(result.pageCount);
+  if (reason) throw new PageCountExceededError(reason, result.pageCount as number);
+  return result;
 }
 
 async function putToStorage(presignedUrl: string, file: File): Promise<void> {
@@ -30,7 +48,7 @@ async function putToStorage(presignedUrl: string, file: File): Promise<void> {
 export async function runDocumentUpload(
   dealId: string,
   file: File,
-  opts?: { maxBytes?: number }
+  opts?: UploadOptions
 ): Promise<CompletedUpload> {
   const declaredSha256 = await validateAndHash(file, opts);
 
@@ -48,21 +66,25 @@ export async function runDocumentUpload(
     // fresh upload would reach. Resolve with the existing row's real
     // id/status rather than re-running a PUT that would just 409 again.
     if (err instanceof DuplicateUploadError) {
-      // The 409 detail body carries only {message, dataSourceId, status} --
-      // no page count for the existing row (it would have already been
-      // checked against the cap on its own original upload).
-      return { id: err.dataSourceId, status: err.status, pageCount: null };
+      // KNOWN GAP until the backend adds pageCount to this 409 detail body
+      // (PR #42 review): err.pageCount is always null today, so a duplicate
+      // hit on a file whose ORIGINAL upload was over-cap can't be
+      // re-flagged here -- but the enforcement itself is ready and already
+      // wired the moment the backend adds it, no further frontend change
+      // needed.
+      return enforcePageCount({ id: err.dataSourceId, status: err.status, pageCount: err.pageCount ?? null });
     }
     throw err;
   }
 
   await putToStorage(presigned.presignedUrl, file);
 
-  return completeUpload(presigned.uploadId, {
+  const result = await completeUpload(presigned.uploadId, {
     dealId,
     filename: file.name,
     declaredSha256,
   });
+  return enforcePageCount(result);
 }
 
 /**
@@ -78,7 +100,7 @@ export async function runDocumentUpload(
  */
 export async function runPublicDocumentUpload(
   file: File,
-  opts?: { maxBytes?: number }
+  opts?: UploadOptions
 ): Promise<PublicCompletedUpload> {
   const declaredSha256 = await validateAndHash(file, opts);
 
@@ -90,8 +112,9 @@ export async function runPublicDocumentUpload(
 
   await putToStorage(presigned.presignedUrl, file);
 
-  return completePublicUpload(presigned.uploadId, {
+  const result = await completePublicUpload(presigned.uploadId, {
     filename: file.name,
     declaredSha256,
   });
+  return enforcePageCount(result);
 }
