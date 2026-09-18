@@ -31,10 +31,8 @@ import {
   DenseTableHeaderRow,
   DenseTableRow,
 } from "@/components/mvp/primitives/DenseTable";
-import {
-  CorroborationPanel,
-  type CorroborationSourceItem,
-} from "@/components/mvp/analysis/CorroborationPanel";
+import { CorroborationPanel } from "@/components/mvp/analysis/CorroborationPanel";
+import { financialsCorroboration } from "@/components/mvp/analysis/corroborationFromClaims";
 import { useCitationSafe } from "@/contexts/CitationContext";
 import { formatUsdShort, formatBpAsPct, formatRatio } from "@/lib/dealMetricsFormat";
 import {
@@ -433,65 +431,13 @@ function HeadlineMetricsCard({
 }
 
 // ---------------------------------------------------------------------------
-// Corroboration — derives real Verified/Partial counts from this tab's own
-// data: DealMetrics (extraction source citation) plus the Sourced fields on
-// ICMemoDeliverable (financialGrid, unitEconomics, retentionMetrics,
-// salesEfficiency, exitStrategy.scenarios). Same "use real per-field data,
-// don't fabricate" approach CompanyTab/MarketTab established. The 3-Year
-// Financial Trend, Valuation & Deal Structure, and the DCF-style projection
-// table have no backing field, so they contribute nothing here.
-// (investmentStructure is deliberately not counted on this
-// tab — it's CapTableTab's corroboration signal, not this one's; see the
-// note on the Valuation & Deal Structure card below.)
+// Corroboration — derived from this tab's OWN live claims view (GET
+// /deals/{id}/financials), not the IC-memo deliverable the composer never
+// writes. Each extracted figure surfaces its real trust status
+// (verified/partially_verified/cited/conflicted/inconclusive) in the header, so
+// the panel now shows genuine counts on real deals. See
+// `financialsCorroboration` in corroborationFromClaims.ts.
 // ---------------------------------------------------------------------------
-
-function collectFinancialsCorroboration(
-  memoTyped: Partial<ICMemoResult> | null,
-  dealMetrics: DealMetrics | undefined
-): {
-  items: CorroborationSourceItem[];
-  verifiedCount: number;
-  partialCount: number;
-  unverifiedCount: number;
-} {
-  const empty = { items: [] as CorroborationSourceItem[], verifiedCount: 0, partialCount: 0, unverifiedCount: 0 };
-
-  let verified = 0;
-  let partial = 0;
-
-  if (dealMetrics) {
-    for (const row of STRIP_ROWS) {
-      const m = dealMetrics[row.field] as MetricValue | undefined;
-      if (!m || m.value == null) continue;
-      if (m.citation?.verified) verified += 1;
-      else partial += 1;
-    }
-  }
-
-  const d = memoTyped?.deliverable;
-  const fields: Array<Sourced<unknown> | undefined> = [
-    d?.financialGrid,
-    d?.unitEconomics,
-    d?.retentionMetrics,
-    d?.salesEfficiency,
-    d?.exitStrategy?.scenarios,
-  ];
-  for (const f of fields) {
-    if (!f || f.provenance === "missing" || f.value == null) continue;
-    if (f.provenance === "extracted" && f.citation?.verified) verified += 1;
-    else partial += 1;
-  }
-
-  const total = verified + partial;
-  if (total === 0) return empty;
-
-  return {
-    items: [{ id: "source-doc", name: memoTyped?.fileName ?? "Source document", kind: "document", citeCount: total }],
-    verifiedCount: verified,
-    partialCount: partial,
-    unverifiedCount: 0,
-  };
-}
 
 type ExitScenario = {
   label: string;
@@ -511,9 +457,11 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
     queryFn: () => fetchFinancials(dealId),
   });
   const trend = financialsQuery.data?.trend ?? [];
+  // Corroboration is now a read-out of the tab's own live claims view (the same
+  // fetch that backs the figures/trend above), replacing the dead memo path.
   const corroboration = useMemo(
-    () => collectFinancialsCorroboration(memoTyped, dealMetrics),
-    [memoTyped, dealMetrics]
+    () => financialsCorroboration(financialsQuery.data),
+    [financialsQuery.data]
   );
 
   // Financial Model — real, modeled field (exitStrategy.scenarios). Scenario
@@ -805,12 +753,7 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
         <UnbackedSection icon={GitCompare} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
       </SectionCard>
 
-      <CorroborationPanel
-        items={corroboration.items}
-        verifiedCount={corroboration.verifiedCount}
-        partialCount={corroboration.partialCount}
-        unverifiedCount={corroboration.unverifiedCount}
-      />
+      <CorroborationPanel items={corroboration.items} statusCounts={corroboration.statusCounts} />
     </div>
   );
 }

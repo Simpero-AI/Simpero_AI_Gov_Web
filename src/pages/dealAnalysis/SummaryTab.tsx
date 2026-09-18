@@ -25,10 +25,8 @@ import {
   DenseTableHeaderRow,
   DenseTableRow,
 } from "@/components/mvp/primitives/DenseTable";
-import {
-  CorroborationPanel,
-  type CorroborationSourceItem,
-} from "@/components/mvp/analysis/CorroborationPanel";
+import { CorroborationPanel } from "@/components/mvp/analysis/CorroborationPanel";
+import { summaryCorroboration } from "@/components/mvp/analysis/corroborationFromClaims";
 import { useCitationSafe } from "@/contexts/CitationContext";
 import { formatUsdShort, formatBpAsPct, formatRatio } from "@/lib/dealMetricsFormat";
 import {
@@ -36,7 +34,6 @@ import {
   type ICMemoResult,
   type Claim,
   type SourcedSentence,
-  type Sourced,
 } from "@shared/simperoTypes";
 
 interface SummaryTabProps {
@@ -191,58 +188,13 @@ function buildRiskAssessmentRows(
 }
 
 // ---------------------------------------------------------------------------
-// Corroboration — derives real Verified/Partial counts from this tab's own
-// Sourced fields (citation.verified) rather than fabricating source data
-// that doesn't exist yet (plan §3 item 4). Missing fields are excluded
-// (nothing rendered to corroborate); everything else is either backed by a
-// verified document citation ("verified") or not ("partial") — mirroring
-// the same extracted/verified heuristic already used elsewhere on this page
-// (see the Company tab's `getStatus` helper in DealDetail.tsx).
+// Corroboration — a read-out of this tab's OWN live claims views, not the
+// IC-memo deliverable the composer never writes (which left the panel empty on
+// every real deal). The claims-driven financial figures (which also back the
+// Key Metrics cards) contribute their real trust status, and each grounded
+// executive-summary point that carries a citation counts as `cited`. See
+// `summaryCorroboration` in corroborationFromClaims.ts.
 // ---------------------------------------------------------------------------
-
-function collectSummaryCorroboration(memoTyped: Partial<ICMemoResult> | null): {
-  items: CorroborationSourceItem[];
-  verifiedCount: number;
-  partialCount: number;
-  unverifiedCount: number;
-} {
-  const d = memoTyped?.deliverable;
-  const empty = { items: [] as CorroborationSourceItem[], verifiedCount: 0, partialCount: 0, unverifiedCount: 0 };
-  if (!d) return empty;
-
-  const fields: Array<Sourced<unknown> | undefined> = [
-    d.executiveSummary?.investmentHighlight,
-    d.investmentThesisCards,
-    d.riskRegister,
-    // investmentStructure fields removed along with the "Proposed Deal
-    // Terms" section itself — already counted in CapTableTab's own
-    // corroboration collector (its real, correct home; see removal note
-    // above the old section's location).
-    d.headerMetrics?.targetIrrPct,
-    d.headerMetrics?.exitValuationUsd,
-    d.headerMetrics?.moic,
-    d.exitStrategy?.scenarios,
-    d.exitStrategy?.weightedReturn,
-    ...(d.icRecommendation?.highlightBullets ?? []),
-  ];
-
-  let verified = 0;
-  let partial = 0;
-  for (const f of fields) {
-    if (!f || f.provenance === "missing") continue;
-    if (f.provenance === "extracted" && f.citation?.verified) verified += 1;
-    else partial += 1;
-  }
-  const total = verified + partial;
-  if (total === 0) return empty;
-
-  return {
-    items: [{ id: "source-doc", name: memoTyped?.fileName ?? "Source document", kind: "document", citeCount: total }],
-    verifiedCount: verified,
-    partialCount: partial,
-    unverifiedCount: 0,
-  };
-}
 
 export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
   const citationCtx = useCitationSafe();
@@ -278,7 +230,10 @@ export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
   // Initial Screening tab's own risk flags (real, claims-grounded) so Risk
   // Assessment shows the concerns a partner would actually see.
   const screeningRiskFlags = screeningInsightsQuery.data?.riskFlags ?? [];
-  const corroboration = useMemo(() => collectSummaryCorroboration(memoTyped), [memoTyped]);
+  const corroboration = useMemo(
+    () => summaryCorroboration(financialsQuery.data, execSummaryPoints),
+    [financialsQuery.data, execSummaryPoints]
+  );
   const riskRegister = memoTyped?.deliverable?.riskRegister;
 
   return (
@@ -781,12 +736,7 @@ export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
         </div>
       </SectionCard>
 
-      <CorroborationPanel
-        items={corroboration.items}
-        verifiedCount={corroboration.verifiedCount}
-        partialCount={corroboration.partialCount}
-        unverifiedCount={corroboration.unverifiedCount}
-      />
+      <CorroborationPanel items={corroboration.items} statusCounts={corroboration.statusCounts} />
 
     </div>
   );
