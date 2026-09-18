@@ -8,7 +8,6 @@ import {
   Loader2,
   Rocket,
   ShieldAlert,
-  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -68,11 +67,16 @@ function UnbackedSection({
   return <EmptyState icon={icon} title={title} description={description} className="border-none p-0" />;
 }
 
-// Uniform "no evidence" copy for a genuinely-unbuilt box (no deck claim AND no
-// web source) — shared across every converted section so the reader sees one
-// consistent empty state rather than a per-box "coming soon" placeholder.
-const NO_EVIDENCE_TITLE = "No evidence found";
-const NO_EVIDENCE_DESCRIPTION = "Nothing on this was found in the deal's materials or public sources.";
+// Honest copy for a section that has NO producer at all (no claims query, no web
+// pass, no synthesis behind it). It must NOT claim a search happened — the deck
+// and public-source phrasing ("nothing was found in the deal's materials or
+// public sources") is an affirmative false negative on a diligence surface,
+// because nothing ever looked. State plainly that the analysis isn't generated
+// yet; it populates automatically once a producer ships. Shared across the
+// not-yet-built Market cards so the reader sees one consistent state.
+const NOT_PRODUCED_TITLE = "Not generated yet";
+const NOT_PRODUCED_DESCRIPTION =
+  "This analysis isn't produced for this deal yet. It will appear here automatically once its producer ships.";
 
 function Citation({ citation, sourceUrl }: { citation: string | null; sourceUrl: string | null }) {
   // A source URL renders as a link ONLY when it's a non-empty http(s) string --
@@ -294,35 +298,36 @@ export function MarketTab({ dealId }: MarketTabProps) {
         )}
       </SectionCard>
 
-      {/* Mockup sections the claims pipeline has no source for -- the eyebrow
-          stays so the reader still sees the topic, but the body is the uniform
-          no-evidence state, never a "coming soon" placeholder. */}
-      <SectionCard
-        eyebrow="Growth Drivers"
-        icon={<TrendingUp className="h-4 w-4 text-[color:var(--rev-primary)]" />}
-      >
-        <UnbackedSection icon={TrendingUp} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
-      </SectionCard>
-
+      {/* Sections the claims pipeline has no producer for yet -- the eyebrow stays
+          so the reader still sees the topic, but the body states plainly that the
+          analysis isn't generated yet, never claiming a search of the materials or
+          public sources happened when nothing ever looked. (Growth Drivers was
+          removed: demand-driver assertions already surface under Market
+          Definition, so a separate hardcoded-empty card only misled. Market Risks
+          and Growth Strategy are intentionally NOT back-filled from the company's
+          lead-scoped risk_or_dependency / plan_or_commitment claims -- those are
+          already shown, market-agnostic, on the Company tab, and relabelling that
+          same content as "market" risk/strategy would mislead. A market-scoped
+          producer is tracked separately.) */}
       <SectionCard
         eyebrow="Market Risks"
         icon={<ShieldAlert className="h-4 w-4 text-[color:var(--rev-primary)]" />}
       >
-        <UnbackedSection icon={ShieldAlert} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
+        <UnbackedSection icon={ShieldAlert} title={NOT_PRODUCED_TITLE} description={NOT_PRODUCED_DESCRIPTION} />
       </SectionCard>
 
       <SectionCard
         eyebrow="Competitive Positioning Matrix"
         icon={<LayoutGrid className="h-4 w-4 text-[color:var(--rev-primary)]" />}
       >
-        <UnbackedSection icon={LayoutGrid} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
+        <UnbackedSection icon={LayoutGrid} title={NOT_PRODUCED_TITLE} description={NOT_PRODUCED_DESCRIPTION} />
       </SectionCard>
 
       <SectionCard
         eyebrow="Growth Strategy"
         icon={<Rocket className="h-4 w-4 text-[color:var(--rev-primary)]" />}
       >
-        <UnbackedSection icon={Rocket} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
+        <UnbackedSection icon={Rocket} title={NOT_PRODUCED_TITLE} description={NOT_PRODUCED_DESCRIPTION} />
       </SectionCard>
     </div>
   );

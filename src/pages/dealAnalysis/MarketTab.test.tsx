@@ -224,20 +224,32 @@ describe("MarketTab", () => {
     expect(screen.queryByText("Couldn't load market data for this deal.")).not.toBeInTheDocument();
   });
 
-  it("renders the uniform no-evidence state for the not-yet-sourced sections", async () => {
-    // A mockup section with no claims source keeps its eyebrow but shows the
-    // shared "No evidence found" body, never a per-box "coming soon" placeholder.
+  it("renders an honest 'not generated yet' state for the unproduced sections, never a false search claim", async () => {
+    // The three sections with NO producer (Market Risks, Competitive Positioning
+    // Matrix, Growth Strategy) keep their eyebrow but state plainly the analysis
+    // isn't generated yet -- they must NEVER claim a search of the materials or
+    // public sources happened, which would be an affirmative false negative on a
+    // diligence surface.
     mockFetchMarket.mockResolvedValue(EMPTY);
     renderMarketTab();
 
     await screen.findByText("Market sizing not available");
-    expect(screen.getAllByText("No evidence found")).toHaveLength(4);
+    expect(screen.getAllByText("Not generated yet")).toHaveLength(3);
     expect(
-      screen.getAllByText("Nothing on this was found in the deal's materials or public sources.").length
-    ).toBeGreaterThanOrEqual(4);
-    expect(screen.queryByText("Growth drivers coming soon")).not.toBeInTheDocument();
-    expect(screen.queryByText("Market risks coming soon")).not.toBeInTheDocument();
-    expect(screen.queryByText("Positioning matrix coming soon")).not.toBeInTheDocument();
-    expect(screen.queryByText("Growth strategy coming soon")).not.toBeInTheDocument();
+      screen.getAllByText(
+        "This analysis isn't produced for this deal yet. It will appear here automatically once its producer ships."
+      )
+    ).toHaveLength(3);
+    // The false-search copy must be gone everywhere on this tab.
+    expect(
+      screen.queryByText("Nothing on this was found in the deal's materials or public sources.")
+    ).not.toBeInTheDocument();
+    // The three unproduced topics stay visible by eyebrow...
+    expect(screen.getByText("Market Risks")).toBeInTheDocument();
+    expect(screen.getByText("Competitive Positioning Matrix")).toBeInTheDocument();
+    expect(screen.getByText("Growth Strategy")).toBeInTheDocument();
+    // ...and the redundant Growth Drivers card (its drivers live in Market
+    // Definition) is removed entirely rather than shown hardcoded-empty.
+    expect(screen.queryByText("Growth Drivers")).not.toBeInTheDocument();
   });
 });

@@ -52,7 +52,10 @@ describe("FinancialsTab", () => {
     // The stray mock reference "(ref: G-42)" is gone from the projections copy.
     expect(screen.queryByText(/ref: G-42/)).not.toBeInTheDocument();
     expect(screen.getByText("Unit economics not yet extracted")).toBeInTheDocument();
-    expect(screen.getByText("See Company tab for revenue mix")).toBeInTheDocument();
+    // Revenue Breakdown states plainly it isn't produced yet -- it no longer
+    // cross-refs a "Company -> Business Model" card that doesn't exist.
+    expect(screen.getByText("Revenue-by-segment not generated yet")).toBeInTheDocument();
+    expect(screen.queryByText("See Company tab for revenue mix")).not.toBeInTheDocument();
     expect(screen.getByText("Financial model not yet available")).toBeInTheDocument();
     // Valuation & Deal Structure, Valuation Cross-Check, AND the now-claims-driven
     // 3-Year Financial Trend (empty here) show the shared no-evidence body; the
