@@ -10,6 +10,12 @@ vi.mock("@/api/logs", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/logs")>();
   return { ...actual, fetchRecentActivity: vi.fn() };
 });
+// DataRoomPane fetches GET /deals/{id}/documents — mock it to an empty listing
+// so the pane settles to "0 documents on file" without a real network call.
+vi.mock("@/api/documents", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/documents")>();
+  return { ...actual, fetchDealDocuments: vi.fn().mockResolvedValue([]) };
+});
 
 afterEach(cleanup);
 
@@ -34,7 +40,8 @@ describe("WorkspaceTab", () => {
     renderWorkspaceTab();
 
     await user.click(screen.getByRole("button", { name: "Data Room" }));
-    expect(screen.getByText("0 documents on file")).toBeInTheDocument();
+    // The documents query settles asynchronously (Loading… -> count), so await it.
+    expect(await screen.findByText("0 documents on file")).toBeInTheDocument();
     expect(screen.queryByText("Diligence Progress")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Checklist" }));

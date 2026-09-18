@@ -10,6 +10,7 @@ import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
 import { fetchScreening, screeningQueryKey } from "@/api/screening";
 import { fetchScreeningMaterials, screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { fetchScreeningInsights, screeningInsightsQueryKey } from "@/api/screeningInsights";
+import { fetchDealDocuments, dealDocumentsQueryKey } from "@/api/documents";
 import { mapScreening } from "@/lib/screeningView";
 
 export interface ScreeningTabProps {
@@ -41,6 +42,14 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
     queryFn: () => fetchScreening(dealId),
   });
   const view = screeningQuery.data ? mapScreening(screeningQuery.data) : null;
+
+  // The real per-document listing (GET /deals/{id}/documents). MaterialsCard
+  // shows every uploaded document with its review status; it degrades to the
+  // single source-file name (`fileName`) when this has no rows yet or fails.
+  const documentsQuery = useQuery({
+    queryKey: dealDocumentsQueryKey(dealId),
+    queryFn: () => fetchDealDocuments(dealId),
+  });
 
   const materialsQuery = useQuery({
     queryKey: screeningMaterialsQueryKey(dealId),
@@ -74,7 +83,11 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
         </p>
       </div>
 
-      <MaterialsCard fileName={fileName} />
+      <MaterialsCard
+        documents={documentsQuery.data ?? null}
+        fileName={fileName}
+        isLoading={documentsQuery.isPending}
+      />
 
       {/* The verdict + mandate-fit gate on the SCREENING query and the extracted
           grid on the MATERIALS query -- INDEPENDENTLY, so a fast verdict (~100ms)

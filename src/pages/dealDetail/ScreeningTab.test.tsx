@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ScreeningTab } from "./ScreeningTab";
 import { fetchScreening, screeningQueryKey } from "@/api/screening";
 import { fetchScreeningMaterials, screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { fetchScreeningInsights } from "@/api/screeningInsights";
+import { fetchDealDocuments } from "@/api/documents";
 
 // ScreeningTab drives three INDEPENDENT queries (verdict, extracted materials,
 // LLM insights) — mock each so the tab renders against controlled data.
@@ -20,10 +21,23 @@ vi.mock("@/api/screeningInsights", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/screeningInsights")>();
   return { ...actual, fetchScreeningInsights: vi.fn() };
 });
+// MaterialsCard now reads the real GET /deals/{id}/documents listing.
+vi.mock("@/api/documents", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/documents")>();
+  return { ...actual, fetchDealDocuments: vi.fn() };
+});
 
 const mockScreening = vi.mocked(fetchScreening);
 const mockMaterials = vi.mocked(fetchScreeningMaterials);
 const mockInsights = vi.mocked(fetchScreeningInsights);
+const mockDocuments = vi.mocked(fetchDealDocuments);
+
+beforeEach(() => {
+  // Default: no documents rows -> MaterialsCard falls back to the single
+  // `fileName`, keeping the pre-existing tests' expectations intact. Tests that
+  // exercise the listing override this.
+  mockDocuments.mockResolvedValue([]);
+});
 
 afterEach(() => {
   cleanup();
@@ -198,5 +212,25 @@ describe("ScreeningTab", () => {
 
     expect(await screen.findByText("Couldn't load screening for this deal.")).toBeInTheDocument();
     expect(screen.queryByText("Mandate fit coming soon")).not.toBeInTheDocument();
+  });
+
+  it("lists every uploaded document with its review status from GET /documents", async () => {
+    // The Materials card is now sourced from the real per-document listing, not
+    // the single memo-session file: every document shows with its verification
+    // status, and the single-file fallback is superseded.
+    mockScreening.mockResolvedValue(null);
+    mockMaterials.mockResolvedValue({ extractedFields: [] });
+    mockInsights.mockResolvedValue({ highlights: [], riskFlags: [] });
+    mockDocuments.mockResolvedValue([
+      { id: "d1", filename: "cim.pdf", status: "verified", createdAt: "2026-01-01T00:00:00Z" },
+      { id: "d2", filename: "financials.xlsx", status: "pending", createdAt: "2026-01-02T00:00:00Z" },
+    ]);
+    renderScreeningTab();
+
+    expect(await screen.findByText("financials.xlsx")).toBeInTheDocument();
+    expect(screen.getByText("cim.pdf")).toBeInTheDocument();
+    expect(screen.getByText("Verified")).toBeInTheDocument();
+    expect(screen.getByText("Verification pending")).toBeInTheDocument();
+    expect(screen.getByText("2 documents on file")).toBeInTheDocument();
   });
 });
