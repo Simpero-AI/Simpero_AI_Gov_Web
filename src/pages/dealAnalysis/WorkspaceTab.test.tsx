@@ -39,7 +39,9 @@ describe("WorkspaceTab", () => {
     renderWorkspaceTab();
 
     await user.click(screen.getByRole("button", { name: "Data Room" }));
-    expect(screen.getByText("0 documents on file")).toBeInTheDocument();
+    // The Data Room now fetches GET /deals/{id}/documents (mocked to []), so the
+    // count settles asynchronously (Loading… -> "0 documents on file").
+    expect(await screen.findByText("0 documents on file")).toBeInTheDocument();
     expect(screen.queryByText("Diligence Progress")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Checklist" }));
