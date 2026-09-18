@@ -4,7 +4,7 @@ import { FileUp, CheckCircle2, XCircle } from "lucide-react";
 import { Button, Spinner } from "@/components/mvp/primitives";
 import { runPublicDocumentUpload } from "@/lib/documentUploadPipeline";
 import { postIntakeSubmit } from "@/api/publicIntake";
-import { DEFAULT_MAX_UPLOAD_BYTES, describePageCountViolation, validateUploadFile } from "@/lib/fileValidation";
+import { DEFAULT_MAX_UPLOAD_BYTES, validateUploadFile } from "@/lib/fileValidation";
 
 const MAX_FILES = 20;
 
@@ -57,20 +57,12 @@ export function UploadStep({ onSubmitted, onUnavailable, onBack }: UploadStepPro
       });
       for (const entry of next) {
         runPublicDocumentUpload(entry.file)
-          .then((result) => {
-            // FE-8: an over-cap file did genuinely upload (page count is
-            // only knowable after the fact) -- show it as an error entry
-            // rather than "done" so it's clear it won't be usable.
-            const pageCountReason = describePageCountViolation(result.pageCount);
-            setEntries((cur) =>
-              cur.map((e) =>
-                e.id === entry.id
-                  ? pageCountReason
-                    ? { ...e, status: "error", errorMessage: pageCountReason }
-                    : { ...e, status: "done" }
-                  : e
-              )
-            );
+          .then(() => {
+            // An over-cap PDF never resolves here at all -- runPublicDocumentUpload
+            // throws PageCountExceededError for it (enforced once, centrally
+            // in documentUploadPipeline.ts), which the .catch below turns
+            // into the same error entry as any other upload failure.
+            setEntries((cur) => cur.map((e) => (e.id === entry.id ? { ...e, status: "done" } : e)));
           })
           .catch((err) => {
             setEntries((cur) =>

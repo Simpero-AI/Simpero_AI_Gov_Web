@@ -4,6 +4,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { useUploadDocument } from "./useUploadDocument";
 import * as pipeline from "@/lib/documentUploadPipeline";
+import { PageCountExceededError } from "@/lib/fileValidation";
 
 vi.mock("@/lib/documentUploadPipeline", () => ({ runDocumentUpload: vi.fn() }));
 
@@ -70,12 +71,17 @@ describe("useUploadDocument", () => {
   });
 
   it("toasts the page-cap rejection instead of a success message for an over-cap PDF (FE-8)", async () => {
-    vi.mocked(pipeline.runDocumentUpload).mockResolvedValue({ id: "doc1", status: "pending", pageCount: 156 });
+    // runDocumentUpload itself throws for an over-cap file (enforced once,
+    // centrally, in documentUploadPipeline.ts) -- this hook's generic
+    // onError toasts that rejection the same as any other upload failure.
+    vi.mocked(pipeline.runDocumentUpload).mockRejectedValue(
+      new PageCountExceededError("Too many pages — 156 exceeds the 110-page limit.", 156)
+    );
     const { result } = renderHook(() => useUploadDocument("deal1"), { wrapper });
 
     result.current.mutate(new File(["x"], "deck.pdf"));
 
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.isError).toBe(true));
     expect(toastError).toHaveBeenCalledWith("Too many pages — 156 exceeds the 110-page limit.");
     expect(toastSuccess).not.toHaveBeenCalled();
   });

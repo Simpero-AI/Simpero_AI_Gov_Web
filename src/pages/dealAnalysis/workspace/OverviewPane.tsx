@@ -1,5 +1,4 @@
 import { useMemo, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Compass, FileText, Flag, Loader2, ShieldAlert, Workflow } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RadialProgress } from "@/components/mvp/primitives/RadialProgress";
@@ -10,7 +9,7 @@ import {
   CorroborationPanel,
   type CorroborationSourceItem,
 } from "@/components/mvp/analysis/CorroborationPanel";
-import { fetchDealDocuments, dealDocumentsQueryKey } from "@/api/documents";
+import { useVerifiedDealDocuments } from "@/hooks/useVerifiedDealDocuments";
 import type { ICMemoResult, Sourced } from "@shared/simperoTypes";
 
 interface OverviewPaneProps {
@@ -198,17 +197,17 @@ export function OverviewPane({ memoTyped, dealId }: OverviewPaneProps) {
         : "var(--rev-text-4)";
 
   // Recent documents — GET /deals/{id}/documents, the real per-deal document
-  // list (same source Screening tab's MaterialsCard.tsx now reads). Previously
-  // read `memoTyped?.fileName`, which is only set once a memo/deliverable
-  // exists and left this panel showing "No documents uploaded yet" even for a
-  // deal with a verified upload.
-  const documentsQuery = useQuery({
-    queryKey: dealDocumentsQueryKey(dealId),
-    queryFn: () => fetchDealDocuments(dealId),
-  });
-  const verifiedDocuments = documentsQuery.data
-    ? documentsQuery.data.filter((d) => d.status === "verified")
-    : null;
+  // list (shared hook with Screening tab's MaterialsCard.tsx, so the two
+  // panels never drift on loading/error behavior for the same query -- PR
+  // #42 review). Previously read `memoTyped?.fileName`, which is only set
+  // once a memo/deliverable exists and left this panel showing "No
+  // documents uploaded yet" even for a deal with a verified upload.
+  const {
+    verifiedDocuments,
+    isLoading: documentsLoading,
+    isError: documentsError,
+    error: documentsErr,
+  } = useVerifiedDealDocuments(dealId);
 
   return (
     <div className="space-y-5">
@@ -332,15 +331,15 @@ export function OverviewPane({ memoTyped, dealId }: OverviewPaneProps) {
 
         {/* Recent Documents — the deal's verified documents. */}
         <SectionCard eyebrow="Recent Documents" icon={<FileText className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          {documentsQuery.isPending ? (
+          {documentsLoading ? (
             <div role="status" className="flex items-center gap-2 py-4 text-sm text-[color:var(--rev-text-6)]">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               Loading documents…
             </div>
-          ) : documentsQuery.isError && verifiedDocuments === null ? (
+          ) : documentsError ? (
             <QueryErrorAlert
               message="Couldn't load documents for this deal."
-              error={documentsQuery.error as Error | null}
+              error={documentsErr as Error | null}
             />
           ) : !verifiedDocuments || verifiedDocuments.length === 0 ? (
             <EmptyState

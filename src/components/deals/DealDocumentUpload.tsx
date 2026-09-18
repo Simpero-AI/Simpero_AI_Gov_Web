@@ -4,19 +4,13 @@ import { FileUp } from "lucide-react";
 import { Spinner } from "@/components/mvp/primitives";
 import { toast } from "@/components/mvp/primitives/sonner";
 import { useUploadDocument } from "@/hooks/useUploadDocument";
-import { DEFAULT_MAX_UPLOAD_BYTES, describePageCountViolation, validateUploadFile } from "@/lib/fileValidation";
+import { DEFAULT_MAX_UPLOAD_BYTES, PDF_ONLY_EXTENSIONS, dropzoneAcceptFor, validateUploadFile } from "@/lib/fileValidation";
 import type { CompletedUpload } from "@/api/documents";
 
-// Mirrors the backend's `_ALLOWED_EXTENSIONS` (app/api/uploads.py) exactly — no .ppt, includes .csv.
-const ACCEPT = {
-  "application/pdf": [".pdf"],
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
-  "application/msword": [".doc"],
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation": [".pptx"],
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
-  "application/vnd.ms-excel": [".xls"],
-  "text/csv": [".csv"],
-};
+// Derived from the SAME extension list validateUploadFile checks against
+// (PR #42 review) -- previously a separate, independently-maintained MIME
+// map that happened to describe the same allow-list, but could drift.
+const ACCEPT = dropzoneAcceptFor(PDF_ONLY_EXTENSIONS);
 
 const STATUS_LABELS: Record<string, string> = {
   ocr_needed: "Scanned document — text extraction needed before analysis",
@@ -38,7 +32,7 @@ interface DealDocumentUploadProps {
 /** Single-file dropzone for the presigned-URL upload flow. Mountable anywhere a dealId is available. */
 export function DealDocumentUpload({ dealId, onUploaded, maxBytes = DEFAULT_MAX_UPLOAD_BYTES }: DealDocumentUploadProps) {
   const [fileName, setFileName] = useState<string | null>(null);
-  const mutation = useUploadDocument(dealId, { maxBytes });
+  const mutation = useUploadDocument(dealId, { maxBytes, allowedExtensions: PDF_ONLY_EXTENSIONS });
 
   const onDrop = useCallback(
     (acceptedFiles: File[], fileRejections: FileRejection[]) => {
@@ -50,24 +44,19 @@ export function DealDocumentUpload({ dealId, onUploaded, maxBytes = DEFAULT_MAX_
       // (FE-9). Re-validating the rejected file surfaces that same message.
       if (fileRejections.length > 0) {
         const rejected = fileRejections[0].file;
-        const result = validateUploadFile(rejected, { maxBytes });
+        const result = validateUploadFile(rejected, { maxBytes, allowedExtensions: PDF_ONLY_EXTENSIONS });
         toast.error(result.ok ? "File rejected" : result.reason);
         return;
       }
       const file = acceptedFiles[0];
       if (!file) return;
       setFileName(file.name);
-      mutation.mutate(file, {
-        onSuccess: (result) => {
-          // FE-8: an over-cap file did genuinely upload (page count is only
-          // knowable after the fact), but the wizard must not treat it as an
-          // attached, analysis-ready document -- useUploadDocument's onSuccess
-          // already toasted the rejection reason instead of the usual success
-          // message.
-          if (describePageCountViolation(result.pageCount)) return;
-          onUploaded?.(result);
-        },
-      });
+      // An over-cap PDF makes runDocumentUpload reject (PageCountExceededError,
+      // enforced once, centrally) rather than resolve -- onSuccess below
+      // simply never fires for it, so onUploaded is never called and the
+      // wizard never treats it as attached. useUploadDocument's onError
+      // already toasts that same rejection message.
+      mutation.mutate(file, { onSuccess: (result) => onUploaded?.(result) });
     },
     [mutation, onUploaded, maxBytes]
   );
@@ -112,22 +101,13 @@ export function DealDocumentUpload({ dealId, onUploaded, maxBytes = DEFAULT_MAX_
       </div>
 
       {mutation.isSuccess && mutation.data && (
-        (() => {
-          const pageCountReason = describePageCountViolation(mutation.data.pageCount);
-          return (
-            <div
-              className={
-                pageCountReason
-                  ? "mt-3 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800"
-                  : "mt-3 px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800"
-              }
-              data-testid="deal-document-upload-status"
-            >
-              {fileName ? `${fileName} — ` : ""}
-              {pageCountReason ?? statusLabel(mutation.data.status)}
-            </div>
-          );
-        })()
+        <div
+          className="mt-3 px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800"
+          data-testid="deal-document-upload-status"
+        >
+          {fileName ? `${fileName} — ` : ""}
+          {statusLabel(mutation.data.status)}
+        </div>
       )}
     </div>
   );

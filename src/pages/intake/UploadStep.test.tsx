@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { UploadStep } from "./UploadStep";
 import { runPublicDocumentUpload } from "@/lib/documentUploadPipeline";
 import { postIntakeSubmit } from "@/api/publicIntake";
+import { PageCountExceededError } from "@/lib/fileValidation";
 
 vi.mock("@/lib/documentUploadPipeline", () => ({
   runPublicDocumentUpload: vi.fn(),
@@ -68,8 +69,13 @@ describe("UploadStep", () => {
   });
 
   it("shows an over-cap PDF as an error entry, not 'done', and keeps Submit disabled on it alone (FE-8)", async () => {
+    // runPublicDocumentUpload itself throws for an over-cap file (enforced
+    // once, centrally) -- the existing .catch handler in UploadStep.tsx
+    // turns that into the same error entry as any other upload failure.
     const user = userEvent.setup();
-    vi.mocked(runPublicDocumentUpload).mockResolvedValue({ id: "d1", status: "pending", pageCount: 156 });
+    vi.mocked(runPublicDocumentUpload).mockRejectedValue(
+      new PageCountExceededError("Too many pages — 156 exceeds the 110-page limit.", 156)
+    );
     render(<UploadStep onSubmitted={vi.fn()} onUnavailable={vi.fn()} onBack={vi.fn()} />);
 
     const submitButton = screen.getByTestId("intake-submit-button");

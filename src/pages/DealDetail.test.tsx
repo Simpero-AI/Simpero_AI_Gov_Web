@@ -162,11 +162,6 @@ describe("nextDealStatusPollMs — keeps polling through the screening stage", (
 });
 
 describe("useTabFromUrl — invalid ?tab= (FE-15)", () => {
-  // This file mocks react-router's useNavigate wholesale (navigateSpy,
-  // above) so every other test here can assert on the completion redirect
-  // -- that mock is a no-op, so the MemoryRouter's own location never
-  // actually changes here either; assert against navigateSpy directly,
-  // same as this file's other useNavigate-driven tests.
   function renderTabHook(initialPath: string) {
     return renderHook(() => useTabFromUrl(), {
       wrapper: ({ children }) => (
@@ -179,22 +174,26 @@ describe("useTabFromUrl — invalid ?tab= (FE-15)", () => {
     });
   }
 
-  it("redirects an unrecognized ?tab= to summary instead of silently rendering it with the bad value left in the URL", () => {
+  it("returns a redirect target for an unrecognized ?tab= instead of silently rendering it with the bad value left in the URL", () => {
+    // AnalysisTabs renders <Navigate to={redirectTo} replace /> for this --
+    // a single synchronous redirect (PR #42 review), not a useEffect calling
+    // navigate() (which this file's global useNavigate mock, navigateSpy,
+    // would swallow as a no-op anyway).
     const { result } = renderTabHook("/deals/deal-1/analysis?tab=captable");
     expect(result.current[0]).toBe("summary");
-    expect(navigateSpy).toHaveBeenCalledWith("/deals/deal-1/analysis?tab=summary", { replace: true });
+    expect(result.current[2]).toBe("/deals/deal-1/analysis?tab=summary");
   });
 
   it("leaves a valid ?tab= alone, with no redirect", () => {
     const { result } = renderTabHook("/deals/deal-1/analysis?tab=cap-table");
     expect(result.current[0]).toBe("cap-table");
-    expect(navigateSpy).not.toHaveBeenCalled();
+    expect(result.current[2]).toBeNull();
   });
 
   it("defaults a missing ?tab= to summary without a redirect (no bad value to correct)", () => {
     const { result } = renderTabHook("/deals/deal-1/analysis");
     expect(result.current[0]).toBe("summary");
-    expect(navigateSpy).not.toHaveBeenCalled();
+    expect(result.current[2]).toBeNull();
   });
 });
 

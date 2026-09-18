@@ -10,7 +10,7 @@ import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
 import { fetchScreening, screeningQueryKey } from "@/api/screening";
 import { fetchScreeningMaterials, screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { fetchScreeningInsights, screeningInsightsQueryKey } from "@/api/screeningInsights";
-import { fetchDealDocuments, dealDocumentsQueryKey } from "@/api/documents";
+import { useVerifiedDealDocuments } from "@/hooks/useVerifiedDealDocuments";
 import { mapScreening } from "@/lib/screeningView";
 
 export interface ScreeningTabProps {
@@ -46,14 +46,10 @@ export function ScreeningTab({ dealId }: ScreeningTabProps) {
   // is only set once a memo/deliverable exists and previously left this
   // panel showing "No materials on file" even for a deal with a verified
   // upload (visible directly above the extracted figures citing that same
-  // file).
-  const documentsQuery = useQuery({
-    queryKey: dealDocumentsQueryKey(dealId),
-    queryFn: () => fetchDealDocuments(dealId),
-  });
-  const verifiedDocuments = documentsQuery.data
-    ? documentsQuery.data.filter((d) => d.status === "verified")
-    : null;
+  // file). Shared with OverviewPane.tsx's Recent Documents panel so the two
+  // never drift on loading/error behavior for the same query (PR #42 review).
+  const { verifiedDocuments, isLoading: documentsLoading, isError: documentsError, error: documentsErr } =
+    useVerifiedDealDocuments(dealId);
 
   const materialsQuery = useQuery({
     queryKey: screeningMaterialsQueryKey(dealId),
@@ -87,7 +83,7 @@ export function ScreeningTab({ dealId }: ScreeningTabProps) {
         </p>
       </div>
 
-      {documentsQuery.isPending || (documentsQuery.isFetching && verifiedDocuments === null) ? (
+      {documentsLoading ? (
         <div
           role="status"
           className="mb-5 flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]"
@@ -95,10 +91,10 @@ export function ScreeningTab({ dealId }: ScreeningTabProps) {
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           Loading materials…
         </div>
-      ) : documentsQuery.isError && verifiedDocuments === null ? (
+      ) : documentsError ? (
         <QueryErrorAlert
           message="Couldn't load materials for this deal."
-          error={documentsQuery.error as Error | null}
+          error={documentsErr as Error | null}
         />
       ) : (
         <MaterialsCard documents={verifiedDocuments} />
