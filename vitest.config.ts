@@ -26,11 +26,11 @@ export default defineConfig({
     ],
     include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: [path.join(templateRoot, "vitest.setup.ts")],
-    // Default 5000ms leaves no headroom over Testing Library's own
-    // asyncUtilTimeout (vitest.setup.ts) — a waitFor/findBy polling close to
-    // that limit was getting killed by this cap first, surfacing as "Test
-    // timed out in 5000ms" instead of a real assertion failure.
-    testTimeout: 20_000,
+    // Must stay above Testing Library's own asyncUtilTimeout (vitest.setup.ts,
+    // now 15_000) with headroom — a waitFor/findBy polling close to that
+    // limit would otherwise get killed by this cap first, surfacing as "Test
+    // timed out" instead of the real waitFor assertion failure.
+    testTimeout: 25_000,
     // A handful of NewDealWizard tests mount the full MvpAppShell (a heavy
     // sidebar tree) and race real async state settling; under parallel
     // worker contention on a loaded machine one occasionally misses its
