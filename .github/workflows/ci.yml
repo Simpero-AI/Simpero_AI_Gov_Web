@@ -28,15 +28,17 @@ jobs:
         run: pnpm exec tsc --noEmit
 
       - name: Unit tests
-        # Capped to 2 workers: GitHub's shared ubuntu-latest runners don't have
+        # Fully serialized: GitHub's shared ubuntu-latest runners don't have
         # enough CPU for vitest's default (one worker per core) when several
         # tests mount heavy component trees (e.g. NewDealWizard's full
         # MvpAppShell) — that contention was pushing waitFor/findBy calls past
-        # their timeout under the default worker count, causing flaky
-        # (non-deterministic, count varies run to run) failures unrelated to
-        # any real regression. See vitest.setup.ts/vitest.config.ts for the
-        # matching timeout/retry headroom already in place for this.
-        run: pnpm exec vitest run --minWorkers=1 --maxWorkers=2
+        # their timeout, causing flaky (non-deterministic, count varies run
+        # to run) failures unrelated to any real regression. A 2-worker cap
+        # (previous mitigation) still weren't enough — NewDealWizard's
+        # share-link tests kept timing out under it across two separate PRs'
+        # CI runs. See vitest.setup.ts/vitest.config.ts for the matching
+        # timeout/retry headroom already in place for this.
+        run: pnpm exec vitest run --minWorkers=1 --maxWorkers=1
 
       - name: Build
         run: pnpm build
