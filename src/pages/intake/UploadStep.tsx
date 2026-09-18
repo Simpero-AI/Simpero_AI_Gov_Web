@@ -1,10 +1,10 @@
 import { useCallback, useState } from "react";
-import { useDropzone } from "react-dropzone";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import { FileUp, CheckCircle2, XCircle } from "lucide-react";
 import { Button, Spinner } from "@/components/mvp/primitives";
 import { runPublicDocumentUpload } from "@/lib/documentUploadPipeline";
 import { postIntakeSubmit } from "@/api/publicIntake";
-import { DEFAULT_MAX_UPLOAD_BYTES } from "@/lib/fileValidation";
+import { DEFAULT_MAX_UPLOAD_BYTES, describePageCountViolation, validateUploadFile } from "@/lib/fileValidation";
 
 const MAX_FILES = 20;
 
@@ -32,7 +32,7 @@ export function UploadStep({ onSubmitted, onUnavailable, onBack }: UploadStepPro
   const [entries, setEntries] = useState<UploadEntry[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback((acceptedFiles: File[], fileRejections: FileRejection[]) => {
     setEntries((prev) => {
       const room = MAX_FILES - prev.length;
       const toAdd = acceptedFiles.slice(0, Math.max(0, room));
@@ -41,10 +41,36 @@ export function UploadStep({ onSubmitted, onUnavailable, onBack }: UploadStepPro
         file,
         status: "uploading",
       }));
+      // react-dropzone's own accept/maxSize gate routes an oversized or
+      // wrong-type file straight into fileRejections, never into
+      // acceptedFiles -- so it never reached this list at all, with no
+      // feedback (FE-9). Add it as its own "error" entry, re-validated via
+      // the same check runPublicDocumentUpload uses, for the same message.
+      const rejectedEntries: UploadEntry[] = fileRejections.slice(0, Math.max(0, room - next.length)).map((r) => {
+        const result = validateUploadFile(r.file);
+        return {
+          id: `${r.file.name}-${r.file.size}-${Date.now()}-${Math.random()}`,
+          file: r.file,
+          status: "error",
+          errorMessage: result.ok ? "File rejected" : result.reason,
+        };
+      });
       for (const entry of next) {
         runPublicDocumentUpload(entry.file)
-          .then(() => {
-            setEntries((cur) => cur.map((e) => (e.id === entry.id ? { ...e, status: "done" } : e)));
+          .then((result) => {
+            // FE-8: an over-cap file did genuinely upload (page count is
+            // only knowable after the fact) -- show it as an error entry
+            // rather than "done" so it's clear it won't be usable.
+            const pageCountReason = describePageCountViolation(result.pageCount);
+            setEntries((cur) =>
+              cur.map((e) =>
+                e.id === entry.id
+                  ? pageCountReason
+                    ? { ...e, status: "error", errorMessage: pageCountReason }
+                    : { ...e, status: "done" }
+                  : e
+              )
+            );
           })
           .catch((err) => {
             setEntries((cur) =>
@@ -56,7 +82,7 @@ export function UploadStep({ onSubmitted, onUnavailable, onBack }: UploadStepPro
             );
           });
       }
-      return [...prev, ...next];
+      return [...prev, ...next, ...rejectedEntries];
     });
   }, []);
 

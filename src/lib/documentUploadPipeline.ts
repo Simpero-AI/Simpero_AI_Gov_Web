@@ -48,7 +48,10 @@ export async function runDocumentUpload(
     // fresh upload would reach. Resolve with the existing row's real
     // id/status rather than re-running a PUT that would just 409 again.
     if (err instanceof DuplicateUploadError) {
-      return { id: err.dataSourceId, status: err.status };
+      // The 409 detail body carries only {message, dataSourceId, status} --
+      // no page count for the existing row (it would have already been
+      // checked against the cap on its own original upload).
+      return { id: err.dataSourceId, status: err.status, pageCount: null };
     }
     throw err;
   }

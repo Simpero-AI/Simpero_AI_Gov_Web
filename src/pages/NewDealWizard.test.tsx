@@ -1,12 +1,12 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { useEffect } from "react";
 import NewDealWizard from "./NewDealWizard";
 import { createDeal, fetchDeal } from "@/api/deals";
 import type { DealWithLatestMemo } from "@/api/deals";
-import { fetchDealDocuments } from "@/api/documents";
+import { fetchDealDocuments, dealDocumentsQueryKey } from "@/api/documents";
 import type { DealDocument } from "@/api/documents";
 import { IntakeApiError, createIntakeLink, fetchIntakeLink, revokeIntakeLink } from "@/api/intakeLink";
 import type { IntakeLink } from "@/api/intakeLink";
@@ -252,6 +252,32 @@ describe("NewDealWizard — Step 3 confirm guard (attach mode)", () => {
     await waitFor(() => expect(screen.getByText("Acme Corp")).toBeInTheDocument());
     expect(screen.getByTestId("wizard-step-3")).toBeInTheDocument();
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("Step 3's document list picks up verification without a manual reload (FE-10)", async () => {
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    vi.mocked(fetchDealDocuments).mockResolvedValue([makeDealDocument({ id: "d1", status: "pending" })]);
+    vi.mocked(fetchIntakeLink).mockResolvedValue({
+      status: "submitted",
+      recipientEmail: "gp@example.com",
+      expiresAt: new Date().toISOString(),
+      submittedAt: new Date().toISOString(),
+    });
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWizard("/new-deal/confirm?dealId=deal-1", { queryClient });
+
+    expect(await screen.findByText("Verification pending")).toBeInTheDocument();
+
+    // Simulate the poll's tick (real interval timing isn't exercised here,
+    // same pattern DealDetail.test.tsx uses for its own status poll).
+    vi.mocked(fetchDealDocuments).mockResolvedValue([makeDealDocument({ id: "d1", status: "verified" })]);
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: dealDocumentsQueryKey("deal-1") });
+    });
+
+    await waitFor(() => expect(screen.getByText("Verified")).toBeInTheDocument());
+    expect(screen.queryByText("Verification pending")).not.toBeInTheDocument();
   });
 
   it("does not navigate or toast while the documents query is still unresolved", async () => {

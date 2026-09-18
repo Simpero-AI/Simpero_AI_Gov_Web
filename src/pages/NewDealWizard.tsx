@@ -161,10 +161,16 @@ export default function NewDealWizard({ step }: NewDealWizardProps) {
   // (which only ever reflects a fresh in-session upload — see
   // confirmStepGate.ts). Neither query overrides the global retry policy
   // (no `retry: false`): a transient blip must not read as a hard block.
+  //
+  // refetchInterval polls while any row is still "pending" verification
+  // (FE-10) -- without it, a document that verifies moments after this
+  // query's one-shot fetch stays stuck on "verification pending" in the
+  // Step 3 list until an unrelated remount/refetch happens to occur.
   const documentsQuery = useQuery({
     queryKey: dealDocumentsQueryKey(state.attachDealId ?? ""),
     queryFn: () => fetchDealDocuments(state.attachDealId as string),
     enabled: state.attachDealId != null,
+    refetchInterval: (q) => (q.state.data?.some((d) => d.status === "pending") ? 3000 : false),
   });
   const intakeLinkQuery = useQuery({
     queryKey: intakeLinkQueryKey(state.attachDealId ?? ""),

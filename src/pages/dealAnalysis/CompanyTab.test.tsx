@@ -74,11 +74,13 @@ describe("CompanyTab", () => {
           points: [
             { text: "The company sells a consumption-based cloud data platform.", citation: "cim.pdf · p.5" },
           ],
+          people: [],
         },
         {
           key: "risks",
           title: "Risks & Dependencies",
           points: [{ text: "Revenue is variable with customer usage.", citation: "cim.pdf · p.15" }],
+          people: [],
         },
       ],
     });

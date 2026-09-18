@@ -292,21 +292,27 @@ function DealMetricsStrip({
 // AnalysisTabs — Figma-matched 9-tab view
 // ---------------------------------------------------------------------------
 
-function useTabFromUrl(): [TabKey, (t: TabKey) => void] {
+export function useTabFromUrl(): [TabKey, (t: TabKey) => void] {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
-  const tab = (() => {
-    const params = new URLSearchParams(search);
-    const t = params.get("tab");
-    if (t && VALID_TABS.has(t as TabKey)) return t as TabKey;
-    return "summary" as TabKey;
-  })();
+  const rawTab = new URLSearchParams(search).get("tab");
+  const isValid = rawTab != null && VALID_TABS.has(rawTab as TabKey);
+  const tab = isValid ? (rawTab as TabKey) : ("summary" as TabKey);
   const setTab = (t: TabKey) => {
     const params = new URLSearchParams(search);
     params.set("tab", t);
     // Replace search params, preserving the path
     navigate(`${pathname}?${params.toString()}`, { replace: true });
   };
+  // An unrecognized ?tab= (e.g. "captable" instead of "cap-table") used to
+  // silently render Summary while leaving the bad value sitting in the URL
+  // (FE-15) -- redirect to the real "summary" tab so the URL reflects what's
+  // actually showing, same pattern MandateScorecard.tsx uses for an invalid
+  // ?section=.
+  useEffect(() => {
+    if (rawTab != null && !isValid) setTab("summary" as TabKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawTab, isValid]);
   return [tab, setTab];
 }
 
@@ -428,7 +434,7 @@ function AnalysisTabs({
           />
         )}{" "}
         {/* FOUNDERS */}
-        {tab === "founders" && <FoundersTab memoTyped={memoTyped} />}
+        {tab === "founders" && <FoundersTab memoTyped={memoTyped} dealId={dealId} />}
         {/* CAP TABLE */}
         {tab === "cap-table" && <CapTableTab memoTyped={memoTyped} />}
         {/* FINDINGS */}
@@ -712,12 +718,13 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
         </div>
         <div className="mt-6">
           <AnalysisProgressView
-            fileName={latestMemoSession?.fileName ?? "Unknown"}
+            fileName={latestMemoSession?.fileName ?? deal.name}
             steps={status.steps}
             startedAt={status.startedAt}
             endedAt={status.endedAt}
             stepDurations={status.stepDurations}
             jobComments={status.jobComments}
+            failed
           />
         </div>
         <div className="mt-6 text-center">
@@ -787,7 +794,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
           onChange={t => navigate(`/deals/${dealId}/${t}`)}
         />
         {tab === "screening" ? (
-          <ScreeningTab dealId={dealId} fileName={latestMemoSession?.fileName ?? null} />
+          <ScreeningTab dealId={dealId} />
         ) : (
           <>
             {showPass3FailedBanner && (

@@ -1,9 +1,9 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, useLocation } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { useEffect } from "react";
-import DealDetail, { nextDealStatusPollMs } from "./DealDetail";
+import DealDetail, { nextDealStatusPollMs, useTabFromUrl } from "./DealDetail";
 import { dealStatusQueryKey, fetchDeal, fetchDealStatus } from "@/api/deals";
 import type { DealWithLatestMemo } from "@/api/deals";
 import { screeningMaterialsQueryKey } from "@/api/screeningMaterials";
@@ -158,6 +158,43 @@ describe("nextDealStatusPollMs — keeps polling through the screening stage", (
 
   it("stops when there is no data yet (undefined)", () => {
     expect(nextDealStatusPollMs(undefined)).toBe(false);
+  });
+});
+
+describe("useTabFromUrl — invalid ?tab= (FE-15)", () => {
+  // This file mocks react-router's useNavigate wholesale (navigateSpy,
+  // above) so every other test here can assert on the completion redirect
+  // -- that mock is a no-op, so the MemoryRouter's own location never
+  // actually changes here either; assert against navigateSpy directly,
+  // same as this file's other useNavigate-driven tests.
+  function renderTabHook(initialPath: string) {
+    return renderHook(() => useTabFromUrl(), {
+      wrapper: ({ children }) => (
+        <MemoryRouter initialEntries={[initialPath]}>
+          <Routes>
+            <Route path="*" element={<>{children}</>} />
+          </Routes>
+        </MemoryRouter>
+      ),
+    });
+  }
+
+  it("redirects an unrecognized ?tab= to summary instead of silently rendering it with the bad value left in the URL", () => {
+    const { result } = renderTabHook("/deals/deal-1/analysis?tab=captable");
+    expect(result.current[0]).toBe("summary");
+    expect(navigateSpy).toHaveBeenCalledWith("/deals/deal-1/analysis?tab=summary", { replace: true });
+  });
+
+  it("leaves a valid ?tab= alone, with no redirect", () => {
+    const { result } = renderTabHook("/deals/deal-1/analysis?tab=cap-table");
+    expect(result.current[0]).toBe("cap-table");
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it("defaults a missing ?tab= to summary without a redirect (no bad value to correct)", () => {
+    const { result } = renderTabHook("/deals/deal-1/analysis");
+    expect(result.current[0]).toBe("summary");
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 });
 

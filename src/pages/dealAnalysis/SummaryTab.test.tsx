@@ -49,6 +49,7 @@ describe("SummaryTab", () => {
           points: [
             { text: "A consumption-priced cloud data platform serving enterprises.", citation: "cim.pdf · p.5" },
           ],
+          people: [],
         },
       ],
     });

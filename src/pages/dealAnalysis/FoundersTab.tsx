@@ -1,7 +1,9 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Briefcase,
   Columns2,
+  Handshake,
   ShieldCheck,
   UserRound,
   type LucideIcon,
@@ -10,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/mvp/primitives/button";
 import { ProvenanceBadge } from "@/components/mvp/primitives/ProvenanceBadge";
 import { ProseWithClaims } from "@/components/mvp/primitives/ClaimText";
+import { TrustStatusPill } from "@/components/mvp/primitives/TrustStatusPill";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
 import { FieldValueList, type FieldValueItem } from "@/components/mvp/common/FieldValueList";
 import { VerificationPill, type VerificationState } from "@/components/mvp/common/VerificationPill";
@@ -26,10 +29,18 @@ import {
   type CorroborationSourceItem,
 } from "@/components/mvp/analysis/CorroborationPanel";
 import { useCitationSafe } from "@/contexts/CitationContext";
+import {
+  fetchCompanySynthesis,
+  companySynthesisQueryKey,
+  type CompanySynthPoint,
+  type CompanySynthPerson,
+} from "@/api/companySynthesis";
+import { fetchCompany, companyQueryKey, type CompanyFact } from "@/api/company";
 import type { Claim, ICMemoResult, Sourced, SourcedSentence } from "@shared/simperoTypes";
 
 interface FoundersTabProps {
   memoTyped: Partial<ICMemoResult> | null;
+  dealId: string;
 }
 
 type FounderMember = {
@@ -95,6 +106,104 @@ function ProvenanceAction({
       onClick={citationCtx ? () => citationCtx.openCitation({ fieldLabel, citation: sourced.citation ?? null }) : undefined}
     />
   );
+}
+
+// ---------------------------------------------------------------------------
+// Leadership fallback — when no structured founder profile exists on
+// ICMemoDeliverable (managementTeam), prefer the backend's dedicated
+// "leadership" synthesis section (GET /deals/{id}/company-synthesis,
+// grounded name/title/background people, FE-5) over the flat Related
+// Parties data. Related Parties (AI synthesis prose, or the claims-driven
+// fact list) isn't split into name/title/background, so it's kept only as
+// a second-line fallback when leadership itself has nothing.
+// ---------------------------------------------------------------------------
+
+function LeadershipPersonCard({ person }: { person: CompanySynthPerson }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-[color:var(--rev-border)] bg-[color:var(--rev-surface)] shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+      <div className="flex items-center gap-4 border-b border-[color:var(--rev-border-subtle)] p-5">
+        <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-[color:var(--rev-tint-primary)]">
+          <UserRound className="h-6 w-6 text-[color:var(--rev-primary)]" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-serif text-lg text-[color:var(--rev-text-1)]">{person.name}</p>
+          {person.title && <p className="text-[13px] text-[color:var(--rev-text-7)]">{person.title}</p>}
+        </div>
+      </div>
+      {person.background && (
+        <div className="p-5">
+          <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{person.background}</p>
+        </div>
+      )}
+      {person.citation && (
+        <div className="flex justify-end border-t border-[color:var(--rev-border-subtle)] px-5 py-2.5">
+          <span className="font-mono text-[12px] text-[color:var(--rev-text-5)]">{person.citation}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RelatedPartiesFallback({ points, facts }: { points: CompanySynthPoint[]; facts: CompanyFact[] }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-[color:var(--rev-border)] bg-[color:var(--rev-surface)] p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+      <div className="mb-3.5 flex items-center gap-2.5">
+        <Handshake className="h-4 w-4 text-[color:var(--rev-primary)]" />
+        <span className="font-mono text-[10.5px] uppercase tracking-[0.6px] text-[color:var(--rev-text-6)]">
+          Related Parties
+        </span>
+      </div>
+      <p className="mb-3 text-[11px] italic text-[color:var(--rev-text-6)]">
+        From the Company tab&apos;s Related Parties — no per-person title/background split is available yet.
+      </p>
+      <div className="space-y-3">
+        {points.length > 0
+          ? points.map((p, i) => (
+              <div key={i} className="rounded-lg border border-[color:var(--rev-border-subtle)] p-4">
+                <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{p.text}</p>
+                {p.citation ? (
+                  <p className="mt-2 text-right font-mono text-[12px] text-[color:var(--rev-text-5)]">{p.citation}</p>
+                ) : null}
+              </div>
+            ))
+          : facts.map((f, i) => (
+              <div key={i} className="rounded-lg border border-[color:var(--rev-border-subtle)] p-4">
+                <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{f.value}</p>
+                <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-[color:var(--rev-border-subtle)] pt-2.5">
+                  <span className="truncate text-[11.5px] text-[color:var(--rev-text-5)]">{f.entity || "—"}</span>
+                  <TrustStatusPill status={f.status} />
+                </div>
+              </div>
+            ))}
+      </div>
+    </div>
+  );
+}
+
+function LeadershipFallback({ dealId }: { dealId: string }) {
+  const synthesisQuery = useQuery({
+    queryKey: companySynthesisQueryKey(dealId),
+    queryFn: () => fetchCompanySynthesis(dealId),
+  });
+  const companyQuery = useQuery({
+    queryKey: companyQueryKey(dealId),
+    queryFn: () => fetchCompany(dealId),
+  });
+  const people = synthesisQuery.data?.sections.find((s) => s.key === "leadership")?.people ?? [];
+  if (people.length > 0) {
+    return (
+      <div className="space-y-5">
+        {people.map((p, i) => (
+          <LeadershipPersonCard key={`${p.name}-${i}`} person={p} />
+        ))}
+      </div>
+    );
+  }
+
+  const points = synthesisQuery.data?.sections.find((s) => s.key === "related_parties")?.points ?? [];
+  const facts: CompanyFact[] = companyQuery.data?.relatedParties ?? [];
+  if (points.length === 0 && facts.length === 0) return null;
+  return <RelatedPartiesFallback points={points} facts={facts} />;
 }
 
 function UnbackedSection({
@@ -316,7 +425,7 @@ function collectFoundersCorroboration(memoTyped: Partial<ICMemoResult> | null): 
   };
 }
 
-export function FoundersTab({ memoTyped }: FoundersTabProps) {
+export function FoundersTab({ memoTyped, dealId }: FoundersTabProps) {
   const team = memoTyped?.deliverable?.managementTeam;
   const board = memoTyped?.deliverable?.board;
   const [compareOpen, setCompareOpen] = useState(false);
@@ -340,6 +449,7 @@ export function FoundersTab({ memoTyped }: FoundersTabProps) {
             description="Names, titles, background, and key achievements for founders/leadership will appear here once the source document is processed."
           />
         </SectionCard>
+        <LeadershipFallback dealId={dealId} />
         <CorroborationPanel
           items={corroboration.items}
           verifiedCount={corroboration.verifiedCount}

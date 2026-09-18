@@ -18,11 +18,27 @@ export interface CompanySynthPoint {
   citation: string | null;
 }
 
+/**
+ * One grounded leadership entry (the "leadership" section only) — a person's
+ * name plus their stated title/background and citation, verification-gated
+ * the same way as the prose points (plus a surname-presence check backend
+ * side). `title`/`background`/`citation` are null when the excerpts didn't
+ * state them or a citation resolved to nothing.
+ */
+export interface CompanySynthPerson {
+  name: string;
+  title: string | null;
+  background: string | null;
+  citation: string | null;
+}
+
 export interface CompanySynthSection {
-  /** Matches the build_company_view section names: "overview" | "risks" | "commercial" | ... */
+  /** Matches the build_company_view section names: "overview" | "risks" | "commercial" | ... plus "leadership" (no build_company_view counterpart). */
   key: string;
   title: string;
   points: CompanySynthPoint[];
+  /** Only ever populated for the "leadership" section; every other section's is []. */
+  people: CompanySynthPerson[];
 }
 
 export interface CompanySynthesis {

@@ -1,22 +1,101 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import { FoundersTab } from "./FoundersTab";
+import { fetchCompanySynthesis } from "@/api/companySynthesis";
+import { fetchCompany } from "@/api/company";
 import { buildE2eDeliverableMemo } from "@shared/e2eUxMemoFixture";
 import type { ICMemoResult } from "@shared/simperoTypes";
+
+// The empty-state branch also reads the Company tab's Related Parties data
+// (FE-5) — mocked so these tests drive it deterministically without a real
+// network call.
+vi.mock("@/api/companySynthesis", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/api/companySynthesis")>();
+  return { ...actual, fetchCompanySynthesis: vi.fn() };
+});
+vi.mock("@/api/company", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/api/company")>();
+  return { ...actual, fetchCompany: vi.fn() };
+});
+const mockSynthesis = vi.mocked(fetchCompanySynthesis);
+const mockCompany = vi.mocked(fetchCompany);
+
+function renderFoundersTab(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 afterEach(cleanup);
 
 describe("FoundersTab", () => {
-  it("renders the honest empty-state when there is no managementTeam data", () => {
-    render(<FoundersTab memoTyped={null} />);
+  it("renders the honest empty-state when there is no managementTeam or Company-tab related-parties data", async () => {
+    mockSynthesis.mockResolvedValue({ sections: [] });
+    mockCompany.mockResolvedValue(null);
+    renderFoundersTab(<FoundersTab memoTyped={null} dealId="deal-1" />);
     expect(screen.getByText("Founder & leadership profiles not yet extracted")).toBeInTheDocument();
     expect(screen.getByText(/no structured source citations/i)).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText("Related Parties")).not.toBeInTheDocument();
+  });
+
+  it("renders real per-person leadership cards from the backend's dedicated leadership synthesis section (FE-5)", async () => {
+    mockSynthesis.mockResolvedValue({
+      sections: [
+        {
+          key: "leadership",
+          title: "Leadership",
+          points: [],
+          people: [
+            { name: "Jen-Hsun Huang", title: "CEO and Co-Founder", background: "Led the company since founding.", citation: "10-K · p.4" },
+          ],
+        },
+      ],
+    });
+    mockCompany.mockResolvedValue(null);
+    renderFoundersTab(<FoundersTab memoTyped={null} dealId="deal-1" />);
+
+    expect(screen.getByText("Founder & leadership profiles not yet extracted")).toBeInTheDocument();
+    expect(await screen.findByText("Jen-Hsun Huang")).toBeInTheDocument();
+    expect(screen.getByText("CEO and Co-Founder")).toBeInTheDocument();
+    expect(screen.getByText("Led the company since founding.")).toBeInTheDocument();
+    expect(screen.getByText("10-K · p.4")).toBeInTheDocument();
+    // Leadership took priority -- the flatter Related Parties fallback never renders.
+    expect(screen.queryByText("Related Parties")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the Company tab's Related Parties data when both managementTeam AND the leadership section are empty (FE-5)", async () => {
+    mockSynthesis.mockResolvedValue({
+      sections: [
+        {
+          key: "leadership",
+          title: "Leadership",
+          points: [],
+          people: [],
+        },
+        {
+          key: "related_parties",
+          title: "Related Parties",
+          points: [{ text: "Jen-Hsun Huang serves as CEO and co-founder.", citation: "10-K · p.4" }],
+          people: [],
+        },
+      ],
+    });
+    mockCompany.mockResolvedValue(null);
+    renderFoundersTab(<FoundersTab memoTyped={null} dealId="deal-1" />);
+
+    expect(screen.getByText("Founder & leadership profiles not yet extracted")).toBeInTheDocument();
+    expect(await screen.findByText("Related Parties")).toBeInTheDocument();
+    expect(screen.getByText("Jen-Hsun Huang serves as CEO and co-founder.")).toBeInTheDocument();
   });
 
   it("renders real founder name/title/background and the keyAchievement as a pull-quote shown once, not duplicated into Track Record", () => {
+    mockSynthesis.mockResolvedValue({ sections: [] });
+    mockCompany.mockResolvedValue(null);
     const memo = buildE2eDeliverableMemo();
-    render(<FoundersTab memoTyped={memo} />);
+    renderFoundersTab(<FoundersTab memoTyped={memo} dealId="deal-1" />);
 
     expect(screen.getByText("Jane Founder")).toBeInTheDocument();
     expect(screen.getByText("CEO & Co-Founder")).toBeInTheDocument();
@@ -38,10 +117,12 @@ describe("FoundersTab", () => {
   });
 
   it("only shows the Compare toggle with 2+ founders, and the comparison table renders each founder's real fields", async () => {
+    mockSynthesis.mockResolvedValue({ sections: [] });
+    mockCompany.mockResolvedValue(null);
     const user = userEvent.setup();
     const base = buildE2eDeliverableMemo();
     const soloMemo = base;
-    const { unmount } = render(<FoundersTab memoTyped={soloMemo} />);
+    const { unmount } = renderFoundersTab(<FoundersTab memoTyped={soloMemo} dealId="deal-1" />);
     expect(screen.queryByRole("button", { name: /compare founders/i })).not.toBeInTheDocument();
     unmount();
 
@@ -58,7 +139,7 @@ describe("FoundersTab", () => {
         },
       },
     };
-    render(<FoundersTab memoTyped={twoFounderMemo} />);
+    renderFoundersTab(<FoundersTab memoTyped={twoFounderMemo} dealId="deal-1" />);
 
     const compareButton = screen.getByRole("button", { name: /compare founders/i });
     expect(compareButton).toBeInTheDocument();

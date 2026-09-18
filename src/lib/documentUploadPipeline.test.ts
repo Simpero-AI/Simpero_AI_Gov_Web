@@ -91,7 +91,7 @@ describe("runDocumentUpload", () => {
 
     const result = await runDocumentUpload("deal1", makeFile("deck.pdf"));
 
-    expect(result).toEqual({ id: "existing-doc-1", status: "verified" });
+    expect(result).toEqual({ id: "existing-doc-1", status: "verified", pageCount: null });
     expect(putFetch).not.toHaveBeenCalled();
     expect(documentsApi.completeUpload).not.toHaveBeenCalled();
   });
