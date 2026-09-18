@@ -444,7 +444,7 @@ function AnalysisTabs({
         {/* FOUNDERS */}
         {tab === "founders" && <FoundersTab memoTyped={memoTyped} dealId={dealId} />}
         {/* CAP TABLE */}
-        {tab === "cap-table" && <CapTableTab memoTyped={memoTyped} />}
+        {tab === "cap-table" && <CapTableTab dealId={dealId} />}
         {/* FINDINGS */}
         {tab === "findings" && <FindingsTab />}
         {/* CORROBORATION */}
