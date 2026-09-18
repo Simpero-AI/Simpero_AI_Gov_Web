@@ -39,7 +39,9 @@ describe("WorkspaceTab", () => {
     renderWorkspaceTab();
 
     await user.click(screen.getByRole("button", { name: "Data Room" }));
-    expect(screen.getByText("0 documents on file")).toBeInTheDocument();
+    // The Data Room document count now resolves from the documents query
+    // (async), not the synchronous memo fileName — await it.
+    expect(await screen.findByText("0 documents on file")).toBeInTheDocument();
     expect(screen.queryByText("Diligence Progress")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Checklist" }));
