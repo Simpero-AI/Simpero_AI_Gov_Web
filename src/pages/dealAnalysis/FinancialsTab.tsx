@@ -593,17 +593,18 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
         );
       })()}
 
-      {/* Revenue Breakdown — the mockup's version of this section (revenue by
-          segment) is the same field already rendered on CompanyTab's Business
-          Model card (companyOverview.revenueMix); there's no separate
-          revenue-breakdown field on ICMemoDeliverable, so this section is
-          empty-stated rather than re-rendering that same data under a second
-          label. */}
+      {/* Revenue Breakdown — revenue by segment. The current pipeline has no
+          producer for a segment split: the old cross-reference pointed at a
+          "Company → Business Model" card that no longer exists and at the
+          memo-sourced revenueMix field, which is never populated (the memo_json
+          path has no writer). So state plainly that it isn't produced yet rather
+          than sending the reader to a card that isn't there. A segment-revenue
+          extractor is tracked separately. */}
       <SectionCard eyebrow="Revenue Breakdown" icon={<PieChart className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
         <UnbackedSection
           icon={PieChart}
-          title="See Company tab for revenue mix"
-          description="Revenue-by-segment breakdown is the same extracted field already shown under Company → Business Model; there's no separate financials-specific revenue breakdown produced by the current pipeline."
+          title="Revenue-by-segment not generated yet"
+          description="A revenue-by-segment breakdown isn't produced by the current pipeline yet. It will appear here automatically once a segment-revenue extractor ships."
         />
       </SectionCard>
 
