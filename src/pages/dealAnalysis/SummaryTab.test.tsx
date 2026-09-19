@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SummaryTab } from "./SummaryTab";
 import { fetchCompanySynthesis } from "@/api/companySynthesis";
+import { fetchIcSignOff, recordIcSignOff } from "@/api/icSignOff";
 import { buildE2eDeliverableMemo } from "@shared/e2eUxMemoFixture";
 import type { GovernanceFlag, ICMemoResult } from "@shared/simperoTypes";
 
@@ -14,11 +15,22 @@ vi.mock("@/api/companySynthesis", async importOriginal => {
   return { ...actual, fetchCompanySynthesis: vi.fn() };
 });
 
+// IC Sign-off talks to the deal's audit-trail endpoints; mock both so tests are
+// hermetic and don't hit the network.
+vi.mock("@/api/icSignOff", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/icSignOff")>();
+  return { ...actual, fetchIcSignOff: vi.fn(), recordIcSignOff: vi.fn() };
+});
+
 const mockFetchCompanySynthesis = vi.mocked(fetchCompanySynthesis);
+const mockFetchIcSignOff = vi.mocked(fetchIcSignOff);
+const mockRecordIcSignOff = vi.mocked(recordIcSignOff);
 
 beforeEach(() => {
   // Default: no synthesis -> the Executive Summary falls back to memo / placeholder.
   mockFetchCompanySynthesis.mockResolvedValue({ sections: [] });
+  // Default: no IC decision recorded yet.
+  mockFetchIcSignOff.mockResolvedValue(null);
 });
 
 afterEach(cleanup);
@@ -86,11 +98,50 @@ describe("SummaryTab", () => {
     expect(rows[1].textContent).toContain("Customer concentration");
   });
 
-  it("renders a visibly disabled IC Sign-off control with no fake success state", () => {
+  it("enables the IC Sign-off actions when no decision has been recorded yet", async () => {
     renderSummary(buildE2eDeliverableMemo());
-    expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Decline" })).toBeDisabled();
-    expect(screen.getByText(/isn't persisted yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/No IC decision recorded yet/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Decline" })).toBeEnabled();
+    // No fake-persistence disclaimer any more — it is really saved.
+    expect(screen.queryByText(/isn't persisted yet/i)).not.toBeInTheDocument();
+  });
+
+  it("records an IC decision (with notes) and shows it as the current decision", async () => {
+    const user = userEvent.setup();
+    mockRecordIcSignOff.mockResolvedValue({
+      decision: "approve",
+      notes: "Cleared by IC.",
+      actorEmail: "partner@fund.com",
+      createdAt: "2026-09-18T00:00:00Z",
+    });
+    renderSummary(buildE2eDeliverableMemo());
+
+    await screen.findByText(/No IC decision recorded yet/i);
+    await user.type(screen.getByPlaceholderText(/Optional notes/i), "Cleared by IC.");
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+
+    expect(mockRecordIcSignOff).toHaveBeenCalledWith("deal-1", {
+      decision: "approve",
+      notes: "Cleared by IC.",
+    });
+    expect(await screen.findByText(/Approved by/i)).toBeInTheDocument();
+    expect(screen.getByText("partner@fund.com")).toBeInTheDocument();
+    expect(screen.getByText("Cleared by IC.")).toBeInTheDocument();
+  });
+
+  it("shows an existing IC decision on load", async () => {
+    mockFetchIcSignOff.mockResolvedValue({
+      decision: "decline",
+      notes: null,
+      actorEmail: "partner@fund.com",
+      createdAt: "2026-09-18T00:00:00Z",
+    });
+    renderSummary(buildE2eDeliverableMemo());
+
+    expect(await screen.findByText(/Declined by/i)).toBeInTheDocument();
+    expect(screen.getByText("Declined")).toBeInTheDocument();
+    expect(screen.getByText(/Recording a new decision replaces this one/i)).toBeInTheDocument();
   });
 
   it("derives real Corroboration counts from the memo's own Sourced citations rather than fabricating data", async () => {
