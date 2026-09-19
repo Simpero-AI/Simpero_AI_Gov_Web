@@ -212,6 +212,24 @@ describe("FinancialsTab", () => {
     expect(screen.queryByText("No financial figures extracted")).not.toBeInTheDocument();
   });
 
+  it("badges a figure that failed the arithmetic consistency check, and only that one", async () => {
+    mockFetchFinancials.mockResolvedValue({
+      ...EMPTY_FINANCIALS,
+      incomeStatement: [
+        { label: "Gross Profit", value: "$97.9B", period: "FY23", citation: "10-K · p.40", status: "verified", entity: null, sourceUrl: null, reconciliationMismatch: true },
+        { label: "Revenue", value: "$60.9B", period: "FY23", citation: "10-K · p.40", status: "verified", entity: null, sourceUrl: null },
+      ],
+    });
+    renderFinancialsTab({ memoTyped: null, dealMetrics: undefined, dealMetricDiscrepancies: [] });
+
+    await screen.findByText("Gross Profit");
+    const badges = screen.getAllByText(/Doesn't reconcile/i);
+    expect(badges).toHaveLength(1);
+    // The flagged value still shows -- it is surfaced, not dropped.
+    expect(screen.getByText("$97.9B")).toBeInTheDocument();
+    expect(screen.getByText("$60.9B")).toBeInTheDocument();
+  });
+
   it("shows a loading state for the figures section, not a false empty-state, while the fetch is pending", () => {
     mockFetchFinancials.mockReturnValue(new Promise<FinancialsView>(() => {}));
     renderFinancialsTab({ memoTyped: null, dealMetrics: undefined, dealMetricDiscrepancies: [] });

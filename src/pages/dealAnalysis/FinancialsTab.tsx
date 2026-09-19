@@ -12,6 +12,7 @@ import {
   Target,
   TrendingDown,
   TrendingUp,
+  TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -189,6 +190,15 @@ function FinancialFactRow({ fact }: { fact: FinancialFact }) {
       </div>
       <div className="flex shrink-0 items-center gap-2.5">
         <span className="font-medium tabular-nums text-[color:var(--rev-text-1)]">{fact.value}</span>
+        {fact.reconciliationMismatch ? (
+          <span
+            className="inline-flex items-center gap-1 rounded-full border border-[color:var(--rev-warning)]/40 px-1.5 py-0.5 text-[10.5px] font-medium text-[color:var(--rev-warning)]"
+            title="This figure failed an arithmetic consistency check (e.g. revenue − COGS ≠ gross profit). It's shown as reported — one of the related figures may be the mis-extracted one."
+          >
+            <TriangleAlert className="h-3 w-3" aria-hidden="true" />
+            Doesn&apos;t reconcile
+          </span>
+        ) : null}
         <TrustStatusPill status={fact.status} />
         <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
       </div>
