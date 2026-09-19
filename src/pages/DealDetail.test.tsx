@@ -305,6 +305,69 @@ describe("DealDetail — completion routes to Initial Screening", () => {
     });
   });
 
+  it("re-invalidates the pipeline-derived queries on a SECOND completion (re-analysis) without redirecting a second time", async () => {
+    // Bug guard: the one-shot redirectedRef used to gate the ENTIRE completion
+    // block, so a second queued/processing → complete transition in the same
+    // session (a re-analysis of an already-complete deal) skipped EVERY query
+    // invalidation -- a user parked on Market/Company/Financials/Corroboration
+    // kept seeing pre-rerun data until an unrelated refetch (window-focus) fired.
+    // Invalidation must run on every genuine transition; only the redirect to
+    // screening stays one-shot (we don't yank the user back on a re-run).
+    vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
+    // Drive status through processing → complete → processing → complete via a
+    // controlled variable rather than a mockResolvedValueOnce chain: the status
+    // query polls on a 2s refetchInterval while processing, so a stray poll must
+    // never consume a one-shot value out of order and desync the sequence.
+    let currentStatus: DealStatusPayload = processingStatus;
+    vi.mocked(fetchDealStatus).mockImplementation(async () => currentStatus);
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    renderDealDetail("deal-1", "screening", { queryClient });
+
+    await waitFor(() =>
+      expect(screen.getByText("Analyzing your document")).toBeInTheDocument()
+    );
+
+    // First completion: processing → complete. Redirect fires once, queries invalidate.
+    currentStatus = completeStatus;
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: dealStatusQueryKey("deal-1") });
+    });
+    await waitFor(() =>
+      expect(navigateSpy).toHaveBeenCalledWith("/deals/deal-1/screening", { replace: true })
+    );
+    expect(navigateSpy).toHaveBeenCalledTimes(1);
+
+    // Re-analysis begins: complete → processing (the progress view returns).
+    invalidateSpy.mockClear();
+    currentStatus = processingStatus;
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: dealStatusQueryKey("deal-1") });
+    });
+    await waitFor(() =>
+      expect(screen.getByText("Analyzing your document")).toBeInTheDocument()
+    );
+
+    // Second completion: processing → complete again.
+    currentStatus = completeStatus;
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: dealStatusQueryKey("deal-1") });
+    });
+
+    // The whole invalidation batch fires AGAIN on the second transition...
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: screeningMaterialsQueryKey("deal-1"),
+      })
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: screeningInsightsQueryKey("deal-1"),
+    });
+    // ...but the redirect stays one-shot: no second yank back to screening.
+    expect(navigateSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("routes to screening on completion even when the completed deal has no memo (no 'retrieving your memo' hang)", async () => {
     // Regression for the staging hang: no pipeline stage produces a memo, so
     // latestMemoSession is null. The old memo-wait blocked the completed view on
