@@ -446,7 +446,7 @@ function AnalysisTabs({
         {/* CAP TABLE */}
         {tab === "cap-table" && <CapTableTab memoTyped={memoTyped} />}
         {/* FINDINGS */}
-        {tab === "findings" && <FindingsTab />}
+        {tab === "findings" && <FindingsTab dealId={dealId} />}
         {/* CORROBORATION */}
         {tab === "corroboration" && <CorroborationTab dealId={dealId} />}
         {/* DILIGENCE WORKSPACE */}
