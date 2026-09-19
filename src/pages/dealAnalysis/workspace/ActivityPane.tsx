@@ -3,18 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity as ActivityIcon, AlertCircle, Loader2 } from "lucide-react";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
 import { CorroborationPanel } from "@/components/mvp/analysis/CorroborationPanel";
-import { fetchRecentActivity, recentActivityQueryKey, type RecentActivityRow } from "@/api/logs";
+import { fetchDealAudit, dealAuditQueryKey, type DealAuditRow } from "@/api/logs";
 
 interface ActivityPaneProps {
-  /** This deal's latest memo session id, if one exists — used to filter the
-   * org/session-wide activity feed down to genuinely deal-scoped rows. */
-  sessionId: string | null;
+  dealId: string;
 }
-
-// Fetch a generous window of recent org-wide activity, then filter
-// client-side to this deal's session — fetchRecentActivity has no
-// dealId/sessionId query param, so there's no server-side way to scope it.
-const ACTIVITY_FETCH_LIMIT = 200;
 
 function severityDot(action: string): string {
   if (action.includes("error") || action.includes("failed") || action.includes("fail")) {
@@ -39,40 +32,34 @@ function relativeTime(iso: string): string {
 }
 
 /**
- * Diligence Workspace → Activity pane. `fetchRecentActivity` is org/session-
- * wide, not deal-scoped (see api/logs.ts) — rendering it unfiltered here
- * would show unrelated deals' activity next to this one, which would be
- * misleading on a deal-specific page. Instead this filters the fetched rows
- * client-side by `row.sessionId === sessionId` (this deal's latest memo
- * session), a real filter over real data rather than a fabricated one. When
- * the deal has no session yet, there is nothing to filter to — honest empty
- * state rather than a spurious "0 events" feed.
+ * Diligence Workspace → Activity pane. Backed by the deal-scoped audit trail
+ * (`GET /deals/{id}/audit`, api/logs.ts `fetchDealAudit`) — the same
+ * human_audit_log feed as the Logs drawer's "Audit Trail" tab.
+ *
+ * Deliberately scoped by deal, not by memo session: the run-based analysis
+ * worker records its progress (analysis_requested / analysis_parsing_completed
+ * / …) keyed by deal_id and never creates a memo Session row, so a completed
+ * analysis has activity on the deal but no session to scope to. Filtering by
+ * session (the pane's former behaviour) therefore rendered a spurious "no
+ * session yet" empty state on deals that had, in fact, been analysed.
  */
-export function ActivityPane({ sessionId }: ActivityPaneProps) {
+export function ActivityPane({ dealId }: ActivityPaneProps) {
   const query = useQuery({
-    queryKey: recentActivityQueryKey(ACTIVITY_FETCH_LIMIT),
-    queryFn: () => fetchRecentActivity(ACTIVITY_FETCH_LIMIT),
-    enabled: sessionId !== null,
+    queryKey: dealAuditQueryKey(dealId),
+    queryFn: () => fetchDealAudit(dealId),
   });
 
-  const rows: RecentActivityRow[] = useMemo(() => {
-    if (!sessionId || !query.data) return [];
-    return query.data.rows
-      .filter((r) => r.sessionId === sessionId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [query.data, sessionId]);
+  const rows: DealAuditRow[] = useMemo(() => {
+    if (!query.data) return [];
+    // The route already returns newest-first; sort defensively so render
+    // order never depends on backend ordering.
+    return [...query.data].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [query.data]);
 
   let body: React.ReactNode;
-  if (sessionId === null) {
-    body = (
-      <EmptyState
-        icon={ActivityIcon}
-        title="No active analysis session yet"
-        description="This deal doesn't have a completed analysis session on record, so there's no activity to scope this feed to."
-        className="border-none p-0"
-      />
-    );
-  } else if (query.isLoading) {
+  if (query.isLoading) {
     body = (
       <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[color:var(--rev-text-6)]">
         <Loader2 className="h-4 w-4 animate-spin" />
@@ -91,7 +78,7 @@ export function ActivityPane({ sessionId }: ActivityPaneProps) {
       <EmptyState
         icon={ActivityIcon}
         title="No activity yet on this deal"
-        description="Pipeline and analyst actions for this deal's analysis session will appear here as they happen."
+        description="Pipeline and analyst actions for this deal will appear here as they happen."
         className="border-none p-0"
       />
     );
@@ -109,8 +96,8 @@ export function ActivityPane({ sessionId }: ActivityPaneProps) {
             />
             <div className="min-w-0 flex-1">
               <span className="font-mono text-[13px] text-[color:var(--rev-text-2)]">{row.action}</span>
-              {row.jobId ? (
-                <p className="mt-0.5 text-[11.5px] text-[color:var(--rev-text-7)]">Job {row.jobId.slice(0, 8)}…</p>
+              {row.actorEmail ? (
+                <p className="mt-0.5 text-[11.5px] text-[color:var(--rev-text-7)]">{row.actorEmail}</p>
               ) : null}
             </div>
             <span

@@ -4,11 +4,11 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WorkspaceTab } from "./WorkspaceTab";
 
-// ActivityPane fetches via react-query — mocked so mounting it doesn't hit a
-// real network call; sessionId=null below keeps its query disabled anyway.
+// ActivityPane fetches the deal-scoped audit trail via react-query — mocked so
+// mounting it doesn't hit a real network call.
 vi.mock("@/api/logs", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/logs")>();
-  return { ...actual, fetchRecentActivity: vi.fn() };
+  return { ...actual, fetchDealAudit: vi.fn().mockResolvedValue([]) };
 });
 // OverviewPane (the default pane) also fetches via react-query — same reason.
 vi.mock("@/api/documents", async importOriginal => {
@@ -22,7 +22,7 @@ function renderWorkspaceTab() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <WorkspaceTab memoTyped={null} dealId="deal-1" sessionId={null} />
+      <WorkspaceTab memoTyped={null} dealId="deal-1" />
     </QueryClientProvider>
   );
 }

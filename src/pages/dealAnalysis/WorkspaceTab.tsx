@@ -21,7 +21,6 @@ const WORKSPACE_PANES: Array<{ id: WorkspacePaneKey; label: string }> = [
 interface WorkspaceTabProps {
   memoTyped: Partial<ICMemoResult> | null;
   dealId: string;
-  sessionId: string | null;
 }
 
 /**
@@ -40,7 +39,7 @@ interface WorkspaceTabProps {
  * fabricated local state or a bare "coming soon" (see each pane's own
  * comment).
  */
-export function WorkspaceTab({ memoTyped, dealId, sessionId }: WorkspaceTabProps) {
+export function WorkspaceTab({ memoTyped, dealId }: WorkspaceTabProps) {
   const [pane, setPane] = useState<WorkspacePaneKey>("overview");
 
   return (
@@ -65,7 +64,7 @@ export function WorkspaceTab({ memoTyped, dealId, sessionId }: WorkspaceTabProps
       {pane === "overview" && <OverviewPane memoTyped={memoTyped} dealId={dealId} />}
       {pane === "data-room" && <DataRoomPane memoTyped={memoTyped} />}
       {pane === "checklist" && <ChecklistPane />}
-      {pane === "activity" && <ActivityPane sessionId={sessionId} />}
+      {pane === "activity" && <ActivityPane dealId={dealId} />}
       {pane === "notes" && <NotesTranscriptsPane />}
       {pane === "draft-memo" && <DraftMemoPane memoTyped={memoTyped} />}
     </div>
