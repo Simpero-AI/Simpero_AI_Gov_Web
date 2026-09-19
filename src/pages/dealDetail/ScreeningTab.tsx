@@ -10,12 +10,11 @@ import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
 import { fetchScreening, screeningQueryKey } from "@/api/screening";
 import { fetchScreeningMaterials, screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { fetchScreeningInsights, screeningInsightsQueryKey } from "@/api/screeningInsights";
+import { useVerifiedDealDocuments } from "@/hooks/useVerifiedDealDocuments";
 import { mapScreening } from "@/lib/screeningView";
 
 export interface ScreeningTabProps {
   dealId: string;
-  /** The deal's uploaded source file name, if any. */
-  fileName: string | null;
 }
 
 /**
@@ -35,12 +34,22 @@ export interface ScreeningTabProps {
  * The Reject/Advance decision bar is hidden here by explicit request -- a
  * recorded advance/reject human decision has no backend surface yet anyway.
  */
-export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
+export function ScreeningTab({ dealId }: ScreeningTabProps) {
   const screeningQuery = useQuery({
     queryKey: screeningQueryKey(dealId),
     queryFn: () => fetchScreening(dealId),
   });
   const view = screeningQuery.data ? mapScreening(screeningQuery.data) : null;
+
+  // GET /deals/{id}/documents -- the real per-deal document list (with
+  // verification status), not the memo session's own fileName field, which
+  // is only set once a memo/deliverable exists and previously left this
+  // panel showing "No materials on file" even for a deal with a verified
+  // upload (visible directly above the extracted figures citing that same
+  // file). Shared with OverviewPane.tsx's Recent Documents panel so the two
+  // never drift on loading/error behavior for the same query (PR #42 review).
+  const { verifiedDocuments, isLoading: documentsLoading, isError: documentsError, error: documentsErr } =
+    useVerifiedDealDocuments(dealId);
 
   const materialsQuery = useQuery({
     queryKey: screeningMaterialsQueryKey(dealId),
@@ -74,7 +83,22 @@ export function ScreeningTab({ dealId, fileName }: ScreeningTabProps) {
         </p>
       </div>
 
-      <MaterialsCard fileName={fileName} />
+      {documentsLoading ? (
+        <div
+          role="status"
+          className="mb-5 flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Loading materials…
+        </div>
+      ) : documentsError ? (
+        <QueryErrorAlert
+          message="Couldn't load materials for this deal."
+          error={documentsErr as Error | null}
+        />
+      ) : (
+        <MaterialsCard documents={verifiedDocuments} />
+      )}
 
       {/* The verdict + mandate-fit gate on the SCREENING query and the extracted
           grid on the MATERIALS query -- INDEPENDENTLY, so a fast verdict (~100ms)

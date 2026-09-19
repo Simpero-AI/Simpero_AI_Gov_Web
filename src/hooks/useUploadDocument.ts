@@ -13,11 +13,15 @@ function successMessage(status: string): string {
   return STATUS_MESSAGES[status] ?? `Document uploaded — status: ${status}`;
 }
 
-export function useUploadDocument(dealId: string, opts?: { maxBytes?: number }) {
+export function useUploadDocument(dealId: string, opts?: { maxBytes?: number; allowedExtensions?: string[] }) {
   return useMutation<CompletedUpload, Error, File>({
     mutationFn: (file: File) => runDocumentUpload(dealId, file, opts),
     onSuccess: (result) => {
       // TODO: invalidate the per-deal documents list query once one exists.
+      // An over-cap PDF never reaches here at all -- runDocumentUpload
+      // throws PageCountExceededError for it (enforced once, centrally),
+      // which lands in onError below with the same rejection message
+      // instead of this success toast.
       toast.success(successMessage(result.status));
     },
     onError: (error: Error) => {

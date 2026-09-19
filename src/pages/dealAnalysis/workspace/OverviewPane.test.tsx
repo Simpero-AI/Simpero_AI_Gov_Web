@@ -1,17 +1,32 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import { OverviewPane } from "./OverviewPane";
+import { fetchDealDocuments } from "@/api/documents";
 import { buildE2eDeliverableMemo } from "@shared/e2eUxMemoFixture";
 import type { ICMemoResult } from "@shared/simperoTypes";
+
+vi.mock("@/api/documents", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/api/documents")>();
+  return { ...actual, fetchDealDocuments: vi.fn() };
+});
+const mockDocuments = vi.mocked(fetchDealDocuments);
+
+function renderOverviewPane(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 afterEach(cleanup);
 
 describe("OverviewPane", () => {
-  it("renders honest empty-states for every section when there is no memo", () => {
-    render(<OverviewPane memoTyped={null} />);
+  it("renders honest empty-states for every section when there is no memo", async () => {
+    mockDocuments.mockResolvedValue([]);
+    renderOverviewPane(<OverviewPane memoTyped={null} dealId="deal-1" />);
     expect(screen.getByText("Diligence summary not yet extracted")).toBeInTheDocument();
     expect(screen.getByText("No risks registered yet")).toBeInTheDocument();
-    expect(screen.getByText("No documents uploaded yet")).toBeInTheDocument();
+    expect(await screen.findByText("No documents uploaded yet")).toBeInTheDocument();
     // "Top Open Findings" is always empty regardless of fixture — no backend.
     expect(screen.getByText("No findings logged yet")).toBeInTheDocument();
     // Workstream Progress still renders all 6 categories as "Not started".
@@ -62,7 +77,8 @@ describe("OverviewPane", () => {
         },
       },
     };
-    render(<OverviewPane memoTyped={memo} />);
+    mockDocuments.mockResolvedValue([]);
+    renderOverviewPane(<OverviewPane memoTyped={memo} dealId="deal-1" />);
 
     // 2 complete, 1 in review, 3 absent from the 6-category universe = not started.
     const progressCard = screen.getByText("Diligence Progress").closest(".rounded-xl") as HTMLElement;
@@ -100,7 +116,8 @@ describe("OverviewPane", () => {
         },
       },
     };
-    render(<OverviewPane memoTyped={memo} />);
+    mockDocuments.mockResolvedValue([]);
+    renderOverviewPane(<OverviewPane memoTyped={memo} dealId="deal-1" />);
 
     const riskCard = screen.getByText("Risk Profile").closest(".rounded-xl") as HTMLElement;
     // Overall exposure headline + the "High" severity bar label — 2 occurrences.
@@ -113,8 +130,21 @@ describe("OverviewPane", () => {
   });
 
   it("always shows the honest 'Top Open Findings' empty state, even with a fully populated memo", () => {
-    render(<OverviewPane memoTyped={buildE2eDeliverableMemo()} />);
+    mockDocuments.mockResolvedValue([]);
+    renderOverviewPane(<OverviewPane memoTyped={buildE2eDeliverableMemo()} dealId="deal-1" />);
     expect(screen.getByText("No findings logged yet")).toBeInTheDocument();
     expect(screen.getByText("Not yet wired to a backend")).toBeInTheDocument();
+  });
+
+  it("renders a verified document in Recent Documents instead of the empty state (FE-3)", async () => {
+    mockDocuments.mockResolvedValue([
+      { id: "doc-1", filename: "nvda-20260125.pdf", status: "verified", createdAt: "2026-01-25T00:00:00Z" },
+      { id: "doc-2", filename: "still-processing.pdf", status: "pending", createdAt: "2026-01-25T00:00:00Z" },
+    ]);
+    renderOverviewPane(<OverviewPane memoTyped={null} dealId="deal-1" />);
+
+    expect(await screen.findByText("nvda-20260125.pdf")).toBeInTheDocument();
+    expect(screen.queryByText("still-processing.pdf")).not.toBeInTheDocument();
+    expect(screen.queryByText("No documents uploaded yet")).not.toBeInTheDocument();
   });
 });

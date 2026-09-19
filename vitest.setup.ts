@@ -14,7 +14,11 @@ config({ path: path.join(root, ".env.local"), override: true, quiet: true });
 // component trees like MvpAppShell competing for CPU across worker threads).
 // Raising it doesn't mask a real hang (genuine bugs still time out, just
 // later); vitest.config.ts's testTimeout is raised to match with headroom.
-configure({ asyncUtilTimeout: 8000 });
+// 8000 wasn't enough even at ci.yml's --maxWorkers=1 (NewDealWizard's
+// intake-link tests kept exhausting all of retry:2's attempts, each hitting
+// the full 8s ceiling) -- raised further rather than reducing concurrency
+// again, since 1 worker already means no contention left to remove.
+configure({ asyncUtilTimeout: 15000 });
 
 // jsdom installs its own AbortController/AbortSignal over Node's, but leaves
 // the global `Request` as Node's (undici) — and undici brand-checks

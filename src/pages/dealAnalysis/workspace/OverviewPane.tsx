@@ -1,17 +1,20 @@
 import { useMemo, type ReactNode } from "react";
-import { Compass, FileText, Flag, ShieldAlert, Workflow } from "lucide-react";
+import { Compass, FileText, Flag, Loader2, ShieldAlert, Workflow } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RadialProgress } from "@/components/mvp/primitives/RadialProgress";
 import { LabeledBarRow } from "@/components/mvp/primitives/BarRow";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
+import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
 import {
   CorroborationPanel,
   type CorroborationSourceItem,
 } from "@/components/mvp/analysis/CorroborationPanel";
+import { useVerifiedDealDocuments } from "@/hooks/useVerifiedDealDocuments";
 import type { ICMemoResult, Sourced } from "@shared/simperoTypes";
 
 interface OverviewPaneProps {
   memoTyped: Partial<ICMemoResult> | null;
+  dealId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +135,7 @@ function fileExt(fileName: string): string {
  * FindingsTab.tsx's own comment for why, reused here verbatim rather than a
  * differently-styled empty state.
  */
-export function OverviewPane({ memoTyped }: OverviewPaneProps) {
+export function OverviewPane({ memoTyped, dealId }: OverviewPaneProps) {
   const dd = memoTyped?.deliverable?.dueDiligenceSummary;
   const riskRegister = memoTyped?.deliverable?.riskRegister;
   const corroboration = useMemo(() => collectOverviewCorroboration(memoTyped), [memoTyped]);
@@ -193,10 +196,18 @@ export function OverviewPane({ memoTyped }: OverviewPaneProps) {
         ? "var(--rev-warning)"
         : "var(--rev-text-4)";
 
-  // Recent documents — a deal has at most one tracked source file today (no
-  // `GET /deals/{id}/documents` listing endpoint exists yet), same
-  // constraint MaterialsCard.tsx works within on the Screening tab.
-  const fileName = memoTyped?.fileName ?? null;
+  // Recent documents — GET /deals/{id}/documents, the real per-deal document
+  // list (shared hook with Screening tab's MaterialsCard.tsx, so the two
+  // panels never drift on loading/error behavior for the same query -- PR
+  // #42 review). Previously read `memoTyped?.fileName`, which is only set
+  // once a memo/deliverable exists and left this panel showing "No
+  // documents uploaded yet" even for a deal with a verified upload.
+  const {
+    verifiedDocuments,
+    isLoading: documentsLoading,
+    isError: documentsError,
+    error: documentsErr,
+  } = useVerifiedDealDocuments(dealId);
 
   return (
     <div className="space-y-5">
@@ -318,9 +329,19 @@ export function OverviewPane({ memoTyped }: OverviewPaneProps) {
           />
         </SectionCard>
 
-        {/* Recent Documents — real, single tracked source file per deal. */}
+        {/* Recent Documents — the deal's verified documents. */}
         <SectionCard eyebrow="Recent Documents" icon={<FileText className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          {!fileName ? (
+          {documentsLoading ? (
+            <div role="status" className="flex items-center gap-2 py-4 text-sm text-[color:var(--rev-text-6)]">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Loading documents…
+            </div>
+          ) : documentsError ? (
+            <QueryErrorAlert
+              message="Couldn't load documents for this deal."
+              error={documentsErr as Error | null}
+            />
+          ) : !verifiedDocuments || verifiedDocuments.length === 0 ? (
             <EmptyState
               icon={FileText}
               title="No documents uploaded yet"
@@ -328,11 +349,18 @@ export function OverviewPane({ memoTyped }: OverviewPaneProps) {
               className="border-none p-0"
             />
           ) : (
-            <div className="flex items-center gap-3 rounded-[10px] border border-[color:var(--rev-border-strong)] bg-[color:var(--rev-tint-neutral-subtle)] px-4 py-3">
-              <span className="shrink-0 rounded-[5px] bg-[color:var(--rev-tint-neutral)] px-1.5 py-1 font-mono text-[9px] font-semibold text-[color:var(--rev-text-4)]">
-                {fileExt(fileName)}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-[13.5px] text-[color:var(--rev-text-2)]">{fileName}</span>
+            <div className="space-y-2">
+              {verifiedDocuments.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="flex items-center gap-3 rounded-[10px] border border-[color:var(--rev-border-strong)] bg-[color:var(--rev-tint-neutral-subtle)] px-4 py-3"
+                >
+                  <span className="shrink-0 rounded-[5px] bg-[color:var(--rev-tint-neutral)] px-1.5 py-1 font-mono text-[9px] font-semibold text-[color:var(--rev-text-4)]">
+                    {fileExt(doc.filename)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-[color:var(--rev-text-2)]">{doc.filename}</span>
+                </div>
+              ))}
             </div>
           )}
         </SectionCard>

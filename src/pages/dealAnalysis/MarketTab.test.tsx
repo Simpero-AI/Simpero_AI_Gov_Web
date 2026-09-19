@@ -1,8 +1,13 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MarketTab } from "./MarketTab";
 import { fetchMarket, marketQueryKey, type MarketView } from "@/api/market";
+import {
+  fetchCompanySynthesis,
+  companySynthesisQueryKey,
+  type CompanySynthesis,
+} from "@/api/companySynthesis";
 
 // MarketTab fetches GET /deals/{id}/market via react-query — mock the client so
 // the tab renders against controlled data with no real network call.
@@ -11,7 +16,23 @@ vi.mock("@/api/market", async importOriginal => {
   return { ...actual, fetchMarket: vi.fn() };
 });
 
+// Market Risks / Growth Strategy are backed by the grounded synthesis pass (shared
+// with the Company/Summary tabs). Mock it too so tests don't hit the network; it
+// defaults to an empty snapshot (below), which every existing market-claims test
+// relies on to keep those two sections in their honest no-evidence state.
+vi.mock("@/api/companySynthesis", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/companySynthesis")>();
+  return { ...actual, fetchCompanySynthesis: vi.fn() };
+});
+
 const mockFetchMarket = vi.mocked(fetchMarket);
+const mockFetchCompanySynthesis = vi.mocked(fetchCompanySynthesis);
+
+beforeEach(() => {
+  // Default: no grounded market synthesis -> Market Risks / Growth Strategy fall to
+  // their no-evidence state. Individual tests override for the grounded case.
+  mockFetchCompanySynthesis.mockResolvedValue({ sections: [] });
+});
 
 afterEach(() => {
   cleanup();
@@ -224,32 +245,139 @@ describe("MarketTab", () => {
     expect(screen.queryByText("Couldn't load market data for this deal.")).not.toBeInTheDocument();
   });
 
-  it("renders an honest 'not generated yet' state for the unproduced sections, never a false search claim", async () => {
-    // The three sections with NO producer (Market Risks, Competitive Positioning
-    // Matrix, Growth Strategy) keep their eyebrow but state plainly the analysis
-    // isn't generated yet -- they must NEVER claim a search of the materials or
-    // public sources happened, which would be an affirmative false negative on a
-    // diligence surface.
+  it("renders the uniform no-evidence state for the not-yet-sourced sections", async () => {
+    // A mockup section with no claims source keeps its eyebrow but shows the
+    // shared "No evidence found" body, never a per-box "coming soon" placeholder.
     mockFetchMarket.mockResolvedValue(EMPTY);
     renderMarketTab();
 
     await screen.findByText("Market sizing not available");
-    expect(screen.getAllByText("Not generated yet")).toHaveLength(3);
+    // Growth Drivers + Competitive Positioning Matrix are permanently unbacked;
+    // Market Risks + Growth Strategy fall here too once the (empty) synthesis
+    // snapshot loads -- so four in total. waitFor covers the brief window where the
+    // two synthesis sections still show their loader.
+    await waitFor(() => expect(screen.getAllByText("No evidence found")).toHaveLength(4));
     expect(
-      screen.getAllByText(
-        "This analysis isn't produced for this deal yet. It will appear here automatically once its producer ships."
-      )
-    ).toHaveLength(3);
-    // The false-search copy must be gone everywhere on this tab.
+      screen.getAllByText("Nothing on this was found in the deal's materials or public sources.").length
+    ).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText("Growth drivers coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Market risks coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Positioning matrix coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Growth strategy coming soon")).not.toBeInTheDocument();
+  });
+
+  it("backs Market Risks and Growth Strategy with grounded synthesis points", async () => {
+    // The two sections the claims spine has no producer for are filled by the
+    // grounded synthesis pass (keyed market_risks / market_growth_strategy), shown
+    // as the labelled, cited AI summary -- not a fabricated or claims-borrowed stand-in.
+    mockFetchMarket.mockResolvedValue(EMPTY);
+    const synthesis: CompanySynthesis = {
+      sections: [
+        {
+          key: "market_risks",
+          title: "Market Risks",
+          points: [
+            {
+              text: "Intensifying competition from low-cost entrants could compress margins.",
+              citation: "cim.pdf · p.20",
+            },
+          ],
+          people: [],
+        },
+        {
+          key: "market_growth_strategy",
+          title: "Growth Strategy",
+          points: [
+            {
+              text: "Plans to expand into two new European geographies by 2027.",
+              citation: "cim.pdf · p.24",
+            },
+          ],
+          people: [],
+        },
+      ],
+    };
+    mockFetchCompanySynthesis.mockResolvedValue(synthesis);
+    renderMarketTab();
+
     expect(
-      screen.queryByText("Nothing on this was found in the deal's materials or public sources.")
+      await screen.findByText("Intensifying competition from low-cost entrants could compress margins.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Plans to expand into two new European geographies by 2027.")
+    ).toBeInTheDocument();
+    // Each synthesized section carries the AI-summary provenance label and its citation.
+    expect(screen.getAllByText(/AI summary/)).toHaveLength(2);
+    expect(screen.getByText("cim.pdf · p.20")).toBeInTheDocument();
+    expect(screen.getByText("cim.pdf · p.24")).toBeInTheDocument();
+    // Only the two still-unbacked sections (Growth Drivers, Positioning Matrix) keep
+    // the no-evidence state; the synthesized ones no longer show it.
+    expect(screen.getAllByText("No evidence found")).toHaveLength(2);
+  });
+
+  it("shows a per-section loader while the synthesis snapshot is still loading", async () => {
+    // Market claims resolve but synthesis is still in flight: the two synthesis
+    // sections must show their own loader, never a premature "No evidence found".
+    mockFetchMarket.mockResolvedValue(EMPTY);
+    mockFetchCompanySynthesis.mockReturnValue(new Promise<CompanySynthesis>(() => {}));
+    renderMarketTab();
+
+    await screen.findByText("Market sizing not available");
+    expect(screen.getAllByText("Loading…")).toHaveLength(2);
+  });
+
+  it("shows a neutral note in the synthesis sections when the synthesis fetch fails", async () => {
+    // A failed synthesis load must not read as "nothing found" -- the two sections
+    // show a neutral couldn't-load note while the market-claims sections are untouched.
+    mockFetchMarket.mockResolvedValue(EMPTY);
+    mockFetchCompanySynthesis.mockRejectedValue(new Error("synthesis boom"));
+    renderMarketTab();
+
+    await screen.findByText("Market sizing not available");
+    await waitFor(() =>
+      expect(screen.getAllByText("Couldn't load this section right now.")).toHaveLength(2)
+    );
+    expect(screen.queryByText("Couldn't load market data for this deal.")).not.toBeInTheDocument();
+  });
+
+  it("keeps grounded synthesis points visible when a synthesis refetch fails", async () => {
+    // react-query keeps cached `data` across a failed refetch (and still reports
+    // isError), so a transient refresh failure after synthesis loaded -- e.g. right
+    // after a re-analysis invalidates the key -- must keep the points visible, never
+    // blank them or swap in the section's error note. This pins synthError's guard
+    // (isError && data === undefined): a failed refetch-over-cache is NOT that case.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mockFetchMarket.mockResolvedValue(EMPTY);
+    mockFetchCompanySynthesis.mockResolvedValueOnce({
+      sections: [
+        {
+          key: "market_risks",
+          title: "Market Risks",
+          points: [
+            { text: "Regulatory tightening could raise compliance costs.", citation: "cim.pdf · p.30" },
+          ],
+          people: [],
+        },
+      ],
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MarketTab dealId="deal-1" />
+      </QueryClientProvider>
+    );
+    expect(
+      await screen.findByText("Regulatory tightening could raise compliance costs.")
+    ).toBeInTheDocument();
+
+    mockFetchCompanySynthesis.mockRejectedValue(new Error("refetch boom"));
+    await queryClient.refetchQueries({ queryKey: companySynthesisQueryKey("deal-1") });
+
+    // The cached point stays; the error note never appears.
+    expect(
+      screen.getByText("Regulatory tightening could raise compliance costs.")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Couldn't load this section right now.")
     ).not.toBeInTheDocument();
-    // The three unproduced topics stay visible by eyebrow...
-    expect(screen.getByText("Market Risks")).toBeInTheDocument();
-    expect(screen.getByText("Competitive Positioning Matrix")).toBeInTheDocument();
-    expect(screen.getByText("Growth Strategy")).toBeInTheDocument();
-    // ...and the redundant Growth Drivers card (its drivers live in Market
-    // Definition) is removed entirely rather than shown hardcoded-empty.
-    expect(screen.queryByText("Growth Drivers")).not.toBeInTheDocument();
   });
 });

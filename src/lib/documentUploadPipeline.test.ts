@@ -4,6 +4,7 @@
 // the same note in sha256.test.ts.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runDocumentUpload, runPublicDocumentUpload } from "./documentUploadPipeline";
+import { PageCountExceededError } from "@/lib/fileValidation";
 import * as documentsApi from "@/api/documents";
 import * as publicIntakeApi from "@/api/publicIntake";
 
@@ -14,7 +15,8 @@ vi.mock("@/api/documents", () => ({
     constructor(
       message: string,
       public readonly dataSourceId: string,
-      public readonly status: string
+      public readonly status: string,
+      public readonly pageCount?: number | null
     ) {
       super(message);
     }
@@ -91,7 +93,7 @@ describe("runDocumentUpload", () => {
 
     const result = await runDocumentUpload("deal1", makeFile("deck.pdf"));
 
-    expect(result).toEqual({ id: "existing-doc-1", status: "verified" });
+    expect(result).toEqual({ id: "existing-doc-1", status: "verified", pageCount: null });
     expect(putFetch).not.toHaveBeenCalled();
     expect(documentsApi.completeUpload).not.toHaveBeenCalled();
   });
@@ -106,6 +108,40 @@ describe("runDocumentUpload", () => {
 
     await expect(runDocumentUpload("deal1", makeFile("deck.pdf"))).rejects.toThrow(/403/);
     expect(documentsApi.completeUpload).not.toHaveBeenCalled();
+  });
+
+  it("throws PageCountExceededError for a fresh upload over the page cap (PR #42 review: enforced once, centrally)", async () => {
+    vi.mocked(documentsApi.requestPresignedUpload).mockResolvedValue({
+      uploadId: "u1",
+      presignedUrl: "https://storage.example/put-here",
+      storageKey: "k1",
+    });
+    vi.mocked(documentsApi.completeUpload).mockResolvedValue({ id: "doc1", status: "pending", pageCount: 156 });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+
+    await expect(runDocumentUpload("deal1", makeFile("deck.pdf"))).rejects.toThrow(PageCountExceededError);
+    await expect(runDocumentUpload("deal1", makeFile("deck.pdf"))).rejects.toThrow(/156 exceeds the 110-page limit/);
+  });
+
+  it("throws PageCountExceededError on a duplicate hit too, once the 409 detail carries pageCount (forward-compat)", async () => {
+    // The backend doesn't send pageCount in the 409 detail today (known gap,
+    // PR #42 review) -- this proves the plumbing is ready the moment it does,
+    // with no further frontend change needed.
+    vi.mocked(documentsApi.requestPresignedUpload).mockRejectedValue(
+      new documentsApi.DuplicateUploadError("dup", "existing-doc-1", "pending", 156)
+    );
+
+    await expect(runDocumentUpload("deal1", makeFile("deck.pdf"))).rejects.toThrow(PageCountExceededError);
+    expect(documentsApi.completeUpload).not.toHaveBeenCalled();
+  });
+
+  it("does NOT throw on a duplicate hit while pageCount is unknown (today's actual backend shape)", async () => {
+    vi.mocked(documentsApi.requestPresignedUpload).mockRejectedValue(
+      new documentsApi.DuplicateUploadError("dup", "existing-doc-1", "verified")
+    );
+
+    const result = await runDocumentUpload("deal1", makeFile("deck.pdf"));
+    expect(result).toEqual({ id: "existing-doc-1", status: "verified", pageCount: null });
   });
 });
 
@@ -144,5 +180,17 @@ describe("runPublicDocumentUpload", () => {
 
     expect(publicIntakeApi.completePublicUpload).toHaveBeenCalledWith("u1", expect.objectContaining({ filename: "deck.pdf" }));
     expect(result).toEqual({ id: "doc1", status: "pending" });
+  });
+
+  it("throws PageCountExceededError for a fresh upload over the page cap", async () => {
+    vi.mocked(publicIntakeApi.requestPublicPresignedUpload).mockResolvedValue({
+      uploadId: "u1",
+      presignedUrl: "https://storage.example/put-here",
+      storageKey: "k1",
+    });
+    vi.mocked(publicIntakeApi.completePublicUpload).mockResolvedValue({ id: "doc1", status: "pending", pageCount: 156 });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+
+    await expect(runPublicDocumentUpload(makeFile("deck.pdf"))).rejects.toThrow(PageCountExceededError);
   });
 });

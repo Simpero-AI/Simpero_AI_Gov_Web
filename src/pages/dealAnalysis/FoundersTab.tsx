@@ -1,7 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Briefcase,
   Columns2,
+  Handshake,
+  Loader2,
   ShieldCheck,
   UserRound,
   type LucideIcon,
@@ -10,7 +13,9 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/mvp/primitives/button";
 import { ProvenanceBadge } from "@/components/mvp/primitives/ProvenanceBadge";
 import { ProseWithClaims } from "@/components/mvp/primitives/ClaimText";
+import { TrustStatusPill } from "@/components/mvp/primitives/TrustStatusPill";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
+import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
 import { FieldValueList, type FieldValueItem } from "@/components/mvp/common/FieldValueList";
 import { VerificationPill, type VerificationState } from "@/components/mvp/common/VerificationPill";
 import {
@@ -26,10 +31,18 @@ import {
   type CorroborationSourceItem,
 } from "@/components/mvp/analysis/CorroborationPanel";
 import { useCitationSafe } from "@/contexts/CitationContext";
+import {
+  fetchCompanySynthesis,
+  companySynthesisQueryKey,
+  type CompanySynthPoint,
+  type CompanySynthPerson,
+} from "@/api/companySynthesis";
+import { fetchCompany, companyQueryKey, type CompanyFact } from "@/api/company";
 import type { Claim, ICMemoResult, Sourced, SourcedSentence } from "@shared/simperoTypes";
 
 interface FoundersTabProps {
   memoTyped: Partial<ICMemoResult> | null;
+  dealId: string;
 }
 
 type FounderMember = {
@@ -95,6 +108,161 @@ function ProvenanceAction({
       onClick={citationCtx ? () => citationCtx.openCitation({ fieldLabel, citation: sourced.citation ?? null }) : undefined}
     />
   );
+}
+
+// ---------------------------------------------------------------------------
+// Leadership — the Founders tab's real, data-backed surface (the IC-memo
+// managementTeam path is unbuilt today). Prefers the backend's dedicated
+// "leadership" synthesis section (GET /deals/{id}/company-synthesis, grounded
+// name/title/background people, FE-5); when leadership itself is empty it
+// falls back to the flat Related Parties data (AI synthesis prose, or the
+// claims-driven fact list), which isn't split into name/title/background.
+// LeadershipSection (below) owns the honest loading/error/empty states.
+// ---------------------------------------------------------------------------
+
+function LeadershipPersonCard({ person }: { person: CompanySynthPerson }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-[color:var(--rev-border)] bg-[color:var(--rev-surface)] shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+      <div className="flex items-center gap-4 border-b border-[color:var(--rev-border-subtle)] p-5">
+        <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-[color:var(--rev-tint-primary)]">
+          <UserRound className="h-6 w-6 text-[color:var(--rev-primary)]" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-serif text-lg text-[color:var(--rev-text-1)]">{person.name}</p>
+          {person.title && <p className="text-[13px] text-[color:var(--rev-text-7)]">{person.title}</p>}
+        </div>
+      </div>
+      {person.background && (
+        <div className="p-5">
+          <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{person.background}</p>
+        </div>
+      )}
+      {person.citation && (
+        <div className="flex justify-end border-t border-[color:var(--rev-border-subtle)] px-5 py-2.5">
+          <span className="font-mono text-[12px] text-[color:var(--rev-text-5)]">{person.citation}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RelatedPartiesFallback({ points, facts }: { points: CompanySynthPoint[]; facts: CompanyFact[] }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-[color:var(--rev-border)] bg-[color:var(--rev-surface)] p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+      <div className="mb-3.5 flex items-center gap-2.5">
+        <Handshake className="h-4 w-4 text-[color:var(--rev-primary)]" />
+        <span className="font-mono text-[10.5px] uppercase tracking-[0.6px] text-[color:var(--rev-text-6)]">
+          Related Parties
+        </span>
+      </div>
+      <p className="mb-3 text-[11px] italic text-[color:var(--rev-text-6)]">
+        From the Company tab&apos;s Related Parties — no per-person title/background split is available yet.
+      </p>
+      <div className="space-y-3">
+        {points.length > 0
+          ? points.map((p, i) => (
+              <div key={i} className="rounded-lg border border-[color:var(--rev-border-subtle)] p-4">
+                <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{p.text}</p>
+                {p.citation ? (
+                  <p className="mt-2 text-right font-mono text-[12px] text-[color:var(--rev-text-5)]">{p.citation}</p>
+                ) : null}
+              </div>
+            ))
+          : facts.map((f, i) => (
+              <div key={i} className="rounded-lg border border-[color:var(--rev-border-subtle)] p-4">
+                <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{f.value}</p>
+                <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-[color:var(--rev-border-subtle)] pt-2.5">
+                  <span className="truncate text-[11.5px] text-[color:var(--rev-text-5)]">{f.entity || "—"}</span>
+                  <TrustStatusPill status={f.status} />
+                </div>
+              </div>
+            ))}
+      </div>
+    </div>
+  );
+}
+
+function LeadershipLoading() {
+  return (
+    <div role="status" className="flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]">
+      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      Loading leadership…
+    </div>
+  );
+}
+
+function LeadershipEmpty() {
+  return (
+    <SectionCard
+      eyebrow="Founders & Leadership"
+      icon={<UserRound className="h-4 w-4 text-[color:var(--rev-primary)]" />}
+    >
+      <UnbackedSection
+        icon={UserRound}
+        title="Founder & leadership profiles not yet extracted"
+        description="Names, titles, and background for founders and leadership appear here once the deal's documents have been analyzed. A deal analyzed before leadership extraction was added shows them after a re-analysis."
+      />
+    </SectionCard>
+  );
+}
+
+function LeadershipSection({ dealId }: { dealId: string }) {
+  const synthesisQuery = useQuery({
+    queryKey: companySynthesisQueryKey(dealId),
+    queryFn: () => fetchCompanySynthesis(dealId),
+  });
+  const people = synthesisQuery.data?.sections.find((s) => s.key === "leadership")?.people ?? [];
+  // The Company-tab Related Parties fallback is only fetched once synthesis has
+  // settled AND leadership came back empty (PR #42 review) -- the common,
+  // successful case (real leadership data) never issues this request, and a
+  // synthesis error skips it too (the error alert below is shown instead).
+  const companyQuery = useQuery({
+    queryKey: companyQueryKey(dealId),
+    queryFn: () => fetchCompany(dealId),
+    enabled: !synthesisQuery.isPending && !synthesisQuery.isError && people.length === 0,
+  });
+
+  // Guard the "not extracted" negative against a load that hasn't produced
+  // people yet: the initial load (isPending) and the post-analysis refetch
+  // DealDetail fires on completion (isFetching with nothing cached). Mirrors
+  // MarketTab's decision tree so a user parked on the tab never sees a false
+  // empty flash before the people pop in.
+  if (synthesisQuery.isPending || (synthesisQuery.isFetching && people.length === 0)) {
+    return <LeadershipLoading />;
+  }
+  // A fetch that NEVER loaded (data === undefined) and errored. A refetch that
+  // fails while a prior snapshot is cached falls through to render that snapshot.
+  if (synthesisQuery.isError && synthesisQuery.data === undefined) {
+    return (
+      <QueryErrorAlert
+        message="Couldn't load leadership for this deal."
+        error={synthesisQuery.error as Error | null}
+      />
+    );
+  }
+  if (people.length > 0) {
+    return (
+      <div className="space-y-5">
+        {people.map((p, i) => (
+          <LeadershipPersonCard key={`${p.name}-${i}`} person={p} />
+        ))}
+      </div>
+    );
+  }
+
+  // No leadership people -> the flatter Related Parties fallback. Its prose
+  // points come from the already-settled synthesis; the claims-driven facts
+  // need the still-in-flight companyQuery, so keep the loader until that
+  // settles rather than flashing the empty state first.
+  const points = synthesisQuery.data?.sections.find((s) => s.key === "related_parties")?.points ?? [];
+  const facts: CompanyFact[] = companyQuery.data?.relatedParties ?? [];
+  if (points.length === 0 && companyQuery.isPending) {
+    return <LeadershipLoading />;
+  }
+  if (points.length > 0 || facts.length > 0) {
+    return <RelatedPartiesFallback points={points} facts={facts} />;
+  }
+  return <LeadershipEmpty />;
 }
 
 function UnbackedSection({
@@ -316,7 +484,7 @@ function collectFoundersCorroboration(memoTyped: Partial<ICMemoResult> | null): 
   };
 }
 
-export function FoundersTab({ memoTyped }: FoundersTabProps) {
+export function FoundersTab({ memoTyped, dealId }: FoundersTabProps) {
   const team = memoTyped?.deliverable?.managementTeam;
   const board = memoTyped?.deliverable?.board;
   const [compareOpen, setCompareOpen] = useState(false);
@@ -331,15 +499,14 @@ export function FoundersTab({ memoTyped }: FoundersTabProps) {
   const hasFounders = !!founders?.length;
 
   if (!hasFounders) {
+    // The IC-memo managementTeam path (below) is unbuilt today, so this
+    // LeadershipSection is what a deal actually shows: the grounded leadership
+    // synthesis, with its own honest loading/error/empty states. The old
+    // always-on "not yet extracted" card is gone -- it rendered ABOVE populated
+    // leadership people, contradicting the very data below it.
     return (
       <div className="space-y-5">
-        <SectionCard eyebrow="Founders & Leadership" icon={<UserRound className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection
-            icon={UserRound}
-            title="Founder & leadership profiles not yet extracted"
-            description="Names, titles, background, and key achievements for founders/leadership will appear here once the source document is processed."
-          />
-        </SectionCard>
+        <LeadershipSection dealId={dealId} />
         <CorroborationPanel
           items={corroboration.items}
           verifiedCount={corroboration.verifiedCount}

@@ -244,4 +244,36 @@ describe("FinancialsTab", () => {
 
     expect(await screen.findByText("No financial figures extracted")).toBeInTheDocument();
   });
+
+  // -------------------------------------------------------------------------
+  // Corroboration panel — now a read-out of the live financials view's own
+  // trust statuses, not the dead memo path.
+  // -------------------------------------------------------------------------
+
+  it("summarises the live financials view's real trust statuses in the Corroboration panel, keeping conflicted distinct from unverified", async () => {
+    const user = userEvent.setup();
+    mockFetchFinancials.mockResolvedValue({
+      ...EMPTY_FINANCIALS,
+      incomeStatement: [
+        { label: "Revenue", value: "$497.2M", period: "FY23", citation: "cim.pdf · p.12", status: "verified", entity: null, sourceUrl: null },
+        { label: "Net Income", value: "$40.0M", period: "FY23", citation: "cim.pdf · p.12", status: "conflicted", entity: null, sourceUrl: null },
+      ],
+      profitability: [
+        { label: "Gross Margin", value: "42%", period: "FY23", citation: "EDGAR 10-K", status: "cited", entity: null, sourceUrl: "https://www.sec.gov/x" },
+      ],
+    });
+    renderFinancialsTab({ memoTyped: null, dealMetrics: undefined, dealMetricDiscrepancies: [] });
+
+    // Header shows the real ladder. "1 Conflicted" is NOT collapsed to
+    // "Unverified"; the coarse triple is gone.
+    expect(await screen.findByText("1 Verified")).toBeInTheDocument();
+    expect(screen.getByText("1 Conflicted")).toBeInTheDocument();
+    expect(screen.getByText("1 Cited")).toBeInTheDocument();
+    expect(screen.queryByText(/Unverified/)).not.toBeInTheDocument();
+    // Two distinct sources: the document (backing 2 figures) and the SEC record.
+    expect(screen.getByText(/^Corroboration \(2 sources\)$/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Corroboration/ }));
+    expect(screen.getByText("cited 2x")).toBeInTheDocument();
+  });
 });

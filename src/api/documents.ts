@@ -28,6 +28,8 @@ export type CompletedUpload = {
   // SIM-350: backend will add an "ocr_needed" value soon — kept as `string`
   // (not a closed union) so a new status never fails to typecheck here.
   status: string;
+  /** Synchronous PDF page count (FE-8) -- null when the file isn't a PDF or the count couldn't be determined. */
+  pageCount: number | null;
 };
 
 /**
@@ -36,12 +38,20 @@ export type CompletedUpload = {
  * id/status (app/api/uploads.py's structured 409 detail) so callers can
  * treat "already uploaded" as equivalent to a fresh successful upload
  * instead of a dead end.
+ *
+ * `pageCount`: the 409 detail body doesn't carry this today (PR #42 review
+ * flagged that a dedupe hit on a file whose ORIGINAL upload was over the
+ * page cap silently loses that rejection, since page_count is never
+ * persisted server-side to recover it) -- kept `| undefined` and read
+ * defensively so this starts enforcing the cap the moment the backend adds
+ * it to the detail body, with no further frontend change needed.
  */
 export class DuplicateUploadError extends Error {
   constructor(
     message: string,
     public readonly dataSourceId: string,
-    public readonly status: string
+    public readonly status: string,
+    public readonly pageCount?: number | null
   ) {
     super(message);
   }
@@ -60,7 +70,8 @@ export async function requestPresignedUpload(body: PresignedUploadRequest): Prom
     throw new DuplicateUploadError(
       detail?.message ?? "A matching file has already been uploaded for this deal",
       detail?.dataSourceId ?? "",
-      detail?.status ?? "pending"
+      detail?.status ?? "pending",
+      detail?.pageCount ?? null
     );
   }
   if (!res.ok) {

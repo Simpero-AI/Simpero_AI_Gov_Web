@@ -19,6 +19,14 @@ concurrency:
 
 env:
   TF_VERSION: 1.14.0 # matches the locally-installed CLI used to author infra/
+  # deploy/smoke need APP_ID/DEFAULT_INGRESS/LIVE_URL but must NOT reference
+  # a protected Environment (that's what collapses the approval gate down to
+  # the single one on terraform-apply, below) -- so these live as plain
+  # repo-level vars (STAGING_*/PRODUCTION_*), selected here once by
+  # `inputs.environment` rather than duplicated in every job/step.
+  DEPLOY_APP_ID: ${{ inputs.environment == 'production' && vars.PRODUCTION_APP_ID || vars.STAGING_APP_ID }}
+  DEPLOY_DEFAULT_INGRESS: ${{ inputs.environment == 'production' && vars.PRODUCTION_DEFAULT_INGRESS || vars.STAGING_DEFAULT_INGRESS }}
+  DEPLOY_LIVE_URL: ${{ inputs.environment == 'production' && vars.PRODUCTION_LIVE_URL || vars.STAGING_LIVE_URL }}
 
 jobs:
   # Deliberately first in the graph, no `needs` (Vansh, 2026-07-30) — CI runs
@@ -30,9 +38,11 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   # No `ref` input by design (D5) — the branch is whichever one you dispatch
-  # from (github.ref_name). This job makes the illegal branch<->environment
-  # pairing fail before any Terraform/DO step, even though it now runs after
-  # `ci` rather than before it.
+  # from (github.ref_name). production still only deploys from `main`;
+  # staging deploys from any branch (Vansh, 2026-09-18) -- GitHub's own
+  # deployment-branch-policy on the `staging`/`staging-plan` Environments was
+  # widened to `*` to match, since that policy is enforced independently of
+  # this check.
   guard:
     needs: ci
     runs-on: ubuntu-latest
@@ -41,9 +51,8 @@ jobs:
     steps:
       - name: Verify branch matches environment
         run: |
-          expected=$([ "${{ inputs.environment }}" = production ] && echo main || echo staging)
-          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
-            echo "::error::environment=${{ inputs.environment }} deploys only from '$expected' (got '$GITHUB_REF_NAME')"
+          if [ "${{ inputs.environment }}" = production ] && [ "$GITHUB_REF_NAME" != main ]; then
+            echo "::error::environment=production deploys only from 'main' (got '$GITHUB_REF_NAME')"
             exit 1
           fi
 
@@ -105,8 +114,13 @@ jobs:
     needs: terraform-plan
     if: ${{ inputs.run_terraform }}
     runs-on: ubuntu-latest
-    # Gated Environment — this is what makes the required-reviewer and
-    # deployment-branch-policy rules fire (D5/V7).
+    # The ONLY job that references the protected Environment (Vansh,
+    # 2026-09-18 — previously deploy and smoke each carried their own
+    # separate reference too, which meant 3 required-reviewer prompts on a
+    # full run_terraform:true deploy, 2 on a routine run_terraform:false one;
+    # deploy/smoke now read their DO vars from repo-level DEPLOY_* instead).
+    # This is what makes the required-reviewer and deployment-branch-policy
+    # rules fire (D5/V7) — single gate, right before the infra change itself.
     environment:
       name: ${{ inputs.environment }}
     defaults:
@@ -135,11 +149,11 @@ jobs:
         run: terraform apply tfplan
 
       # On a first-ever apply for this environment, the `deploy` job below
-      # WILL fail (vars.APP_ID is still empty — doctl apps create-deployment ""
-      # -> DO 405, confirmed 2026-07-30). Not a bug: copy the values below into
-      # this environment's APP_ID/LIVE_URL/DEFAULT_INGRESS variables, then
-      # re-run failed jobs (retries only deploy/smoke, not Terraform). See
-      # plan doc R8.
+      # WILL fail (env.DEPLOY_APP_ID is still empty — doctl apps
+      # create-deployment "" -> DO 405, confirmed 2026-07-30). Not a bug:
+      # copy the values below into the repo-level APP_ID/LIVE_URL/
+      # DEFAULT_INGRESS variables, then re-run failed jobs (retries only
+      # deploy/smoke, not Terraform). See plan doc R8.
       - name: Summarize App outputs
         run: |
           {
@@ -148,7 +162,7 @@ jobs:
             echo "- live_url: \`$(terraform output -raw live_url)\`"
             echo "- default_ingress: \`$(terraform output -raw default_ingress)\`"
             echo ""
-            echo "If this is the first apply for this environment, or the App was recreated, copy these into the \`APP_ID\` / \`LIVE_URL\` / \`DEFAULT_INGRESS\` Environment **variables** (not secrets — not sensitive) for \`${{ inputs.environment }}\` before the next deploy. \`smoke\` checks \`DEFAULT_INGRESS\` (App Platform's own \`*.ondigitalocean.app\` hostname), not \`LIVE_URL\` — \`LIVE_URL\` becomes the custom domain once DNS/cert are live (Group D), which isn't true immediately after a first apply. On a first apply, the \`deploy\` job in **this same run** will already have failed with an empty app ID — set the variables now, then use **Re-run jobs → Re-run failed jobs**."
+            echo "If this is the first apply for this environment, or the App was recreated, copy these into the repo-level \`${{ inputs.environment == 'production' && 'PRODUCTION' || 'STAGING' }}_APP_ID\` / \`..._LIVE_URL\` / \`..._DEFAULT_INGRESS\` **variables** (not secrets — not sensitive; read by \`deploy\`/\`smoke\` via this workflow's top-level \`env:\`) before the next deploy. \`smoke\` checks \`DEFAULT_INGRESS\` (App Platform's own \`*.ondigitalocean.app\` hostname), not \`LIVE_URL\` — \`LIVE_URL\` becomes the custom domain once DNS/cert are live (Group D), which isn't true immediately after a first apply. On a first apply, the \`deploy\` job in **this same run** will already have failed with an empty app ID — set the variables now, then use **Re-run jobs → Re-run failed jobs**."
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
@@ -160,11 +174,11 @@ jobs:
     # run_terraform: false deploy, since a skipped job's result is
     # 'skipped', not 'success'.
     if: ${{ always() && needs.ci.result == 'success' && (inputs.run_terraform == false || needs.terraform-apply.result == 'success') }}
-    # Gated Environment, same as terraform-apply — reads vars.APP_ID (an App
-    # Platform app ID isn't a credential, hence a variable not a secret) and
-    # secrets.DO_TOKEN. No Terraform or its credentials needed here.
-    environment:
-      name: ${{ inputs.environment }}
+    # No `environment:` here on purpose (Vansh, 2026-09-18) — the single
+    # required-reviewer gate lives on terraform-apply only. APP_ID (an App
+    # Platform app ID isn't a credential, hence a variable not a secret)
+    # comes from the repo-level env.DEPLOY_APP_ID above; DO_TOKEN is already
+    # a repo-level secret, needing no Environment reference either.
     outputs:
       deployment_id: ${{ steps.create.outputs.deployment_id }}
     steps:
@@ -175,7 +189,7 @@ jobs:
       - name: Create deployment
         id: create
         run: |
-          id=$(doctl apps create-deployment "${{ vars.APP_ID }}" --wait --format ID --no-header)
+          id=$(doctl apps create-deployment "${{ env.DEPLOY_APP_ID }}" --wait --format ID --no-header)
           echo "deployment_id=$id" >> "$GITHUB_OUTPUT"
 
   smoke:
@@ -189,19 +203,16 @@ jobs:
     # and deploy both actually succeeded. Confirmed 2026-07-30 — smoke was
     # silently skipped on a real run_terraform: false deploy before this fix.
     if: ${{ always() && needs.guard.result == 'success' && needs.deploy.result == 'success' }}
-    # Needed to read vars.DEFAULT_INGRESS / vars.APP_ID — GitHub Environment
-    # variables are only readable by jobs that declare that `environment:`.
-    # Expected to not re-trigger the reviewer gate a second time in the same
-    # run (protection rules fire on first entry into the environment, not
-    # per job) — not independently verified against live GitHub behavior.
+    # No `environment:` here either (Vansh, 2026-09-18), same reasoning as
+    # `deploy` above — DEFAULT_INGRESS/APP_ID/LIVE_URL come from the
+    # repo-level env.DEPLOY_* vars, not an Environment reference, so this job
+    # no longer re-triggers its own required-reviewer prompt.
     #
     # Checks DEFAULT_INGRESS (App Platform's own *.ondigitalocean.app
     # hostname), not LIVE_URL — LIVE_URL becomes the custom domain once
     # DNS/cert are live (Group D), which isn't guaranteed right after an
     # apply. Confirmed 2026-07-30: checking LIVE_URL before DNS exists just
     # fails on an unresolvable/uncertified custom domain, not a real signal.
-    environment:
-      name: ${{ inputs.environment }}
     steps:
       - uses: digitalocean/action-doctl@v2
         with:
@@ -209,21 +220,21 @@ jobs:
 
       - name: GET / is 200
         run: |
-          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ vars.DEFAULT_INGRESS }}/")
+          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ env.DEPLOY_DEFAULT_INGRESS }}/")
           [ "$status" = "200" ] || { echo "::error::GET / returned $status"; exit 1; }
 
       - name: Deep link falls back to the SPA shell (proves catchall_document)
         run: |
-          status=$(curl -s -o /tmp/deep.html -w '%{http_code}' "${{ vars.DEFAULT_INGRESS }}/this/route/does/not/exist")
+          status=$(curl -s -o /tmp/deep.html -w '%{http_code}' "${{ env.DEPLOY_DEFAULT_INGRESS }}/this/route/does/not/exist")
           [ "$status" = "200" ] || { echo "::error::deep route returned $status instead of 200"; exit 1; }
           grep -q '<div id="root"' /tmp/deep.html || { echo "::error::deep route did not return the SPA shell"; exit 1; }
 
       - name: A hashed asset resolves
         run: |
-          curl -s "${{ vars.DEFAULT_INGRESS }}/" -o /tmp/index.html
+          curl -s "${{ env.DEPLOY_DEFAULT_INGRESS }}/" -o /tmp/index.html
           asset=$(grep -oE '/assets/[^"]+\.(js|css)' /tmp/index.html | head -n1)
           [ -n "$asset" ] || { echo "::error::no /assets/* reference found in index.html"; exit 1; }
-          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ vars.DEFAULT_INGRESS }}${asset}")
+          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ env.DEPLOY_DEFAULT_INGRESS }}${asset}")
           [ "$status" = "200" ] || { echo "::error::asset $asset returned $status"; exit 1; }
 
       # Best-effort, not a hard gate (continue-on-error): before Group D's DNS
@@ -235,11 +246,11 @@ jobs:
       - name: LIVE_URL (custom domain) is 200, if DNS/cert are live yet
         continue-on-error: true
         run: |
-          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ vars.LIVE_URL }}/")
+          status=$(curl -s -o /dev/null -w '%{http_code}' "${{ env.DEPLOY_LIVE_URL }}/")
           if [ "$status" = "200" ]; then
             echo "LIVE_URL is live and serving (200)."
           else
-            echo "::warning::LIVE_URL (${{ vars.LIVE_URL }}) returned $status — expected if DNS/cert for this environment aren't set up yet (Group D). Not blocking."
+            echo "::warning::LIVE_URL (${{ env.DEPLOY_LIVE_URL }}) returned $status — expected if DNS/cert for this environment aren't set up yet (Group D). Not blocking."
           fi
 
       - name: Deployed commit matches the dispatched sha
@@ -251,7 +262,7 @@ jobs:
           # correct against a real deployment response (same run). `.services`
           # fallback kept defensively — not applicable to this static-site
           # app, only relevant if a service component is ever added.
-          raw=$(doctl apps get-deployment "${{ vars.APP_ID }}" "${{ needs.deploy.outputs.deployment_id }}" -o json)
+          raw=$(doctl apps get-deployment "${{ env.DEPLOY_APP_ID }}" "${{ needs.deploy.outputs.deployment_id }}" -o json)
           deployed_sha=$(echo "$raw" | jq -r '.[0].static_sites[0].source_commit_hash // .[0].services[0].source_commit_hash // empty')
           expected_sha="${{ needs.guard.outputs.sha }}"
           if [ "$deployed_sha" != "$expected_sha" ]; then

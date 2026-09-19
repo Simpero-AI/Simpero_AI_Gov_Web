@@ -1,13 +1,14 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, useLocation } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { useEffect } from "react";
-import DealDetail, { nextDealStatusPollMs } from "./DealDetail";
+import DealDetail, { nextDealStatusPollMs, useTabFromUrl } from "./DealDetail";
 import { dealStatusQueryKey, fetchDeal, fetchDealStatus } from "@/api/deals";
 import type { DealWithLatestMemo } from "@/api/deals";
 import { screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { screeningInsightsQueryKey } from "@/api/screeningInsights";
+import { companySynthesisQueryKey } from "@/api/companySynthesis";
 import type { DealStatusPayload } from "@shared/dealsStatus";
 
 // Real fetchDeal/fetchDealStatus hit the network via apiFetch — mock the
@@ -161,6 +162,42 @@ describe("nextDealStatusPollMs — keeps polling through the screening stage", (
   });
 });
 
+describe("useTabFromUrl — invalid ?tab= (FE-15)", () => {
+  function renderTabHook(initialPath: string) {
+    return renderHook(() => useTabFromUrl(), {
+      wrapper: ({ children }) => (
+        <MemoryRouter initialEntries={[initialPath]}>
+          <Routes>
+            <Route path="*" element={<>{children}</>} />
+          </Routes>
+        </MemoryRouter>
+      ),
+    });
+  }
+
+  it("returns a redirect target for an unrecognized ?tab= instead of silently rendering it with the bad value left in the URL", () => {
+    // AnalysisTabs renders <Navigate to={redirectTo} replace /> for this --
+    // a single synchronous redirect (PR #42 review), not a useEffect calling
+    // navigate() (which this file's global useNavigate mock, navigateSpy,
+    // would swallow as a no-op anyway).
+    const { result } = renderTabHook("/deals/deal-1/analysis?tab=captable");
+    expect(result.current[0]).toBe("summary");
+    expect(result.current[2]).toBe("/deals/deal-1/analysis?tab=summary");
+  });
+
+  it("leaves a valid ?tab= alone, with no redirect", () => {
+    const { result } = renderTabHook("/deals/deal-1/analysis?tab=cap-table");
+    expect(result.current[0]).toBe("cap-table");
+    expect(result.current[2]).toBeNull();
+  });
+
+  it("defaults a missing ?tab= to summary without a redirect (no bad value to correct)", () => {
+    const { result } = renderTabHook("/deals/deal-1/analysis");
+    expect(result.current[0]).toBe("summary");
+    expect(result.current[2]).toBeNull();
+  });
+});
+
 describe("DealDetail — completion routes to Initial Screening", () => {
   it("navigates straight to /deals/:dealId/screening the instant the job completes during the visit — no interstitial, no button", async () => {
     vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
@@ -258,6 +295,13 @@ describe("DealDetail — completion routes to Initial Screening", () => {
     );
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: screeningInsightsQueryKey("deal-1"),
+    });
+    // The grounded synthesis snapshot is (re)written by the same pipeline and now
+    // backs the Market tab's Market Risks / Growth Strategy (and the Company/Summary
+    // tabs); completion must invalidate it too so a parked tab picks up the fresh
+    // AI summary rather than the pre-analysis snapshot.
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: companySynthesisQueryKey("deal-1"),
     });
   });
 

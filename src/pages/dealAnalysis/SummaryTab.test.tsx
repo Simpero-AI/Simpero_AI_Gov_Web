@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SummaryTab } from "./SummaryTab";
 import { fetchCompanySynthesis } from "@/api/companySynthesis";
+import { fetchFinancials, type FinancialsView } from "@/api/financials";
 import { buildE2eDeliverableMemo } from "@shared/e2eUxMemoFixture";
 import type { GovernanceFlag, ICMemoResult } from "@shared/simperoTypes";
 
@@ -14,11 +15,29 @@ vi.mock("@/api/companySynthesis", async importOriginal => {
   return { ...actual, fetchCompanySynthesis: vi.fn() };
 });
 
+// The Corroboration panel now reads the tab's OWN live claims view — mock it so
+// the tab renders against controlled financial facts instead of the dead memo.
+vi.mock("@/api/financials", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/financials")>();
+  return { ...actual, fetchFinancials: vi.fn() };
+});
+
 const mockFetchCompanySynthesis = vi.mocked(fetchCompanySynthesis);
+const mockFetchFinancials = vi.mocked(fetchFinancials);
+
+const EMPTY_FINANCIALS: FinancialsView = {
+  incomeStatement: [],
+  profitability: [],
+  balanceSheet: [],
+  cashFlow: [],
+  operating: [],
+};
 
 beforeEach(() => {
   // Default: no synthesis -> the Executive Summary falls back to memo / placeholder.
   mockFetchCompanySynthesis.mockResolvedValue({ sections: [] });
+  // Default: no financial figures -> the Corroboration panel self-empties.
+  mockFetchFinancials.mockResolvedValue(EMPTY_FINANCIALS);
 });
 
 afterEach(cleanup);
@@ -49,6 +68,7 @@ describe("SummaryTab", () => {
           points: [
             { text: "A consumption-priced cloud data platform serving enterprises.", citation: "cim.pdf · p.5" },
           ],
+          people: [],
         },
       ],
     });
@@ -92,16 +112,47 @@ describe("SummaryTab", () => {
     expect(screen.getByText(/isn't persisted yet/i)).toBeInTheDocument();
   });
 
-  it("derives real Corroboration counts from the memo's own Sourced citations rather than fabricating data", async () => {
+  it("derives real Corroboration counts from the tab's live claims view + grounded exec-summary points, not the dead memo", async () => {
     const user = userEvent.setup();
-    const memo = buildE2eDeliverableMemo();
-    renderSummary(memo);
+    // Live claims view: one verified figure + one cited figure with an external
+    // SEC record. Labels deliberately aren't Revenue/Gross Margin so the Key
+    // Metrics cards don't also render these as pills (keeps the assert focused).
+    mockFetchFinancials.mockResolvedValue({
+      ...EMPTY_FINANCIALS,
+      incomeStatement: [
+        { label: "EBITDA", value: "$12.0M", period: "FY23", citation: "cim.pdf · p.12", status: "verified", entity: null, sourceUrl: null },
+      ],
+      profitability: [
+        { label: "Operating Margin", value: "18%", period: "FY23", citation: "EDGAR 10-K", status: "cited", entity: null, sourceUrl: "https://www.sec.gov/filing/1" },
+      ],
+    });
+    // One grounded, cited executive-summary point -> counts as `cited`.
+    mockFetchCompanySynthesis.mockResolvedValue({
+      sections: [
+        {
+          key: "executive_summary",
+          title: "Executive Summary",
+          points: [{ text: "A grounded, cited summary point.", citation: "cim.pdf · p.5" }],
+          people: [],
+        },
+      ],
+    });
 
-    expect(screen.getByText(/^Corroboration \(1 source\)$/)).toBeInTheDocument();
-    expect(screen.getByText(/Partial/)).toBeInTheDocument();
-    expect(screen.queryByText(/Verified/)).not.toBeInTheDocument();
+    renderSummary(null);
 
-    await user.click(screen.getByRole("button", { expanded: false }));
-    expect(screen.getByText(memo.fileName)).toBeInTheDocument();
+    // Header shows the real status ladder: 1 verified figure, 2 cited (the cited
+    // figure + the cited synthesis point). No memo-derived source; no force-mapped
+    // "Unverified".
+    expect(await screen.findByText("1 Verified")).toBeInTheDocument();
+    expect(screen.getByText("2 Cited")).toBeInTheDocument();
+    expect(screen.queryByText(/Unverified/)).not.toBeInTheDocument();
+    expect(screen.getByText(/^Corroboration \(3 sources\)$/)).toBeInTheDocument();
+
+    // Expanding reveals the real sources — including the grounded synthesis and
+    // the external SEC record — instead of a single "Source document" row.
+    await user.click(screen.getByRole("button", { name: /Corroboration/ }));
+    expect(screen.getByText("AI executive summary (grounded)")).toBeInTheDocument();
+    expect(screen.getByText("www.sec.gov")).toBeInTheDocument();
+    expect(screen.getByText("cim.pdf · p.12")).toBeInTheDocument();
   });
 });

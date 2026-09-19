@@ -5,9 +5,11 @@ import { ScreeningTab } from "./ScreeningTab";
 import { fetchScreening, screeningQueryKey } from "@/api/screening";
 import { fetchScreeningMaterials, screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { fetchScreeningInsights } from "@/api/screeningInsights";
+import { fetchDealDocuments } from "@/api/documents";
 
-// ScreeningTab drives three INDEPENDENT queries (verdict, extracted materials,
-// LLM insights) — mock each so the tab renders against controlled data.
+// ScreeningTab drives four INDEPENDENT queries (verdict, extracted materials,
+// LLM insights, verified documents) — mock each so the tab renders against
+// controlled data.
 vi.mock("@/api/screening", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/screening")>();
   return { ...actual, fetchScreening: vi.fn() };
@@ -20,10 +22,15 @@ vi.mock("@/api/screeningInsights", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/screeningInsights")>();
   return { ...actual, fetchScreeningInsights: vi.fn() };
 });
+vi.mock("@/api/documents", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/documents")>();
+  return { ...actual, fetchDealDocuments: vi.fn() };
+});
 
 const mockScreening = vi.mocked(fetchScreening);
 const mockMaterials = vi.mocked(fetchScreeningMaterials);
 const mockInsights = vi.mocked(fetchScreeningInsights);
+const mockDocuments = vi.mocked(fetchDealDocuments);
 
 afterEach(() => {
   cleanup();
@@ -31,10 +38,11 @@ afterEach(() => {
 });
 
 function renderScreeningTab() {
+  mockDocuments.mockResolvedValue([]);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ScreeningTab dealId="deal-1" fileName="cim.pdf" />
+      <ScreeningTab dealId="deal-1" />
     </QueryClientProvider>
   );
 }
@@ -82,9 +90,10 @@ describe("ScreeningTab", () => {
       extractedFields: [{ label: "ARR", value: "$4.2M", citation: null }],
     });
     mockInsights.mockResolvedValue({ highlights: [], riskFlags: [] });
+    mockDocuments.mockResolvedValue([]);
     render(
       <QueryClientProvider client={queryClient}>
-        <ScreeningTab dealId="deal-1" fileName="cim.pdf" />
+        <ScreeningTab dealId="deal-1" />
       </QueryClientProvider>
     );
     expect(await screen.findByText("$4.2M")).toBeInTheDocument();
@@ -145,9 +154,10 @@ describe("ScreeningTab", () => {
     mockScreening.mockResolvedValueOnce(null); // first load: 404 -> null cached
     mockMaterials.mockResolvedValue({ extractedFields: [] });
     mockInsights.mockResolvedValue({ highlights: [], riskFlags: [] });
+    mockDocuments.mockResolvedValue([]);
     render(
       <QueryClientProvider client={queryClient}>
-        <ScreeningTab dealId="deal-1" fileName="cim.pdf" />
+        <ScreeningTab dealId="deal-1" />
       </QueryClientProvider>
     );
     // Settled with a null cache: no spinner.
@@ -198,5 +208,25 @@ describe("ScreeningTab", () => {
 
     expect(await screen.findByText("Couldn't load screening for this deal.")).toBeInTheDocument();
     expect(screen.queryByText("Mandate fit coming soon")).not.toBeInTheDocument();
+  });
+
+  it("renders a verified document in Materials instead of the empty state (FE-3)", async () => {
+    mockScreening.mockResolvedValue(null);
+    mockMaterials.mockResolvedValue({ extractedFields: [] });
+    mockInsights.mockResolvedValue({ highlights: [], riskFlags: [] });
+    mockDocuments.mockResolvedValue([
+      { id: "doc-1", filename: "nvda-20260125.pdf", status: "verified", createdAt: "2026-01-25T00:00:00Z" },
+      { id: "doc-2", filename: "still-processing.pdf", status: "pending", createdAt: "2026-01-25T00:00:00Z" },
+    ]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ScreeningTab dealId="deal-1" />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText("nvda-20260125.pdf")).toBeInTheDocument();
+    expect(screen.queryByText("still-processing.pdf")).not.toBeInTheDocument();
+    expect(screen.queryByText("No materials on file for this deal yet.")).not.toBeInTheDocument();
   });
 });

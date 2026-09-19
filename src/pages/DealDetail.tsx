@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CitationProvider, useCitationSafe } from "@/contexts/CitationContext";
 import { CitationSidebar } from "@/components/mvp/primitives/CitationSidebar";
-import { Link, useLocation, useNavigate } from "react-router";
+import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import {
   ArrowRight,
   Award,
@@ -62,6 +62,7 @@ import { screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { screeningInsightsQueryKey } from "@/api/screeningInsights";
 import { marketQueryKey } from "@/api/market";
 import { companyQueryKey } from "@/api/company";
+import { companySynthesisQueryKey } from "@/api/companySynthesis";
 import { financialsQueryKey } from "@/api/financials";
 import { corroborationQueryKey } from "@/api/corroboration";
 import { ScreeningTab } from "./dealDetail/ScreeningTab";
@@ -292,22 +293,34 @@ function DealMetricsStrip({
 // AnalysisTabs — Figma-matched 9-tab view
 // ---------------------------------------------------------------------------
 
-function useTabFromUrl(): [TabKey, (t: TabKey) => void] {
+/**
+ * `redirectTo` is non-null exactly when the current `?tab=` is present but
+ * unrecognized (e.g. "captable" instead of "cap-table") -- the caller
+ * renders `<Navigate to={redirectTo} replace />` for it, a single
+ * synchronous redirect (PR #42 review: this previously ran `tab`'s
+ * "summary" fallback synchronously for render AND a `useEffect` to correct
+ * the URL, two mechanisms for one job where MandateScorecard.tsx's own
+ * `?section=` handling uses just the one `<Navigate replace />`).
+ */
+export function useTabFromUrl(): [TabKey, (t: TabKey) => void, string | null] {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
-  const tab = (() => {
-    const params = new URLSearchParams(search);
-    const t = params.get("tab");
-    if (t && VALID_TABS.has(t as TabKey)) return t as TabKey;
-    return "summary" as TabKey;
-  })();
+  const rawTab = new URLSearchParams(search).get("tab");
+  const isValid = rawTab != null && VALID_TABS.has(rawTab as TabKey);
+  const tab = isValid ? (rawTab as TabKey) : ("summary" as TabKey);
   const setTab = (t: TabKey) => {
     const params = new URLSearchParams(search);
     params.set("tab", t);
     // Replace search params, preserving the path
     navigate(`${pathname}?${params.toString()}`, { replace: true });
   };
-  return [tab, setTab];
+  let redirectTo: string | null = null;
+  if (rawTab != null && !isValid) {
+    const params = new URLSearchParams(search);
+    params.set("tab", "summary");
+    redirectTo = `${pathname}?${params.toString()}`;
+  }
+  return [tab, setTab, redirectTo];
 }
 
 function AnalysisTabs({
@@ -327,8 +340,10 @@ function AnalysisTabs({
   dealId: string;
   sessionId: string | null;
 }) {
-  const [tab, setTab] = useTabFromUrl();
+  const [tab, setTab, redirectTo] = useTabFromUrl();
   const [logsOpen, setLogsOpen] = useState(false);
+
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
 
   const memoTyped = memoData as Partial<ICMemoResult> | null;
   if (memoTyped && process.env.NODE_ENV === "development") {
@@ -428,7 +443,7 @@ function AnalysisTabs({
           />
         )}{" "}
         {/* FOUNDERS */}
-        {tab === "founders" && <FoundersTab memoTyped={memoTyped} />}
+        {tab === "founders" && <FoundersTab memoTyped={memoTyped} dealId={dealId} />}
         {/* CAP TABLE */}
         {tab === "cap-table" && <CapTableTab memoTyped={memoTyped} />}
         {/* FINDINGS */}
@@ -617,6 +632,11 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
       // Corroboration runs as a chained stage of the same pipeline; invalidate
       // so a user on the Corroboration tab sees the checks once they land.
       void queryClient.invalidateQueries({ queryKey: corroborationQueryKey(dealId) });
+      // The grounded synthesis snapshot is (re)written by the same pipeline and is
+      // read by the Company/Summary tabs and now the Market tab's Market Risks /
+      // Growth Strategy sections; invalidate it so a user parked on any of those
+      // sees the fresh AI summary rather than the pre-analysis (often empty) one.
+      void queryClient.invalidateQueries({ queryKey: companySynthesisQueryKey(dealId) });
       // Go straight to the Initial Screening page the instant analysis completes,
       // rather than an interstitial with a "View Initial Screening" button (which
       // only appeared once the status poll noticed completion, so it lagged).
@@ -712,12 +732,13 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
         </div>
         <div className="mt-6">
           <AnalysisProgressView
-            fileName={latestMemoSession?.fileName ?? "Unknown"}
+            fileName={latestMemoSession?.fileName ?? deal.name}
             steps={status.steps}
             startedAt={status.startedAt}
             endedAt={status.endedAt}
             stepDurations={status.stepDurations}
             jobComments={status.jobComments}
+            failed
           />
         </div>
         <div className="mt-6 text-center">
@@ -787,7 +808,7 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
           onChange={t => navigate(`/deals/${dealId}/${t}`)}
         />
         {tab === "screening" ? (
-          <ScreeningTab dealId={dealId} fileName={latestMemoSession?.fileName ?? null} />
+          <ScreeningTab dealId={dealId} />
         ) : (
           <>
             {showPass3FailedBanner && (

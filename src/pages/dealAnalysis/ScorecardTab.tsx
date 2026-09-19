@@ -1,8 +1,8 @@
 import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, Shield, ShieldCheck, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "@/components/mvp/primitives/sonner";
 import { Button } from "@/components/mvp/primitives/button";
 import { RadialProgress } from "@/components/mvp/primitives/RadialProgress";
 import {
@@ -11,7 +11,7 @@ import {
 } from "@/components/mvp/analysis/CorroborationPanel";
 import { DealScorecardPanel, NotConfiguredScorecard } from "@/components/mvp/mandate/ScoreCardBlock";
 import { ROUTES } from "@/components/mvp/nav/mvpNav";
-import { trpc } from "@/lib/trpc";
+import { INVESTMENT_PROFILE_QUERY_KEY, fetchInvestmentProfile } from "@/api/investmentProfile";
 import type { ComplianceScorecard, ICMemoResult } from "@shared/simperoTypes";
 import type { FrameworkResult } from "@shared/complianceFrameworks";
 
@@ -93,15 +93,18 @@ function collectScorecardCorroboration(
   };
 }
 
-export function ScorecardTab({ memoTyped, sessionId, dealId }: ScorecardTabProps) {
-  const utils = trpc.useUtils();
-  const profileQuery = trpc.investmentProfile.get.useQuery(undefined, { retry: false, refetchOnWindowFocus: false });
-  const rescoreMutation = trpc.memo.rescore.useMutation({
-    // ponytail: trpc.deals.get still expects the frozen legacy numeric dealId
-    // (untouched, Phase 3 territory) — this invalidate is a no-op against the
-    // new UUID deal space until this file migrates off tRPC.
-    onSuccess: () => { void utils.deals.get.invalidate({ dealId: Number(dealId) }); },
-    onError: (err) => toast.error(err.message || "Scoring failed"),
+export function ScorecardTab({ memoTyped, dealId }: ScorecardTabProps) {
+  // Migrated off the retired tRPC investmentProfile.get -- that route no
+  // longer resolves on the backend, so the request landed on an HTML
+  // fallback page that the tRPC client then tried (and failed) to parse as
+  // JSON ("Unexpected token '<'..."). GET /api/investment-profile is the
+  // same firm-level (not deal-scoped) profile MandateScorecard.tsx already
+  // reads this way.
+  const profileQuery = useQuery({
+    queryKey: INVESTMENT_PROFILE_QUERY_KEY,
+    queryFn: fetchInvestmentProfile,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const profile = profileQuery.data;
@@ -166,21 +169,15 @@ export function ScorecardTab({ memoTyped, sessionId, dealId }: ScorecardTabProps
 
   return (
     <div className="space-y-5">
-      {/* Actions */}
+      {/* Actions — automated scoring has no backend producer (the memo
+          rescore route is retired), so this control stays disabled with an
+          honest note rather than wired to an endpoint that only errors. */}
       <div className="flex items-center gap-3">
-        <Button
-          onClick={() => sessionId && rescoreMutation.mutate({ sessionId })}
-          disabled={!sessionId || rescoreMutation.isPending}
-          size="sm"
-          variant={hasScoringResult ? "outline" : "default"}
-        >
-          {rescoreMutation.isPending
-            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Scoring…</>
-            : <><Zap className="mr-2 h-4 w-4" />{hasScoringResult ? "Re-score" : hasFailed ? "Retry scoring" : "Score this deal"}</>}
+        <Button disabled size="sm" variant={hasScoringResult ? "outline" : "default"}>
+          <Zap className="mr-2 h-4 w-4" />
+          {hasScoringResult ? "Re-score" : hasFailed ? "Retry scoring" : "Score this deal"}
         </Button>
-        {rescoreMutation.error && (
-          <p className="text-xs text-[color:var(--rev-danger)]">{rescoreMutation.error.message}</p>
-        )}
+        <p className="text-xs text-[color:var(--rev-text-6)]">Automated scoring isn&apos;t wired up yet.</p>
       </div>
 
       {memoTyped?.scoringResult?.criterionIdMismatchWarning && (

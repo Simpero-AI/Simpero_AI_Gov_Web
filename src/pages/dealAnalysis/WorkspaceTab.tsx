@@ -40,12 +40,7 @@ interface WorkspaceTabProps {
  * fabricated local state or a bare "coming soon" (see each pane's own
  * comment).
  */
-// `dealId` isn't consumed by any of the 6 wired panes (all key off
-// `memoTyped`/`sessionId` instead — Checklist/Notes have no backing data
-// source to receive at all), but stays part of the props contract per
-// dealAnalysisUtils.ts's established per-tab convention for when a
-// dealId-scoped fetch (e.g. checklist items) eventually lands.
-export function WorkspaceTab({ memoTyped, sessionId }: WorkspaceTabProps) {
+export function WorkspaceTab({ memoTyped, dealId, sessionId }: WorkspaceTabProps) {
   const [pane, setPane] = useState<WorkspacePaneKey>("overview");
 
   return (
@@ -67,7 +62,7 @@ export function WorkspaceTab({ memoTyped, sessionId }: WorkspaceTabProps) {
         ))}
       </div>
 
-      {pane === "overview" && <OverviewPane memoTyped={memoTyped} />}
+      {pane === "overview" && <OverviewPane memoTyped={memoTyped} dealId={dealId} />}
       {pane === "data-room" && <DataRoomPane memoTyped={memoTyped} />}
       {pane === "checklist" && <ChecklistPane />}
       {pane === "activity" && <ActivityPane sessionId={sessionId} />}

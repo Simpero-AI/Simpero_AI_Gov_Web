@@ -8,12 +8,19 @@ import {
   Loader2,
   Rocket,
   ShieldAlert,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
 import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
 import { fetchMarket, marketQueryKey, type MarketFact } from "@/api/market";
+import {
+  fetchCompanySynthesis,
+  companySynthesisQueryKey,
+  type CompanySynthesis,
+  type CompanySynthPoint,
+} from "@/api/companySynthesis";
 import { TrustStatusPill } from "@/components/mvp/primitives/TrustStatusPill";
 
 interface MarketTabProps {
@@ -67,16 +74,11 @@ function UnbackedSection({
   return <EmptyState icon={icon} title={title} description={description} className="border-none p-0" />;
 }
 
-// Honest copy for a section that has NO producer at all (no claims query, no web
-// pass, no synthesis behind it). It must NOT claim a search happened — the deck
-// and public-source phrasing ("nothing was found in the deal's materials or
-// public sources") is an affirmative false negative on a diligence surface,
-// because nothing ever looked. State plainly that the analysis isn't generated
-// yet; it populates automatically once a producer ships. Shared across the
-// not-yet-built Market cards so the reader sees one consistent state.
-const NOT_PRODUCED_TITLE = "Not generated yet";
-const NOT_PRODUCED_DESCRIPTION =
-  "This analysis isn't produced for this deal yet. It will appear here automatically once its producer ships.";
+// Uniform "no evidence" copy for a genuinely-unbuilt box (no deck claim AND no
+// web source) — shared across every converted section so the reader sees one
+// consistent empty state rather than a per-box "coming soon" placeholder.
+const NO_EVIDENCE_TITLE = "No evidence found";
+const NO_EVIDENCE_DESCRIPTION = "Nothing on this was found in the deal's materials or public sources.";
 
 function Citation({ citation, sourceUrl }: { citation: string | null; sourceUrl: string | null }) {
   // A source URL renders as a link ONLY when it's a non-empty http(s) string --
@@ -168,6 +170,80 @@ function AssertionRow({ fact }: { fact: MarketFact }) {
   );
 }
 
+// A market section backed by the grounded field-synthesis pass (GET
+// /deals/{id}/company-synthesis, keyed market_risks / market_growth_strategy) --
+// the Market Risks and Growth Strategy sections the claims spine has no producer
+// for. Unlike the Company tab's NarrativeSection there is NO claims fallback here:
+// those market-scoped signals exist ONLY as synthesis (the parser emits no
+// market_risk / market_growth_strategy claim), so a section with no grounded points
+// shows the same honest "no evidence" state as the tab's other unbacked boxes --
+// never a fabricated or a company-operational-claim stand-in. Body precedence:
+// while the snapshot is still loading show a loader (not a false "no evidence"
+// flash, mirroring the tab's care with the market-claims query); a first load that
+// failed shows a neutral note; grounded points render as the labelled AI summary
+// (identical styling to the Company tab so the two read the same); otherwise the
+// uniform no-evidence state.
+function MarketNarrativeSection({
+  eyebrow,
+  icon: Icon,
+  points,
+  isLoading,
+  isError,
+}: {
+  eyebrow: string;
+  icon: LucideIcon;
+  points: CompanySynthPoint[] | undefined;
+  isLoading: boolean;
+  isError: boolean;
+}) {
+  let body: ReactNode;
+  if (isLoading) {
+    body = (
+      <div role="status" className="flex items-center gap-2 py-1 text-sm text-[color:var(--rev-text-6)]">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        Loading…
+      </div>
+    );
+  } else if (isError) {
+    body = (
+      <p className="text-[13px] text-[color:var(--rev-text-6)]">Couldn&apos;t load this section right now.</p>
+    );
+  } else if (points && points.length > 0) {
+    body = (
+      <>
+        <p className="mb-3 text-[11px] italic text-[color:var(--rev-text-6)]">
+          AI summary — grounded in this deal&apos;s documents; each point is verified against the
+          cited source.
+        </p>
+        <div className="space-y-3">
+          {points.map((p, i) => (
+            <div key={i} className="rounded-lg border border-[color:var(--rev-border-subtle)] p-4">
+              <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{p.text}</p>
+              {p.citation ? (
+                <div className="mt-2.5 flex items-center justify-end border-t border-[color:var(--rev-border-subtle)] pt-2.5">
+                  <Citation citation={p.citation} sourceUrl={null} />
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  } else {
+    body = <UnbackedSection icon={Icon} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />;
+  }
+  return (
+    <SectionCard eyebrow={eyebrow} icon={<Icon className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
+      {body}
+    </SectionCard>
+  );
+}
+
+/** The grounded points for the synthesis section whose `key` matches, or undefined when absent. */
+function synthPoints(synthesis: CompanySynthesis | null, key: string): CompanySynthPoint[] | undefined {
+  return synthesis?.sections.find(s => s.key === key)?.points;
+}
+
 /**
  * Market tab — claims-driven (GET /deals/{id}/market via build_market_view).
  * Numeric sizing recovered by label, plus the qualitative market-definition and
@@ -176,6 +252,13 @@ function AssertionRow({ fact }: { fact: MarketFact }) {
  * available" when the deal has no backing claims rather than fabricating market
  * intel. (Corroboration + web-search enrichment is a separate track once those
  * engines produce data.)
+ *
+ * Market Risks and Growth Strategy have no claims producer, so they are backed by
+ * the grounded field-synthesis pass instead (GET /deals/{id}/company-synthesis,
+ * keyed market_risks / market_growth_strategy) -- a distinct MARKET lens from the
+ * Company tab's operational risk/plan claims, not a relabel. They render the same
+ * verified-and-cited AI summary the Company tab uses, and fall through to the
+ * honest no-evidence state when synthesis grounded nothing.
  */
 export function MarketTab({ dealId }: MarketTabProps) {
   const marketQuery = useQuery({
@@ -183,6 +266,23 @@ export function MarketTab({ dealId }: MarketTabProps) {
     queryFn: () => fetchMarket(dealId),
   });
   const market = marketQuery.data ?? null;
+
+  // Grounded AI synthesis for Market Risks / Growth Strategy -- shares the query
+  // key and frozen snapshot with the Company/Summary tabs, so it rides their
+  // cache. Its own load/error state is handled per-section (below) and never gates
+  // the tab's other sections. (The reverse is not symmetric: the tab-level
+  // loading/404/error early returns for the market-claims query still decide WHEN
+  // these synthesis sections first render, so a resolved synthesis waits behind a
+  // pending market-claims load -- deliberate, for one consistent tab-level state.)
+  const synthesisQuery = useQuery({
+    queryKey: companySynthesisQueryKey(dealId),
+    queryFn: () => fetchCompanySynthesis(dealId),
+  });
+  const synthesis = synthesisQuery.data ?? null;
+  const synthLoading = synthesisQuery.isPending;
+  // Only a first load that produced nothing (data === undefined) is a hard error;
+  // a failed refetch that still has a cached snapshot keeps showing it.
+  const synthError = synthesisQuery.isError && synthesisQuery.data === undefined;
   const sizing = market?.sizing ?? [];
   const definition = market?.marketDefinition ?? [];
   const competition = market?.competitivePosition ?? [];
@@ -298,37 +398,38 @@ export function MarketTab({ dealId }: MarketTabProps) {
         )}
       </SectionCard>
 
-      {/* Sections the claims pipeline has no producer for yet -- the eyebrow stays
-          so the reader still sees the topic, but the body states plainly that the
-          analysis isn't generated yet, never claiming a search of the materials or
-          public sources happened when nothing ever looked. (Growth Drivers was
-          removed: demand-driver assertions already surface under Market
-          Definition, so a separate hardcoded-empty card only misled. Market Risks
-          and Growth Strategy are intentionally NOT back-filled from the company's
-          lead-scoped risk_or_dependency / plan_or_commitment claims -- those are
-          already shown, market-agnostic, on the Company tab, and relabelling that
-          same content as "market" risk/strategy would mislead. A market-scoped
-          producer is tracked separately.) */}
+      {/* Mockup sections the claims pipeline has no source for -- the eyebrow
+          stays so the reader still sees the topic, but the body is the uniform
+          no-evidence state, never a "coming soon" placeholder. */}
       <SectionCard
-        eyebrow="Market Risks"
-        icon={<ShieldAlert className="h-4 w-4 text-[color:var(--rev-primary)]" />}
+        eyebrow="Growth Drivers"
+        icon={<TrendingUp className="h-4 w-4 text-[color:var(--rev-primary)]" />}
       >
-        <UnbackedSection icon={ShieldAlert} title={NOT_PRODUCED_TITLE} description={NOT_PRODUCED_DESCRIPTION} />
+        <UnbackedSection icon={TrendingUp} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
       </SectionCard>
+
+      <MarketNarrativeSection
+        eyebrow="Market Risks"
+        icon={ShieldAlert}
+        points={synthPoints(synthesis, "market_risks")}
+        isLoading={synthLoading}
+        isError={synthError}
+      />
 
       <SectionCard
         eyebrow="Competitive Positioning Matrix"
         icon={<LayoutGrid className="h-4 w-4 text-[color:var(--rev-primary)]" />}
       >
-        <UnbackedSection icon={LayoutGrid} title={NOT_PRODUCED_TITLE} description={NOT_PRODUCED_DESCRIPTION} />
+        <UnbackedSection icon={LayoutGrid} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
       </SectionCard>
 
-      <SectionCard
+      <MarketNarrativeSection
         eyebrow="Growth Strategy"
-        icon={<Rocket className="h-4 w-4 text-[color:var(--rev-primary)]" />}
-      >
-        <UnbackedSection icon={Rocket} title={NOT_PRODUCED_TITLE} description={NOT_PRODUCED_DESCRIPTION} />
-      </SectionCard>
+        icon={Rocket}
+        points={synthPoints(synthesis, "market_growth_strategy")}
+        isLoading={synthLoading}
+        isError={synthError}
+      />
     </div>
   );
 }
