@@ -35,8 +35,23 @@ export default function Deals() {
 
   const [search, setSearch] = useState("");
 
-  const statsQuery = useQuery({ queryKey: DEALS_DASHBOARD_STATS_QUERY_KEY, queryFn: fetchDashboardStats });
-  const pipelineQuery = useQuery({ queryKey: DEALS_PIPELINE_QUERY_KEY, queryFn: fetchDealsPipeline });
+  // refetchOnWindowFocus is disabled on both dashboard aggregates: each backs an
+  // expensive server aggregate (dashboard-stats and the pipeline grid), and
+  // react-query's default refetch-on-focus fires GET /deals/pipeline again every
+  // time the tab regains focus. That grid holds a PgBouncer transaction slot for
+  // its whole multi-second run, so a focus-refetch storm is the multiplier on the
+  // app-wide hang the pipeline N+1 fix addresses on the backend. staleTime (15s)
+  // still lets an explicit navigation refetch; only the focus trigger is dropped.
+  const statsQuery = useQuery({
+    queryKey: DEALS_DASHBOARD_STATS_QUERY_KEY,
+    queryFn: fetchDashboardStats,
+    refetchOnWindowFocus: false,
+  });
+  const pipelineQuery = useQuery({
+    queryKey: DEALS_PIPELINE_QUERY_KEY,
+    queryFn: fetchDealsPipeline,
+    refetchOnWindowFocus: false,
+  });
   const investmentProfileQuery = useQuery({
     queryKey: INVESTMENT_PROFILE_QUERY_KEY,
     queryFn: fetchInvestmentProfile,
