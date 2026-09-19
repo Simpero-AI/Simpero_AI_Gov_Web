@@ -451,7 +451,7 @@ function AnalysisTabs({
         {tab === "corroboration" && <CorroborationTab dealId={dealId} />}
         {/* DILIGENCE WORKSPACE */}
         {tab === "workspace" && (
-          <WorkspaceTab memoTyped={memoTyped} dealId={dealId} sessionId={sessionId} />
+          <WorkspaceTab memoTyped={memoTyped} dealId={dealId} />
         )}
       </div>
 
