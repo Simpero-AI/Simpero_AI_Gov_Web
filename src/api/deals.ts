@@ -43,7 +43,9 @@ export type DashboardStatsPayload = {
   totalDeals: { value: number; delta: number };
   pipelineValueUsd: { value: number; delta: number | "new" | null };
   avgAiScore: { value: number | null; delta: number | null };
-  ddCompletionPct: { value: number; deltaPp: number };
+  // deltaPp is null when the backend has no truthful month-over-month delta to
+  // report (it doesn't retain point-in-time run state); value is a real rate.
+  ddCompletionPct: { value: number; deltaPp: number | null };
 };
 
 export async function fetchDashboardStats(): Promise<DashboardStatsPayload> {

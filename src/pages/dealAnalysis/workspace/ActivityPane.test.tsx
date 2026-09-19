@@ -2,74 +2,82 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ActivityPane } from "./ActivityPane";
-import { fetchRecentActivity, type RecentActivityRow } from "@/api/logs";
+import { fetchDealAudit, type DealAuditRow } from "@/api/logs";
 
+// ActivityPane fetches the deal-scoped audit (GET /deals/{id}/audit) — mock it
+// so the pane renders against controlled data with no real network call.
 vi.mock("@/api/logs", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/logs")>();
-  return { ...actual, fetchRecentActivity: vi.fn() };
+  return { ...actual, fetchDealAudit: vi.fn() };
 });
 
-const fetchRecentActivityMock = vi.mocked(fetchRecentActivity);
+const fetchDealAuditMock = vi.mocked(fetchDealAudit);
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
-function row(over: Partial<RecentActivityRow> = {}): RecentActivityRow {
+function row(over: Partial<DealAuditRow> = {}): DealAuditRow {
   return {
-    id: 1,
+    id: "1",
     createdAt: "2026-08-01T00:00:00.000Z",
     action: "deal.created",
-    sessionId: "session-1",
+    sessionId: null,
     jobId: null,
+    actorEmail: null,
+    payload: null,
     ...over,
   };
 }
 
-function renderActivityPane(sessionId: string | null) {
+function renderActivityPane(dealId = "deal-1") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivityPane sessionId={sessionId} />
+      <ActivityPane dealId={dealId} />
     </QueryClientProvider>
   );
 }
 
 describe("ActivityPane", () => {
-  it("renders an honest empty state and does not fetch when the deal has no session", () => {
-    renderActivityPane(null);
-    expect(screen.getByText("No active analysis session yet")).toBeInTheDocument();
-    expect(fetchRecentActivityMock).not.toHaveBeenCalled();
+  it("renders the deal's audit events newest-first, scoped by deal (not session)", async () => {
+    // The whole point of the fix: a completed run-based analysis has audit rows
+    // keyed by deal but no memo Session, so scoping by deal (not sessionId)
+    // surfaces them. sessionId is null on these rows and must not filter them out.
+    fetchDealAuditMock.mockResolvedValue([
+      row({ id: "1", action: "parsing.started", createdAt: "2026-08-01T00:00:00.000Z" }),
+      row({ id: "2", action: "verification.completed", createdAt: "2026-08-01T00:05:00.000Z" }),
+    ]);
+    renderActivityPane();
+
+    await waitFor(() => expect(screen.getByText("verification.completed")).toBeInTheDocument());
+    expect(screen.getByText("parsing.started")).toBeInTheDocument();
+    expect(screen.getByText("2 events · newest first")).toBeInTheDocument();
+    // Newest first: verification.completed (later) renders before parsing.started.
+    const texts = screen.getAllByText(/parsing\.started|verification\.completed/).map(n => n.textContent);
+    expect(texts).toEqual(["verification.completed", "parsing.started"]);
   });
 
-  it("renders only rows matching the deal's sessionId, filtering out other sessions' activity", async () => {
-    fetchRecentActivityMock.mockResolvedValue({
-      total: 2,
-      warnings: 0,
-      critical: 0,
-      rows: [
-        row({ id: 1, action: "deal.session-1.event", sessionId: "session-1" }),
-        row({ id: 2, action: "deal.session-2.event", sessionId: "session-2" }),
-      ],
-    });
-    renderActivityPane("session-1");
-
-    await waitFor(() => expect(screen.getByText("deal.session-1.event")).toBeInTheDocument());
-    expect(screen.queryByText("deal.session-2.event")).not.toBeInTheDocument();
-    expect(screen.getByText("1 event · newest first")).toBeInTheDocument();
-  });
-
-  it("renders an empty state when no fetched rows match the deal's sessionId", async () => {
-    fetchRecentActivityMock.mockResolvedValue({
-      total: 1,
-      warnings: 0,
-      critical: 0,
-      rows: [row({ id: 1, action: "other-deal.event", sessionId: "some-other-session" })],
-    });
-    renderActivityPane("session-1");
+  it("renders an honest empty state for a deal with no audit events (never a false 'no session')", async () => {
+    fetchDealAuditMock.mockResolvedValue([]);
+    renderActivityPane();
 
     await waitFor(() => expect(screen.getByText("No activity yet on this deal")).toBeInTheDocument());
-    expect(screen.queryByText("other-deal.event")).not.toBeInTheDocument();
+    // The old "No active analysis session yet" copy is gone — the feed is
+    // deal-scoped and no longer depends on a memo session existing.
+    expect(screen.queryByText("No active analysis session yet")).not.toBeInTheDocument();
+  });
+
+  it("shows a loading state while the audit fetch is in flight", () => {
+    fetchDealAuditMock.mockReturnValue(new Promise<DealAuditRow[]>(() => {}));
+    renderActivityPane();
+    expect(screen.getByText("Loading activity…")).toBeInTheDocument();
+  });
+
+  it("shows an error state when the audit fetch fails", async () => {
+    fetchDealAuditMock.mockRejectedValue(new Error("GET /deals/deal-1/audit failed: 500"));
+    renderActivityPane();
+    expect(await screen.findByText("Failed to load activity.")).toBeInTheDocument();
   });
 });
