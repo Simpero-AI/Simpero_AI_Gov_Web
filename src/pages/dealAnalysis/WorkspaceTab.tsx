@@ -34,11 +34,10 @@ interface WorkspaceTabProps {
  *
  * All 6 panes are now wired: Overview / Activity / Draft Memo render real
  * `ICMemoResult`/activity-log data; Data Room renders the deal's one real
- * tracked source file with an honestly-empty review status; Checklist and
- * Notes & Transcripts have no backing data at all, so they render the real,
- * visibly-disabled "add" affordance + explicit empty state rather than
- * fabricated local state or a bare "coming soon" (see each pane's own
- * comment).
+ * tracked source file with an honestly-empty review status; Checklist persists
+ * diligence requests to the deal's append-only checklist log (add + advance
+ * status); Notes & Transcripts is wired in a paired PR. See each pane's own
+ * comment.
  */
 export function WorkspaceTab({ memoTyped, dealId, sessionId }: WorkspaceTabProps) {
   const [pane, setPane] = useState<WorkspacePaneKey>("overview");
@@ -64,7 +63,7 @@ export function WorkspaceTab({ memoTyped, dealId, sessionId }: WorkspaceTabProps
 
       {pane === "overview" && <OverviewPane memoTyped={memoTyped} dealId={dealId} />}
       {pane === "data-room" && <DataRoomPane memoTyped={memoTyped} />}
-      {pane === "checklist" && <ChecklistPane />}
+      {pane === "checklist" && <ChecklistPane dealId={dealId} />}
       {pane === "activity" && <ActivityPane sessionId={sessionId} />}
       {pane === "notes" && <NotesTranscriptsPane />}
       {pane === "draft-memo" && <DraftMemoPane memoTyped={memoTyped} />}

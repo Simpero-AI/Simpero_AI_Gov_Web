@@ -15,6 +15,14 @@ vi.mock("@/api/documents", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/documents")>();
   return { ...actual, fetchDealDocuments: vi.fn().mockResolvedValue([]) };
 });
+// ChecklistPane fetches its checklist via react-query — same reason.
+vi.mock("@/api/checklist", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/checklist")>();
+  return {
+    ...actual,
+    fetchChecklist: vi.fn().mockResolvedValue({ items: [], completeCount: 0, totalCount: 0 }),
+  };
+});
 
 afterEach(cleanup);
 
