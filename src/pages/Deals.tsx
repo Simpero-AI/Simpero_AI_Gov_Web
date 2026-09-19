@@ -201,11 +201,15 @@ function formatPipelineDelta(delta: number | "new" | null, window: string): stri
   return `${delta > 0 ? "+" : ""}${pct}% vs last ${window}`;
 }
 
-function ddCompletionSub(pct: number, total: number, deltaPp: number): string {
+export function ddCompletionSub(pct: number, total: number, deltaPp: number | null): string {
   const completed = Math.round(total * (pct / 100));
   const completedStr = completed > 0
     ? `${completed} deal${completed === 1 ? "" : "s"} with completed analysis`
     : "none with completed analysis";
-  const deltaStr = `${deltaPp > 0 ? "+" : ""}${deltaPp}pp`;
-  return `${completedStr} · ${deltaStr}`;
+  // deltaPp is null when no truthful month-over-month completion-rate delta is
+  // available (the backend doesn't retain the point-in-time run state a real
+  // diff needs). Show only the real completed count then -- never a fabricated
+  // "+0pp".
+  if (deltaPp === null) return completedStr;
+  return `${completedStr} · ${deltaPp > 0 ? "+" : ""}${deltaPp}pp`;
 }
