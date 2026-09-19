@@ -67,7 +67,7 @@ export function WorkspaceTab({ memoTyped, dealId, sessionId }: WorkspaceTabProps
       {pane === "checklist" && <ChecklistPane />}
       {pane === "activity" && <ActivityPane sessionId={sessionId} />}
       {pane === "notes" && <NotesTranscriptsPane />}
-      {pane === "draft-memo" && <DraftMemoPane memoTyped={memoTyped} />}
+      {pane === "draft-memo" && <DraftMemoPane memoTyped={memoTyped} dealId={dealId} />}
     </div>
   );
 }
