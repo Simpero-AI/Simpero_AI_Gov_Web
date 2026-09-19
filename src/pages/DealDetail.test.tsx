@@ -8,6 +8,7 @@ import { dealStatusQueryKey, fetchDeal, fetchDealStatus } from "@/api/deals";
 import type { DealWithLatestMemo } from "@/api/deals";
 import { screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { screeningInsightsQueryKey } from "@/api/screeningInsights";
+import { companySynthesisQueryKey } from "@/api/companySynthesis";
 import type { DealStatusPayload } from "@shared/dealsStatus";
 
 // Real fetchDeal/fetchDealStatus hit the network via apiFetch — mock the
@@ -294,6 +295,13 @@ describe("DealDetail — completion routes to Initial Screening", () => {
     );
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: screeningInsightsQueryKey("deal-1"),
+    });
+    // The grounded synthesis snapshot is (re)written by the same pipeline and now
+    // backs the Market tab's Market Risks / Growth Strategy (and the Company/Summary
+    // tabs); completion must invalidate it too so a parked tab picks up the fresh
+    // AI summary rather than the pre-analysis snapshot.
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: companySynthesisQueryKey("deal-1"),
     });
   });
 

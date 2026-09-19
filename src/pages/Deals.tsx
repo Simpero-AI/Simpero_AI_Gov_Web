@@ -35,8 +35,23 @@ export default function Deals() {
 
   const [search, setSearch] = useState("");
 
-  const statsQuery = useQuery({ queryKey: DEALS_DASHBOARD_STATS_QUERY_KEY, queryFn: fetchDashboardStats });
-  const pipelineQuery = useQuery({ queryKey: DEALS_PIPELINE_QUERY_KEY, queryFn: fetchDealsPipeline });
+  // refetchOnWindowFocus is disabled on both dashboard aggregates: each backs an
+  // expensive server aggregate (dashboard-stats and the pipeline grid), and
+  // react-query's default refetch-on-focus fires GET /deals/pipeline again every
+  // time the tab regains focus. That grid holds a PgBouncer transaction slot for
+  // its whole multi-second run, so a focus-refetch storm is the multiplier on the
+  // app-wide hang the pipeline N+1 fix addresses on the backend. staleTime (15s)
+  // still lets an explicit navigation refetch; only the focus trigger is dropped.
+  const statsQuery = useQuery({
+    queryKey: DEALS_DASHBOARD_STATS_QUERY_KEY,
+    queryFn: fetchDashboardStats,
+    refetchOnWindowFocus: false,
+  });
+  const pipelineQuery = useQuery({
+    queryKey: DEALS_PIPELINE_QUERY_KEY,
+    queryFn: fetchDealsPipeline,
+    refetchOnWindowFocus: false,
+  });
   const investmentProfileQuery = useQuery({
     queryKey: INVESTMENT_PROFILE_QUERY_KEY,
     queryFn: fetchInvestmentProfile,
@@ -186,11 +201,15 @@ function formatPipelineDelta(delta: number | "new" | null, window: string): stri
   return `${delta > 0 ? "+" : ""}${pct}% vs last ${window}`;
 }
 
-function ddCompletionSub(pct: number, total: number, deltaPp: number): string {
+export function ddCompletionSub(pct: number, total: number, deltaPp: number | null): string {
   const completed = Math.round(total * (pct / 100));
   const completedStr = completed > 0
     ? `${completed} deal${completed === 1 ? "" : "s"} with completed analysis`
     : "none with completed analysis";
-  const deltaStr = `${deltaPp > 0 ? "+" : ""}${deltaPp}pp`;
-  return `${completedStr} · ${deltaStr}`;
+  // deltaPp is null when no truthful month-over-month completion-rate delta is
+  // available (the backend doesn't retain the point-in-time run state a real
+  // diff needs). Show only the real completed count then -- never a fabricated
+  // "+0pp".
+  if (deltaPp === null) return completedStr;
+  return `${completedStr} · ${deltaPp > 0 ? "+" : ""}${deltaPp}pp`;
 }

@@ -62,6 +62,7 @@ import { screeningMaterialsQueryKey } from "@/api/screeningMaterials";
 import { screeningInsightsQueryKey } from "@/api/screeningInsights";
 import { marketQueryKey } from "@/api/market";
 import { companyQueryKey } from "@/api/company";
+import { companySynthesisQueryKey } from "@/api/companySynthesis";
 import { financialsQueryKey } from "@/api/financials";
 import { corroborationQueryKey } from "@/api/corroboration";
 import { ScreeningTab } from "./dealDetail/ScreeningTab";
@@ -641,6 +642,11 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
     // Corroboration runs as a chained stage of the same pipeline; invalidate
     // so a user on the Corroboration tab sees the checks once they land.
     void queryClient.invalidateQueries({ queryKey: corroborationQueryKey(dealId) });
+    // The grounded synthesis snapshot is (re)written by the same pipeline and is
+    // read by the Company/Summary tabs and the Market tab's Market Risks / Growth
+    // Strategy sections; invalidate it so a user parked on any of those sees the
+    // fresh AI summary rather than the pre-analysis (often empty) one.
+    void queryClient.invalidateQueries({ queryKey: companySynthesisQueryKey(dealId) });
 
     // One-shot: go straight to the Initial Screening page the instant analysis
     // FIRST completes, rather than an interstitial with a "View Initial
