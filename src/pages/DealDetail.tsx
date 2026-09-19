@@ -594,46 +594,60 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
   const jobStatus = statusQuery.data?.jobStatus;
   const prevJobStatusRef = useRef(jobStatus);
   const redirectedRef = useRef(false);
-  // Route to Initial Screening once analysis is done, then refresh the
-  // pipeline-derived queries so screening shows fresh data. Fires on the live
+  // On a genuine completion, refresh the pipeline-derived queries so every tab
+  // shows fresh data, then (once) route to Initial Screening. Fires on the live
   // queued/processing → complete transition, OR on a post-upload landing that is
   // ALREADY complete (?from=upload — the pipeline finished before the first poll,
   // so there is no transition to observe). A deliberate revisit to a completed
-  // deal carries no upload flag and saw no transition, so it is never redirected.
+  // deal carries no upload flag and saw no transition, so it does neither.
+  //
+  // INVALIDATION and NAVIGATION are deliberately decoupled: invalidation must
+  // fire on EVERY such completion — including a re-analysis of an
+  // already-complete deal in the same session (complete → processing →
+  // complete) — or a user parked on Market/Company/Financials/Corroboration/etc.
+  // keeps seeing pre-rerun data until an unrelated refetch (e.g. window-focus)
+  // happens to fire. NAVIGATION stays one-shot (redirectedRef): we route to
+  // screening on the first completion, but never yank the user back to screening
+  // on a subsequent re-run they kicked off from another tab.
   useEffect(() => {
     const prev = prevJobStatusRef.current;
     prevJobStatusRef.current = jobStatus;
     const transitioned =
       (prev === "processing" || prev === "queued") && jobStatus === "complete";
     const arrivedCompleteFromUpload = cameFromUpload && jobStatus === "complete";
-    if ((transitioned || arrivedCompleteFromUpload) && !redirectedRef.current) {
+    if (!(transitioned || arrivedCompleteFromUpload)) return;
+
+    // Refresh on every genuine completion (see decoupling note above).
+    void queryClient.invalidateQueries({ queryKey: dealQueryKey(dealId) });
+    // Screening and Market both land from the same pipeline; refetch them too
+    // so a user parked on either tab sees the fresh result without a manual
+    // reload (Market especially: a re-analysis is exactly when its previously
+    // empty sizing/definition/competition populate).
+    void queryClient.invalidateQueries({ queryKey: screeningQueryKey(dealId) });
+    // The extracted-figures grid and the highlight/risk panels read their OWN
+    // queries (materials + insights), not screeningQueryKey -- invalidate them
+    // too, or a user parked on the Screening tab sees the verdict refresh while
+    // ExtractedGrid/Highlights/RiskFlags keep pre-pipeline data until a reload.
+    void queryClient.invalidateQueries({ queryKey: screeningMaterialsQueryKey(dealId) });
+    void queryClient.invalidateQueries({ queryKey: screeningInsightsQueryKey(dealId) });
+    void queryClient.invalidateQueries({ queryKey: marketQueryKey(dealId) });
+    // The Company (Business Overview) tab is derived from the same claims the
+    // pipeline just produced; invalidate it so a user parked there sees the
+    // populated profile instead of the stale/empty pre-pipeline snapshot.
+    void queryClient.invalidateQueries({ queryKey: companyQueryKey(dealId) });
+    // The Financials tab's figures section reads the same claims spine; refetch
+    // it too so its previously empty statement sections populate on completion.
+    void queryClient.invalidateQueries({ queryKey: financialsQueryKey(dealId) });
+    // Corroboration runs as a chained stage of the same pipeline; invalidate
+    // so a user on the Corroboration tab sees the checks once they land.
+    void queryClient.invalidateQueries({ queryKey: corroborationQueryKey(dealId) });
+
+    // One-shot: go straight to the Initial Screening page the instant analysis
+    // FIRST completes, rather than an interstitial with a "View Initial
+    // Screening" button (which only appeared once the status poll noticed
+    // completion, so it lagged). A later re-run leaves the user where they are.
+    if (!redirectedRef.current) {
       redirectedRef.current = true;
-      void queryClient.invalidateQueries({ queryKey: dealQueryKey(dealId) });
-      // Screening and Market both land from the same pipeline; refetch them too
-      // so a user parked on either tab sees the fresh result without a manual
-      // reload (Market especially: a re-analysis is exactly when its previously
-      // empty sizing/definition/competition populate).
-      void queryClient.invalidateQueries({ queryKey: screeningQueryKey(dealId) });
-      // The extracted-figures grid and the highlight/risk panels read their OWN
-      // queries (materials + insights), not screeningQueryKey -- invalidate them
-      // too, or a user parked on the Screening tab sees the verdict refresh while
-      // ExtractedGrid/Highlights/RiskFlags keep pre-pipeline data until a reload.
-      void queryClient.invalidateQueries({ queryKey: screeningMaterialsQueryKey(dealId) });
-      void queryClient.invalidateQueries({ queryKey: screeningInsightsQueryKey(dealId) });
-      void queryClient.invalidateQueries({ queryKey: marketQueryKey(dealId) });
-      // The Company (Business Overview) tab is derived from the same claims the
-      // pipeline just produced; invalidate it so a user parked there sees the
-      // populated profile instead of the stale/empty pre-pipeline snapshot.
-      void queryClient.invalidateQueries({ queryKey: companyQueryKey(dealId) });
-      // The Financials tab's figures section reads the same claims spine; refetch
-      // it too so its previously empty statement sections populate on completion.
-      void queryClient.invalidateQueries({ queryKey: financialsQueryKey(dealId) });
-      // Corroboration runs as a chained stage of the same pipeline; invalidate
-      // so a user on the Corroboration tab sees the checks once they land.
-      void queryClient.invalidateQueries({ queryKey: corroborationQueryKey(dealId) });
-      // Go straight to the Initial Screening page the instant analysis completes,
-      // rather than an interstitial with a "View Initial Screening" button (which
-      // only appeared once the status poll noticed completion, so it lagged).
       navigate(`/deals/${dealId}/screening`, { replace: true });
     }
   }, [jobStatus, dealId, queryClient, navigate, cameFromUpload]);
