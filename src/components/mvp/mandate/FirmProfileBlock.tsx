@@ -1,14 +1,17 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Textarea } from "@/components/mvp/primitives/textarea";
 import { MANDATE_DEFAULTS, type InvestmentProfile } from "@/data/mandateDefaults";
+import { INVESTMENT_PROFILE_QUERY_KEY, upsertInvestmentProfile } from "@/api/investmentProfile";
 import { SimperoMarkIcon } from "@/components/mvp/icons";
 
 interface Props {
   profile: InvestmentProfile | null;
-  /** Fires whenever local dirty state changes — lets the page-level topbar
-   * show a real save-status indicator instead of a fabricated one. `saving`
-   * is always false: this block has no persistence path (see the no-save
-   * comment below). */
+  /** Registered by the parent (MandateScorecard) so its topbar Save button can
+   * trigger this block's save — mirrors EditableMandateBlock's saveRef. */
+  saveRef?: React.MutableRefObject<(() => void) | null>;
+  /** Fires whenever local dirty/saving state changes — drives the page-level
+   * topbar's real save-status indicator. */
   onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
 }
 
@@ -22,17 +25,14 @@ const inp =
 const lbl =
   "block font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[color:var(--rev-text-6)] mb-1.5";
 
-export function FirmProfileBlock({ profile, onStateChange }: Props) {
+export function FirmProfileBlock({ profile, saveRef, onStateChange }: Props) {
+  const queryClient = useQueryClient();
   const [isDirty, setIsDirty] = useState(false);
-  // No persistence path: this block used to call
-  // trpc.investmentProfile.upsert.useMutation() to save, but that endpoint
-  // 404s unconditionally — the Express/tRPC server it lived on was removed
-  // with the FastAPI migration and no write endpoint for firm-profile
-  // fields was ever ported (confirmed live: POST
-  // /api/trpc/investmentProfile.upsert?batch=1 → 404). Fields below stay
-  // fully editable (local state + dirty tracking only); Save is disabled
-  // for this tab in MandateScorecard's topbar instead of attempting a call
-  // that can never succeed.
+  // Persists via PUT /api/investment-profile (upsertInvestmentProfile),
+  // replacing the retired tRPC investmentProfile.upsert that 404'd. See doSave
+  // below for the shared-mandate-JSONB merge that keeps this save from wiping
+  // the Mandate Builder's checkMin/checkMax/targetReturn/holdPeriod.
+  const upsertMutation = useMutation({ mutationFn: upsertInvestmentProfile });
 
   const hydratedRef = useRef<string | null>(null);
 
@@ -57,9 +57,41 @@ export function FirmProfileBlock({ profile, onStateChange }: Props) {
     setIsDirty(false);
   }, [profile]);
 
+  const doSave = useCallback(async () => {
+    // The mandate JSONB is SHARED: it also holds the Mandate Builder's
+    // checkMin/checkMax/targetReturn/holdPeriod (read below). Spread the stored
+    // mandate and override only this block's firm fields, so a Firm Profile save
+    // never blanks those. firmName is the top-level column.
+    const mandate = {
+      ...(profile?.mandate ?? {}),
+      firmTypeFreeText: firmType,
+      aum,
+      fundVintage,
+      hqLocation,
+      investmentThesis,
+    };
+    await upsertMutation.mutateAsync({ firmName, mandate });
+    await queryClient.invalidateQueries({ queryKey: INVESTMENT_PROFILE_QUERY_KEY });
+    setIsDirty(false);
+  }, [
+    profile,
+    firmName,
+    firmType,
+    aum,
+    fundVintage,
+    hqLocation,
+    investmentThesis,
+    upsertMutation,
+    queryClient,
+  ]);
+
   useEffect(() => {
-    onStateChange?.({ dirty: isDirty, saving: false });
-  }, [isDirty, onStateChange]);
+    if (saveRef) saveRef.current = doSave;
+  }, [saveRef, doSave]);
+
+  useEffect(() => {
+    onStateChange?.({ dirty: isDirty, saving: upsertMutation.isPending });
+  }, [isDirty, upsertMutation.isPending, onStateChange]);
 
   const m = profile?.mandate ?? {};
   // checkSize is now stored as numeric checkMin/checkMax (see EditableMandateBlock) —

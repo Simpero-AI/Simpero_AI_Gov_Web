@@ -65,6 +65,10 @@ export default function MandateScorecard({ section }: Props) {
   // comments) — so this is the only save ref left to wire up.
   const mandateSaveRef = useRef<(() => void) | null>(null);
   const mandateResetRef = useRef<(() => Promise<void>) | null>(null);
+  // Firm Profile and Scoring Framework now persist too (PUT /investment-profile),
+  // so each registers its save here for the topbar Save button to trigger.
+  const firmSaveRef = useRef<(() => void) | null>(null);
+  const frameworkSaveRef = useRef<(() => void) | null>(null);
   const [isResetting, setIsResetting] = useState(false);
 
   // Real dirty/saving state lifted from the three editable blocks — drives
@@ -145,17 +149,13 @@ export default function MandateScorecard({ section }: Props) {
   const dirty = activeState.dirty;
   const saveState: MandateSaveState = saving ? "saving" : dirty ? "unsaved" : "saved";
 
-  // Firm Profile and Scoring Framework have no persistence path at all (see
-  // FirmProfileBlock/EditableFrameworkBlock) — their Save/Reset controls are
-  // force-disabled+explained (topbar props below) rather than attempted, so
-  // Mandate Builder is the only tab this ever needs to act on.
-  const saveDisabled = active === "firm" || active === "framework";
-  const saveDisabledReason =
-    active === "firm"
-      ? "Saving isn't available for Firm Profile yet"
-      : active === "framework"
-      ? "Saving isn't available for Scoring Framework yet"
-      : undefined;
+  // Firm Profile, Mandate Builder and Scoring Framework all persist now
+  // (PUT /investment-profile and PUT /mandate); only the read-only Scorecard
+  // tab has nothing of its own to save.
+  const saveDisabled = active === "scorecard";
+  const saveDisabledReason = saveDisabled ? "The Scorecard tab has nothing to save" : undefined;
+  // Reset-to-defaults still only applies to Mandate Builder (it owns the chip
+  // state + the PUT /mandate reset-to-empty path).
   const resetDisabled = active !== "mandate";
   const resetDisabledReason = resetDisabled ? "Reset is only available for Mandate Builder" : undefined;
 
@@ -168,7 +168,9 @@ export default function MandateScorecard({ section }: Props) {
   ].filter((label): label is string => Boolean(label));
 
   const handleSaveConfiguration = () => {
-    if (active === "mandate") mandateSaveRef.current?.();
+    if (active === "firm") firmSaveRef.current?.();
+    else if (active === "mandate") mandateSaveRef.current?.();
+    else if (active === "framework") frameworkSaveRef.current?.();
   };
 
   const handleResetToDefaults = async () => {
@@ -275,13 +277,13 @@ export default function MandateScorecard({ section }: Props) {
               // when active.
               <>
                 <div style={{ display: active === "firm" ? undefined : "none" }}>
-                  <FirmProfileBlock profile={profile} onStateChange={setFirmState} />
+                  <FirmProfileBlock profile={profile} saveRef={firmSaveRef} onStateChange={setFirmState} />
                 </div>
                 <div style={{ display: active === "mandate" ? undefined : "none" }}>
                   <EditableMandateBlock profile={profile} saveRef={mandateSaveRef} resetRef={mandateResetRef} onStateChange={setMandateState} />
                 </div>
                 <div style={{ display: active === "framework" ? undefined : "none" }}>
-                  <EditableFrameworkBlock profile={profile} onStateChange={setFrameworkState} />
+                  <EditableFrameworkBlock profile={profile} saveRef={frameworkSaveRef} onStateChange={setFrameworkState} />
                 </div>
                 {active === "scorecard" && (
                   <DealScorecardTab profile={profile} dealId={dealId} onDealIdChange={setDealId} />
