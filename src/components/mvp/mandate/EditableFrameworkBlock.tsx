@@ -1,14 +1,17 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, LayoutTemplate, Plus, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FRAMEWORK_DEFAULTS, type FrameworkCategory, type FrameworkCriterion, type InvestmentProfile } from "@/data/mandateDefaults";
+import { INVESTMENT_PROFILE_QUERY_KEY, upsertInvestmentProfile } from "@/api/investmentProfile";
 
 interface Props {
   profile: InvestmentProfile | null;
-  /** Fires whenever local dirty state changes — lets the page-level topbar
-   * show a real save-status indicator instead of a fabricated one. `saving`
-   * is always false: this block has no persistence path (see the no-save
-   * comment below). */
+  /** Registered by the parent (MandateScorecard) so its topbar Save button can
+   * trigger this block's save — mirrors EditableMandateBlock's saveRef. */
+  saveRef?: React.MutableRefObject<(() => void) | null>;
+  /** Fires whenever local dirty/saving state changes — drives the page-level
+   * topbar's real save-status indicator. */
   onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
 }
 
@@ -45,16 +48,14 @@ export function loadCategories(profile: InvestmentProfile | null): FrameworkCate
 const inp =
   "bg-transparent focus:outline-none border-0 border-b border-transparent focus:border-[color:var(--rev-border-strong)] text-sm text-[color:var(--rev-text-1)]";
 
-export function EditableFrameworkBlock({ profile, onStateChange }: Props) {
+export function EditableFrameworkBlock({ profile, saveRef, onStateChange }: Props) {
+  const queryClient = useQueryClient();
   const [isDirty, setIsDirty] = useState(false);
-  // No persistence path: this block used to call
-  // trpc.investmentProfile.upsert.useMutation() to save the framework
-  // weights, same dead endpoint as FirmProfileBlock — it 404s
-  // unconditionally (no Express/tRPC server, and no FastAPI write endpoint
-  // for scoring-framework weights was ever built; confirmed live). Categories/
-  // criteria/weights below stay fully editable (local state + dirty tracking
-  // only); Save is disabled for this tab in MandateScorecard's topbar
-  // instead of attempting a call that can never succeed.
+  // Persists via PUT /api/investment-profile (upsertInvestmentProfile),
+  // replacing the retired tRPC investmentProfile.upsert that 404'd. It sends
+  // only `weights`; the backend merges it without touching firm_name/mandate,
+  // so this save is independent of the Firm Profile editor.
+  const upsertMutation = useMutation({ mutationFn: upsertInvestmentProfile });
 
   const [categories, setCategoriesRaw] = useState<FrameworkCategory[]>(() => loadCategories(profile));
   // Every local edit to `categories` (add/remove/rename category or
@@ -75,9 +76,30 @@ export function EditableFrameworkBlock({ profile, onStateChange }: Props) {
     setIsDirty(false);
   }, [profile]);
 
+  const doSave = useCallback(async () => {
+    // Spread the stored weights and set only the framework slice, so any other
+    // future key under `weights` survives. The backend merges weights-only
+    // without touching firm_name/mandate.
+    const existingFramework =
+      profile?.weights?.["framework"] && typeof profile.weights["framework"] === "object"
+        ? (profile.weights["framework"] as Record<string, unknown>)
+        : {};
+    const weights = {
+      ...(profile?.weights ?? {}),
+      framework: { ...existingFramework, categories },
+    };
+    await upsertMutation.mutateAsync({ weights });
+    await queryClient.invalidateQueries({ queryKey: INVESTMENT_PROFILE_QUERY_KEY });
+    setIsDirty(false);
+  }, [profile, categories, upsertMutation, queryClient]);
+
   useEffect(() => {
-    onStateChange?.({ dirty: isDirty, saving: false });
-  }, [isDirty, onStateChange]);
+    if (saveRef) saveRef.current = doSave;
+  }, [saveRef, doSave]);
+
+  useEffect(() => {
+    onStateChange?.({ dirty: isDirty, saving: upsertMutation.isPending });
+  }, [isDirty, upsertMutation.isPending, onStateChange]);
 
   const weightTotal = categories.reduce((sum, c) => sum + c.weight, 0);
   const totalCriteria = categories.reduce((s, c) => s + c.criteria.length, 0);
