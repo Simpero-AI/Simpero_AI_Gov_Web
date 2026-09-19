@@ -212,6 +212,24 @@ describe("FinancialsTab", () => {
     expect(screen.queryByText("No financial figures extracted")).not.toBeInTheDocument();
   });
 
+  it("badges a figure that failed the arithmetic consistency check, and only that one", async () => {
+    mockFetchFinancials.mockResolvedValue({
+      ...EMPTY_FINANCIALS,
+      incomeStatement: [
+        { label: "Gross Profit", value: "$97.9B", period: "FY23", citation: "10-K · p.40", status: "verified", entity: null, sourceUrl: null, reconciliationMismatch: true },
+        { label: "Revenue", value: "$60.9B", period: "FY23", citation: "10-K · p.40", status: "verified", entity: null, sourceUrl: null },
+      ],
+    });
+    renderFinancialsTab({ memoTyped: null, dealMetrics: undefined, dealMetricDiscrepancies: [] });
+
+    await screen.findByText("Gross Profit");
+    const badges = screen.getAllByText(/Doesn't reconcile/i);
+    expect(badges).toHaveLength(1);
+    // The flagged value still shows -- it is surfaced, not dropped.
+    expect(screen.getByText("$97.9B")).toBeInTheDocument();
+    expect(screen.getByText("$60.9B")).toBeInTheDocument();
+  });
+
   it("shows a loading state for the figures section, not a false empty-state, while the fetch is pending", () => {
     mockFetchFinancials.mockReturnValue(new Promise<FinancialsView>(() => {}));
     renderFinancialsTab({ memoTyped: null, dealMetrics: undefined, dealMetricDiscrepancies: [] });
@@ -240,5 +258,37 @@ describe("FinancialsTab", () => {
     renderFinancialsTab({ memoTyped: null, dealMetrics: undefined, dealMetricDiscrepancies: [] });
 
     expect(await screen.findByText("No financial figures extracted")).toBeInTheDocument();
+  });
+
+  // -------------------------------------------------------------------------
+  // Corroboration panel — now a read-out of the live financials view's own
+  // trust statuses, not the dead memo path.
+  // -------------------------------------------------------------------------
+
+  it("summarises the live financials view's real trust statuses in the Corroboration panel, keeping conflicted distinct from unverified", async () => {
+    const user = userEvent.setup();
+    mockFetchFinancials.mockResolvedValue({
+      ...EMPTY_FINANCIALS,
+      incomeStatement: [
+        { label: "Revenue", value: "$497.2M", period: "FY23", citation: "cim.pdf · p.12", status: "verified", entity: null, sourceUrl: null },
+        { label: "Net Income", value: "$40.0M", period: "FY23", citation: "cim.pdf · p.12", status: "conflicted", entity: null, sourceUrl: null },
+      ],
+      profitability: [
+        { label: "Gross Margin", value: "42%", period: "FY23", citation: "EDGAR 10-K", status: "cited", entity: null, sourceUrl: "https://www.sec.gov/x" },
+      ],
+    });
+    renderFinancialsTab({ memoTyped: null, dealMetrics: undefined, dealMetricDiscrepancies: [] });
+
+    // Header shows the real ladder. "1 Conflicted" is NOT collapsed to
+    // "Unverified"; the coarse triple is gone.
+    expect(await screen.findByText("1 Verified")).toBeInTheDocument();
+    expect(screen.getByText("1 Conflicted")).toBeInTheDocument();
+    expect(screen.getByText("1 Cited")).toBeInTheDocument();
+    expect(screen.queryByText(/Unverified/)).not.toBeInTheDocument();
+    // Two distinct sources: the document (backing 2 figures) and the SEC record.
+    expect(screen.getByText(/^Corroboration \(2 sources\)$/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Corroboration/ }));
+    expect(screen.getByText("cited 2x")).toBeInTheDocument();
   });
 });

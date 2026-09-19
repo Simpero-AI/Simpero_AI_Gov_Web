@@ -4,6 +4,7 @@ import {
   Briefcase,
   Columns2,
   Handshake,
+  Loader2,
   ShieldCheck,
   UserRound,
   type LucideIcon,
@@ -14,6 +15,7 @@ import { ProvenanceBadge } from "@/components/mvp/primitives/ProvenanceBadge";
 import { ProseWithClaims } from "@/components/mvp/primitives/ClaimText";
 import { TrustStatusPill } from "@/components/mvp/primitives/TrustStatusPill";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
+import { QueryErrorAlert } from "@/components/mvp/common/QueryErrorAlert";
 import { FieldValueList, type FieldValueItem } from "@/components/mvp/common/FieldValueList";
 import { VerificationPill, type VerificationState } from "@/components/mvp/common/VerificationPill";
 import {
@@ -109,13 +111,13 @@ function ProvenanceAction({
 }
 
 // ---------------------------------------------------------------------------
-// Leadership fallback — when no structured founder profile exists on
-// ICMemoDeliverable (managementTeam), prefer the backend's dedicated
-// "leadership" synthesis section (GET /deals/{id}/company-synthesis,
-// grounded name/title/background people, FE-5) over the flat Related
-// Parties data. Related Parties (AI synthesis prose, or the claims-driven
-// fact list) isn't split into name/title/background, so it's kept only as
-// a second-line fallback when leadership itself has nothing.
+// Leadership — the Founders tab's real, data-backed surface (the IC-memo
+// managementTeam path is unbuilt today). Prefers the backend's dedicated
+// "leadership" synthesis section (GET /deals/{id}/company-synthesis, grounded
+// name/title/background people, FE-5); when leadership itself is empty it
+// falls back to the flat Related Parties data (AI synthesis prose, or the
+// claims-driven fact list), which isn't split into name/title/background.
+// LeadershipSection (below) owns the honest loading/error/empty states.
 // ---------------------------------------------------------------------------
 
 function LeadershipPersonCard({ person }: { person: CompanySynthPerson }) {
@@ -180,21 +182,64 @@ function RelatedPartiesFallback({ points, facts }: { points: CompanySynthPoint[]
   );
 }
 
-function LeadershipFallback({ dealId }: { dealId: string }) {
+function LeadershipLoading() {
+  return (
+    <div role="status" className="flex items-center gap-2 py-8 text-sm text-[color:var(--rev-text-6)]">
+      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      Loading leadership…
+    </div>
+  );
+}
+
+function LeadershipEmpty() {
+  return (
+    <SectionCard
+      eyebrow="Founders & Leadership"
+      icon={<UserRound className="h-4 w-4 text-[color:var(--rev-primary)]" />}
+    >
+      <UnbackedSection
+        icon={UserRound}
+        title="Founder & leadership profiles not yet extracted"
+        description="Names, titles, and background for founders and leadership appear here once the deal's documents have been analyzed. A deal analyzed before leadership extraction was added shows them after a re-analysis."
+      />
+    </SectionCard>
+  );
+}
+
+function LeadershipSection({ dealId }: { dealId: string }) {
   const synthesisQuery = useQuery({
     queryKey: companySynthesisQueryKey(dealId),
     queryFn: () => fetchCompanySynthesis(dealId),
   });
   const people = synthesisQuery.data?.sections.find((s) => s.key === "leadership")?.people ?? [];
-  // Only fetched once synthesisQuery has settled AND leadership came back
-  // empty (PR #42 review) -- the common, successful case (real leadership
-  // data) never issues this request at all, instead of always firing both
-  // queries and discarding companyQuery's response on the happy path.
+  // The Company-tab Related Parties fallback is only fetched once synthesis has
+  // settled AND leadership came back empty (PR #42 review) -- the common,
+  // successful case (real leadership data) never issues this request, and a
+  // synthesis error skips it too (the error alert below is shown instead).
   const companyQuery = useQuery({
     queryKey: companyQueryKey(dealId),
     queryFn: () => fetchCompany(dealId),
-    enabled: !synthesisQuery.isPending && people.length === 0,
+    enabled: !synthesisQuery.isPending && !synthesisQuery.isError && people.length === 0,
   });
+
+  // Guard the "not extracted" negative against a load that hasn't produced
+  // people yet: the initial load (isPending) and the post-analysis refetch
+  // DealDetail fires on completion (isFetching with nothing cached). Mirrors
+  // MarketTab's decision tree so a user parked on the tab never sees a false
+  // empty flash before the people pop in.
+  if (synthesisQuery.isPending || (synthesisQuery.isFetching && people.length === 0)) {
+    return <LeadershipLoading />;
+  }
+  // A fetch that NEVER loaded (data === undefined) and errored. A refetch that
+  // fails while a prior snapshot is cached falls through to render that snapshot.
+  if (synthesisQuery.isError && synthesisQuery.data === undefined) {
+    return (
+      <QueryErrorAlert
+        message="Couldn't load leadership for this deal."
+        error={synthesisQuery.error as Error | null}
+      />
+    );
+  }
   if (people.length > 0) {
     return (
       <div className="space-y-5">
@@ -205,10 +250,19 @@ function LeadershipFallback({ dealId }: { dealId: string }) {
     );
   }
 
+  // No leadership people -> the flatter Related Parties fallback. Its prose
+  // points come from the already-settled synthesis; the claims-driven facts
+  // need the still-in-flight companyQuery, so keep the loader until that
+  // settles rather than flashing the empty state first.
   const points = synthesisQuery.data?.sections.find((s) => s.key === "related_parties")?.points ?? [];
   const facts: CompanyFact[] = companyQuery.data?.relatedParties ?? [];
-  if (points.length === 0 && facts.length === 0) return null;
-  return <RelatedPartiesFallback points={points} facts={facts} />;
+  if (points.length === 0 && companyQuery.isPending) {
+    return <LeadershipLoading />;
+  }
+  if (points.length > 0 || facts.length > 0) {
+    return <RelatedPartiesFallback points={points} facts={facts} />;
+  }
+  return <LeadershipEmpty />;
 }
 
 function UnbackedSection({
@@ -445,16 +499,14 @@ export function FoundersTab({ memoTyped, dealId }: FoundersTabProps) {
   const hasFounders = !!founders?.length;
 
   if (!hasFounders) {
+    // The IC-memo managementTeam path (below) is unbuilt today, so this
+    // LeadershipSection is what a deal actually shows: the grounded leadership
+    // synthesis, with its own honest loading/error/empty states. The old
+    // always-on "not yet extracted" card is gone -- it rendered ABOVE populated
+    // leadership people, contradicting the very data below it.
     return (
       <div className="space-y-5">
-        <SectionCard eyebrow="Founders & Leadership" icon={<UserRound className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection
-            icon={UserRound}
-            title="Founder & leadership profiles not yet extracted"
-            description="Names, titles, background, and key achievements for founders/leadership will appear here once the source document is processed."
-          />
-        </SectionCard>
-        <LeadershipFallback dealId={dealId} />
+        <LeadershipSection dealId={dealId} />
         <CorroborationPanel
           items={corroboration.items}
           verifiedCount={corroboration.verifiedCount}

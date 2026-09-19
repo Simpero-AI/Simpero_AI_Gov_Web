@@ -1,5 +1,5 @@
-import { useMemo, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState, type ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Star } from "lucide-react";
 import {
   fetchCompanySynthesis,
@@ -17,6 +17,13 @@ import { ProvenanceBadge } from "@/components/mvp/primitives/ProvenanceBadge";
 import { ProseWithClaims } from "@/components/mvp/primitives/ClaimText";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
 import { Button } from "@/components/mvp/primitives/button";
+import { Textarea } from "@/components/mvp/primitives/textarea";
+import {
+  fetchIcSignOff,
+  recordIcSignOff,
+  icSignOffQueryKey,
+  type IcSignOffDecision,
+} from "@/api/icSignOff";
 import {
   DenseTable,
   DenseTableBody,
@@ -25,10 +32,8 @@ import {
   DenseTableHeaderRow,
   DenseTableRow,
 } from "@/components/mvp/primitives/DenseTable";
-import {
-  CorroborationPanel,
-  type CorroborationSourceItem,
-} from "@/components/mvp/analysis/CorroborationPanel";
+import { CorroborationPanel } from "@/components/mvp/analysis/CorroborationPanel";
+import { summaryCorroboration } from "@/components/mvp/analysis/corroborationFromClaims";
 import { useCitationSafe } from "@/contexts/CitationContext";
 import { formatUsdShort, formatBpAsPct, formatRatio } from "@/lib/dealMetricsFormat";
 import {
@@ -36,7 +41,6 @@ import {
   type ICMemoResult,
   type Claim,
   type SourcedSentence,
-  type Sourced,
 } from "@shared/simperoTypes";
 
 interface SummaryTabProps {
@@ -79,6 +83,127 @@ function SectionCard({
       </div>
       {children}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// IC Sign-off — the investment-committee decision, persisted in the backend's
+// append-only human_audit_log (GET/POST /deals/{id}/ic-sign-off). The latest
+// recorded decision is the current one; recording a new one supersedes it
+// (the history is retained server-side). Before any decision, GET returns null
+// and this renders the un-decided state with both actions enabled.
+// ---------------------------------------------------------------------------
+
+function IcSignOffCard({ dealId }: { dealId: string }) {
+  const queryClient = useQueryClient();
+  const [notes, setNotes] = useState("");
+
+  const { data: current, isLoading } = useQuery({
+    queryKey: icSignOffQueryKey(dealId),
+    queryFn: () => fetchIcSignOff(dealId),
+  });
+
+  const mutation = useMutation({
+    mutationFn: (decision: IcSignOffDecision) =>
+      recordIcSignOff(dealId, { decision, notes: notes.trim() || null }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(icSignOffQueryKey(dealId), result);
+      setNotes("");
+    },
+  });
+
+  const pending = mutation.isPending;
+  const pendingDecision = mutation.variables;
+
+  const decidedAt = current
+    ? new Date(current.createdAt).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : null;
+
+  return (
+    <SectionCard
+      eyebrow="IC Sign-off"
+      action={
+        current ? (
+          <span
+            className={cn(
+              "rounded-full border px-2.5 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.5px]",
+              current.decision === "approve"
+                ? "border-[color:var(--rev-success)]/40 text-[color:var(--rev-success)]"
+                : "border-[color:var(--rev-danger)]/40 text-[color:var(--rev-danger)]"
+            )}
+          >
+            {current.decision === "approve" ? "Approved" : "Declined"}
+          </span>
+        ) : null
+      }
+    >
+      {current ? (
+        <div className="mb-4 space-y-1.5">
+          <p className="text-[12.5px] leading-relaxed text-[color:var(--rev-text-4)]">
+            {current.decision === "approve" ? "Approved" : "Declined"}
+            {current.actorEmail ? (
+              <>
+                {" by "}
+                <span className="text-[color:var(--rev-text-2)]">{current.actorEmail}</span>
+              </>
+            ) : null}
+            {decidedAt ? <span className="text-[color:var(--rev-text-6)]"> · {decidedAt}</span> : null}
+          </p>
+          {current.notes ? (
+            <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-[color:var(--rev-text-6)]">
+              {current.notes}
+            </p>
+          ) : null}
+          <p className="text-[11px] text-[color:var(--rev-text-7)]">
+            Recording a new decision replaces this one.
+          </p>
+        </div>
+      ) : (
+        <p className="mb-4 text-[12.5px] leading-relaxed text-[color:var(--rev-text-6)]">
+          {isLoading
+            ? "Loading the current decision…"
+            : "No IC decision recorded yet. Approving or declining is saved to the deal's audit trail."}
+        </p>
+      )}
+
+      <Textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Optional notes for this decision"
+        rows={2}
+        disabled={pending}
+        className="mb-3 text-[12.5px]"
+      />
+
+      <div className="flex items-center gap-2.5">
+        <Button
+          variant="outline"
+          disabled={pending || isLoading}
+          onClick={() => mutation.mutate("approve")}
+          className="border-[color:var(--rev-success)]/40 text-[color:var(--rev-success)] hover:bg-[color:var(--rev-success)]/10"
+        >
+          {pending && pendingDecision === "approve" ? "Saving…" : "Approve"}
+        </Button>
+        <Button
+          variant="outline"
+          disabled={pending || isLoading}
+          onClick={() => mutation.mutate("decline")}
+          className="border-[color:var(--rev-danger)]/40 text-[color:var(--rev-danger)] hover:bg-[color:var(--rev-danger)]/10"
+        >
+          {pending && pendingDecision === "decline" ? "Saving…" : "Decline"}
+        </Button>
+      </div>
+
+      {mutation.isError ? (
+        <p className="mt-2.5 text-[12px] text-[color:var(--rev-danger)]">
+          Couldn&apos;t save the decision. Please try again.
+        </p>
+      ) : null}
+    </SectionCard>
   );
 }
 
@@ -191,58 +316,13 @@ function buildRiskAssessmentRows(
 }
 
 // ---------------------------------------------------------------------------
-// Corroboration — derives real Verified/Partial counts from this tab's own
-// Sourced fields (citation.verified) rather than fabricating source data
-// that doesn't exist yet (plan §3 item 4). Missing fields are excluded
-// (nothing rendered to corroborate); everything else is either backed by a
-// verified document citation ("verified") or not ("partial") — mirroring
-// the same extracted/verified heuristic already used elsewhere on this page
-// (see the Company tab's `getStatus` helper in DealDetail.tsx).
+// Corroboration — a read-out of this tab's OWN live claims views, not the
+// IC-memo deliverable the composer never writes (which left the panel empty on
+// every real deal). The claims-driven financial figures (which also back the
+// Key Metrics cards) contribute their real trust status, and each grounded
+// executive-summary point that carries a citation counts as `cited`. See
+// `summaryCorroboration` in corroborationFromClaims.ts.
 // ---------------------------------------------------------------------------
-
-function collectSummaryCorroboration(memoTyped: Partial<ICMemoResult> | null): {
-  items: CorroborationSourceItem[];
-  verifiedCount: number;
-  partialCount: number;
-  unverifiedCount: number;
-} {
-  const d = memoTyped?.deliverable;
-  const empty = { items: [] as CorroborationSourceItem[], verifiedCount: 0, partialCount: 0, unverifiedCount: 0 };
-  if (!d) return empty;
-
-  const fields: Array<Sourced<unknown> | undefined> = [
-    d.executiveSummary?.investmentHighlight,
-    d.investmentThesisCards,
-    d.riskRegister,
-    // investmentStructure fields removed along with the "Proposed Deal
-    // Terms" section itself — already counted in CapTableTab's own
-    // corroboration collector (its real, correct home; see removal note
-    // above the old section's location).
-    d.headerMetrics?.targetIrrPct,
-    d.headerMetrics?.exitValuationUsd,
-    d.headerMetrics?.moic,
-    d.exitStrategy?.scenarios,
-    d.exitStrategy?.weightedReturn,
-    ...(d.icRecommendation?.highlightBullets ?? []),
-  ];
-
-  let verified = 0;
-  let partial = 0;
-  for (const f of fields) {
-    if (!f || f.provenance === "missing") continue;
-    if (f.provenance === "extracted" && f.citation?.verified) verified += 1;
-    else partial += 1;
-  }
-  const total = verified + partial;
-  if (total === 0) return empty;
-
-  return {
-    items: [{ id: "source-doc", name: memoTyped?.fileName ?? "Source document", kind: "document", citeCount: total }],
-    verifiedCount: verified,
-    partialCount: partial,
-    unverifiedCount: 0,
-  };
-}
 
 export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
   const citationCtx = useCitationSafe();
@@ -278,7 +358,10 @@ export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
   // Initial Screening tab's own risk flags (real, claims-grounded) so Risk
   // Assessment shows the concerns a partner would actually see.
   const screeningRiskFlags = screeningInsightsQuery.data?.riskFlags ?? [];
-  const corroboration = useMemo(() => collectSummaryCorroboration(memoTyped), [memoTyped]);
+  const corroboration = useMemo(
+    () => summaryCorroboration(financialsQuery.data, execSummaryPoints),
+    [financialsQuery.data, execSummaryPoints]
+  );
   const riskRegister = memoTyped?.deliverable?.riskRegister;
 
   return (
@@ -750,43 +833,11 @@ export function SummaryTab({ dealId, memoTyped }: SummaryTabProps) {
         );
       })()}
 
-      {/* IC Sign-off — no backend persistence exists yet (plan §3 item 2):
-          renders a real-looking, visibly disabled control rather than a fake
-          success state. */}
-      <SectionCard
-        eyebrow="IC Sign-off"
-        action={<span className="font-mono text-[11px] text-[color:var(--rev-text-7)]">Not yet wired to a backend</span>}
-      >
-        <p className="mb-4 text-[12.5px] leading-relaxed text-[color:var(--rev-text-6)]">
-          IC sign-off tracking isn&apos;t persisted yet — approving or declining here won&apos;t be saved. This previews
-          the control that will ship once per-firm IC membership and voting are wired up.
-        </p>
-        <div className="flex items-center gap-2.5">
-          <Button
-            disabled
-            variant="outline"
-            title="Coming soon — not yet wired to a backend"
-            className="border-[color:var(--rev-success)]/40 text-[color:var(--rev-success)] disabled:opacity-60"
-          >
-            Approve
-          </Button>
-          <Button
-            disabled
-            variant="outline"
-            title="Coming soon — not yet wired to a backend"
-            className="border-[color:var(--rev-danger)]/40 text-[color:var(--rev-danger)] disabled:opacity-60"
-          >
-            Decline
-          </Button>
-        </div>
-      </SectionCard>
+      {/* IC Sign-off — persisted to the deal's append-only audit trail
+          (GET/POST /deals/{id}/ic-sign-off). */}
+      <IcSignOffCard dealId={dealId} />
 
-      <CorroborationPanel
-        items={corroboration.items}
-        verifiedCount={corroboration.verifiedCount}
-        partialCount={corroboration.partialCount}
-        unverifiedCount={corroboration.unverifiedCount}
-      />
+      <CorroborationPanel items={corroboration.items} statusCounts={corroboration.statusCounts} />
 
     </div>
   );

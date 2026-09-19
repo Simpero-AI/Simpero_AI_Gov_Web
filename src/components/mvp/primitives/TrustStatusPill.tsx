@@ -15,9 +15,9 @@
 // conflicted read like a downgrade rather than a flag. The `title` gives the plain
 // meaning on hover (esp. "Partial" = internally verified, not a failure).
 
-type PillStyle = { label: string; color: string; tint: string; title: string };
+export type TrustStatusMeta = { label: string; color: string; tint: string; title: string };
 
-const TRUST_STATUS_STYLE: Record<string, PillStyle> = {
+const TRUST_STATUS_STYLE: Record<string, TrustStatusMeta> = {
   verified: {
     label: "Verified",
     color: "var(--rev-success)",
@@ -56,9 +56,25 @@ const TRUST_STATUS_STYLE: Record<string, PillStyle> = {
   },
 };
 
-// Unknown runtime status (a backend rename ahead of a deploy) still renders its
-// raw value legibly in the neutral pill rather than a blank.
-function styleFor(status: string): PillStyle {
+// Canonical severity/ladder order — the sequence any status breakdown should be
+// read in (best-corroborated first, flags before neutral tails). Consumers that
+// tally statuses (e.g. the corroboration panel header) sort against this so the
+// same statuses always render in the same order across surfaces.
+export const TRUST_STATUS_ORDER = [
+  "verified",
+  "partially_verified",
+  "cited",
+  "conflicted",
+  "inconclusive",
+  "derived",
+] as const;
+
+// The single source of truth for how a trust status reads (label + colour +
+// hover title). Exported so other surfaces render the *same* vocabulary as the
+// pill instead of re-deriving their own labels/colours and drifting. Unknown
+// runtime status (a backend rename ahead of a deploy) still renders its raw
+// value legibly in the neutral style rather than a blank.
+export function trustStatusMeta(status: string): TrustStatusMeta {
   return (
     TRUST_STATUS_STYLE[status] ?? {
       label: status,
@@ -70,7 +86,7 @@ function styleFor(status: string): PillStyle {
 }
 
 export function TrustStatusPill({ status }: { status: string }) {
-  const s = styleFor(status);
+  const s = trustStatusMeta(status);
   return (
     <span
       title={s.title}
