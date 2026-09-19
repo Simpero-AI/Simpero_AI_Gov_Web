@@ -35,12 +35,11 @@ interface WorkspaceTabProps {
  * All 6 panes are now wired: Overview / Activity / Draft Memo render real
  * `ICMemoResult`/activity-log data; Data Room renders the deal's verified
  * documents (GET /deals/{id}/documents) with an honestly-empty, unbacked
- * review status; Notes & Transcripts persists Analyst Notes and the Interview
- * Log to the deal's append-only note log (Agent-Drafted Questions stays an
- * honest empty state — a generation feature, not persistence). Checklist has
- * no backing data yet, so it renders the real, visibly-disabled "add"
- * affordance + explicit empty state rather than fabricated local state or a
- * bare "coming soon" (see each pane's own comment).
+ * review status; Checklist persists diligence requests to the deal's
+ * append-only checklist log (add + advance status); Notes & Transcripts
+ * persists Analyst Notes and the Interview Log to the deal's append-only note
+ * log (Agent-Drafted Questions stays an honest empty state — a generation
+ * feature, not persistence). See each pane's own comment.
  */
 export function WorkspaceTab({ memoTyped, dealId }: WorkspaceTabProps) {
   const [pane, setPane] = useState<WorkspacePaneKey>("overview");
@@ -66,7 +65,7 @@ export function WorkspaceTab({ memoTyped, dealId }: WorkspaceTabProps) {
 
       {pane === "overview" && <OverviewPane memoTyped={memoTyped} dealId={dealId} />}
       {pane === "data-room" && <DataRoomPane dealId={dealId} />}
-      {pane === "checklist" && <ChecklistPane />}
+      {pane === "checklist" && <ChecklistPane dealId={dealId} />}
       {pane === "activity" && <ActivityPane dealId={dealId} />}
       {pane === "notes" && <NotesTranscriptsPane dealId={dealId} />}
       {pane === "draft-memo" && <DraftMemoPane memoTyped={memoTyped} />}
