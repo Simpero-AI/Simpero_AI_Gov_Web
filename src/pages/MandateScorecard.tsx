@@ -59,11 +59,12 @@ export default function MandateScorecard({ section }: Props) {
   const { user, loading: authLoading } = useAuth();
   const [showResetModal, setShowResetModal] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  // Only Mandate Builder still has a working save path (Firm Profile and
-  // Scoring Framework's writes 404 unconditionally with no FastAPI
-  // replacement — see FirmProfileBlock/EditableFrameworkBlock's no-save
-  // comments) — so this is the only save ref left to wire up.
+  // Firm Profile, Mandate Builder, and Scoring Framework each persist via their
+  // own save ref — firm/framework through PUT /investment-profile, mandate
+  // through PUT /mandate. Reset stays Mandate-only.
+  const firmSaveRef = useRef<(() => void) | null>(null);
   const mandateSaveRef = useRef<(() => void) | null>(null);
+  const frameworkSaveRef = useRef<(() => void) | null>(null);
   const mandateResetRef = useRef<(() => Promise<void>) | null>(null);
   const [isResetting, setIsResetting] = useState(false);
 
@@ -145,17 +146,14 @@ export default function MandateScorecard({ section }: Props) {
   const dirty = activeState.dirty;
   const saveState: MandateSaveState = saving ? "saving" : dirty ? "unsaved" : "saved";
 
-  // Firm Profile and Scoring Framework have no persistence path at all (see
-  // FirmProfileBlock/EditableFrameworkBlock) — their Save/Reset controls are
-  // force-disabled+explained (topbar props below) rather than attempted, so
-  // Mandate Builder is the only tab this ever needs to act on.
-  const saveDisabled = active === "firm" || active === "framework";
-  const saveDisabledReason =
-    active === "firm"
-      ? "Saving isn't available for Firm Profile yet"
-      : active === "framework"
-      ? "Saving isn't available for Scoring Framework yet"
-      : undefined;
+  // Deal Scorecard is the only tab with nothing to persist — manual
+  // per-criterion scores have no endpoint yet (see DealScorecardTab) — so its
+  // Save is force-disabled+explained; Firm Profile / Mandate Builder / Scoring
+  // Framework all save for real. Reset stays Mandate-only.
+  const saveDisabled = active === "scorecard";
+  const saveDisabledReason = saveDisabled
+    ? "Saving isn't available for the Deal Scorecard yet"
+    : undefined;
   const resetDisabled = active !== "mandate";
   const resetDisabledReason = resetDisabled ? "Reset is only available for Mandate Builder" : undefined;
 
@@ -168,7 +166,9 @@ export default function MandateScorecard({ section }: Props) {
   ].filter((label): label is string => Boolean(label));
 
   const handleSaveConfiguration = () => {
-    if (active === "mandate") mandateSaveRef.current?.();
+    if (active === "firm") firmSaveRef.current?.();
+    else if (active === "mandate") mandateSaveRef.current?.();
+    else if (active === "framework") frameworkSaveRef.current?.();
   };
 
   const handleResetToDefaults = async () => {
@@ -275,13 +275,13 @@ export default function MandateScorecard({ section }: Props) {
               // when active.
               <>
                 <div style={{ display: active === "firm" ? undefined : "none" }}>
-                  <FirmProfileBlock profile={profile} onStateChange={setFirmState} />
+                  <FirmProfileBlock profile={profile} profileLoading={profileQuery.isLoading} saveRef={firmSaveRef} onStateChange={setFirmState} />
                 </div>
                 <div style={{ display: active === "mandate" ? undefined : "none" }}>
                   <EditableMandateBlock profile={profile} saveRef={mandateSaveRef} resetRef={mandateResetRef} onStateChange={setMandateState} />
                 </div>
                 <div style={{ display: active === "framework" ? undefined : "none" }}>
-                  <EditableFrameworkBlock profile={profile} onStateChange={setFrameworkState} />
+                  <EditableFrameworkBlock profile={profile} profileLoading={profileQuery.isLoading} saveRef={frameworkSaveRef} onStateChange={setFrameworkState} />
                 </div>
                 {active === "scorecard" && (
                   <DealScorecardTab profile={profile} dealId={dealId} onDealIdChange={setDealId} />
