@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, FileText, Globe, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProvenanceBadge } from "@/components/mvp/primitives/ProvenanceBadge";
+import { trustStatusMeta, TRUST_STATUS_ORDER } from "@/components/mvp/primitives/TrustStatusPill";
 
 export type CorroborationSourceKind = "document" | "interview" | "external";
 
@@ -26,11 +27,32 @@ const KIND_ICON: Record<CorroborationSourceKind, typeof FileText> = {
   external: Globe,
 };
 
+/**
+ * One `{ status, count }` pair for the header's full-ladder breakdown, where
+ * `status` is a trust-status key from `TrustStatusPill` (verified /
+ * partially_verified / cited / conflicted / inconclusive / derived). Panels
+ * fed from a live claims view pass this instead of the coarse
+ * verified/partial/unverified triple, so `cited` and `conflicted` keep their
+ * own honest label and colour rather than being force-collapsed into
+ * "Unverified".
+ */
+export interface CorroborationStatusCount {
+  status: string;
+  count: number;
+}
+
 export interface CorroborationPanelProps {
   items: CorroborationSourceItem[];
-  verifiedCount: number;
-  partialCount: number;
-  unverifiedCount: number;
+  /**
+   * Full trust-status breakdown for the header (claims-view-backed tabs). When
+   * provided it takes precedence over verified/partial/unverifiedCount and is
+   * rendered with each status's own canonical label/colour. Omit for the
+   * legacy coarse triple below.
+   */
+  statusCounts?: CorroborationStatusCount[];
+  verifiedCount?: number;
+  partialCount?: number;
+  unverifiedCount?: number;
   defaultOpen?: boolean;
   className?: string;
 }
@@ -39,16 +61,33 @@ export interface CorroborationPanelProps {
  * Collapsible "Corroboration (N source(s))" panel — mounted on 7 Deal
  * Analysis tabs later. Composes `ProvenanceBadge` for the optional per-item
  * verification pill rather than re-implementing verified/partial styling.
+ *
+ * The header summarises trust either as the full status ladder (`statusCounts`,
+ * used by tabs wired to a live claims view) or, for callers still on the coarse
+ * model, the three verified/partial/unverified counts.
  */
 export function CorroborationPanel({
   items,
-  verifiedCount,
-  partialCount,
-  unverifiedCount,
+  statusCounts,
+  verifiedCount = 0,
+  partialCount = 0,
+  unverifiedCount = 0,
   defaultOpen = false,
   className,
 }: CorroborationPanelProps) {
   const [open, setOpen] = useState(defaultOpen);
+
+  // Full-ladder header entries, kept only where count > 0 and ordered by the
+  // canonical severity ladder so the same statuses always read left-to-right
+  // the same way, regardless of the order the caller tallied them.
+  const ladderEntries = (statusCounts ?? [])
+    .filter((s) => s.count > 0)
+    .sort((a, b) => {
+      const ia = TRUST_STATUS_ORDER.indexOf(a.status as (typeof TRUST_STATUS_ORDER)[number]);
+      const ib = TRUST_STATUS_ORDER.indexOf(b.status as (typeof TRUST_STATUS_ORDER)[number]);
+      // Unknown statuses (ia/ib === -1) sort after the known ladder.
+      return (ia === -1 ? TRUST_STATUS_ORDER.length : ia) - (ib === -1 ? TRUST_STATUS_ORDER.length : ib);
+    });
 
   if (items.length === 0) {
     return (
@@ -85,9 +124,22 @@ export function CorroborationPanel({
         </span>
         <span className="flex-1" />
         <span className="flex items-center gap-3 font-mono text-[11.5px]">
-          {verifiedCount > 0 ? <span className="text-[color:var(--rev-success)]">{verifiedCount} Verified</span> : null}
-          {partialCount > 0 ? <span className="text-[color:var(--rev-warning)]">{partialCount} Partial</span> : null}
-          {unverifiedCount > 0 ? <span className="text-[color:var(--rev-danger)]">{unverifiedCount} Unverified</span> : null}
+          {statusCounts ? (
+            ladderEntries.map((s) => {
+              const meta = trustStatusMeta(s.status);
+              return (
+                <span key={s.status} title={meta.title} style={{ color: meta.color }}>
+                  {s.count} {meta.label}
+                </span>
+              );
+            })
+          ) : (
+            <>
+              {verifiedCount > 0 ? <span className="text-[color:var(--rev-success)]">{verifiedCount} Verified</span> : null}
+              {partialCount > 0 ? <span className="text-[color:var(--rev-warning)]">{partialCount} Partial</span> : null}
+              {unverifiedCount > 0 ? <span className="text-[color:var(--rev-danger)]">{unverifiedCount} Unverified</span> : null}
+            </>
+          )}
         </span>
       </button>
       {open ? (

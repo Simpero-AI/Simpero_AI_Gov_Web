@@ -1,14 +1,23 @@
-import { useState, useEffect, useRef } from "react";
+import type React from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, LayoutTemplate, Plus, Trash2, X } from "lucide-react";
+import { INVESTMENT_PROFILE_QUERY_KEY, upsertInvestmentProfile } from "@/api/investmentProfile";
+import { toast } from "@/components/mvp/primitives/sonner";
 import { cn } from "@/lib/utils";
 import { FRAMEWORK_DEFAULTS, type FrameworkCategory, type FrameworkCriterion, type InvestmentProfile } from "@/data/mandateDefaults";
 
 interface Props {
   profile: InvestmentProfile | null;
-  /** Fires whenever local dirty state changes — lets the page-level topbar
-   * show a real save-status indicator instead of a fabricated one. `saving`
-   * is always false: this block has no persistence path (see the no-save
-   * comment below). */
+  /** True while the profile GET is still in flight (no data yet). doSave
+   * refuses to run then, so a fast edit-and-save can't full-replace the weights
+   * blob with an empty one before the real profile has loaded. */
+  profileLoading?: boolean;
+  /** MandateScorecard's topbar Save button calls this to persist the scoring
+   * framework (weights.framework.categories) via PUT /investment-profile. */
+  saveRef?: React.MutableRefObject<(() => void) | null>;
+  /** Fires whenever local dirty/saving state changes — lets the page-level
+   * topbar show a real save-status indicator instead of a fabricated one. */
   onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
 }
 
@@ -45,16 +54,10 @@ export function loadCategories(profile: InvestmentProfile | null): FrameworkCate
 const inp =
   "bg-transparent focus:outline-none border-0 border-b border-transparent focus:border-[color:var(--rev-border-strong)] text-sm text-[color:var(--rev-text-1)]";
 
-export function EditableFrameworkBlock({ profile, onStateChange }: Props) {
+export function EditableFrameworkBlock({ profile, profileLoading, saveRef, onStateChange }: Props) {
   const [isDirty, setIsDirty] = useState(false);
-  // No persistence path: this block used to call
-  // trpc.investmentProfile.upsert.useMutation() to save the framework
-  // weights, same dead endpoint as FirmProfileBlock — it 404s
-  // unconditionally (no Express/tRPC server, and no FastAPI write endpoint
-  // for scoring-framework weights was ever built; confirmed live). Categories/
-  // criteria/weights below stay fully editable (local state + dirty tracking
-  // only); Save is disabled for this tab in MandateScorecard's topbar
-  // instead of attempting a call that can never succeed.
+  const queryClient = useQueryClient();
+  const saveMutation = useMutation({ mutationFn: upsertInvestmentProfile });
 
   const [categories, setCategoriesRaw] = useState<FrameworkCategory[]>(() => loadCategories(profile));
   // Every local edit to `categories` (add/remove/rename category or
@@ -68,16 +71,48 @@ export function EditableFrameworkBlock({ profile, onStateChange }: Props) {
   const hydratedForProfileRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Never clobber unsaved edits: a background refetch — e.g. the shared
+    // profile query invalidated by *another* always-mounted tab's save, which
+    // bumps updatedAt — must not re-hydrate this tab and drop what the user is
+    // editing. doSave clears isDirty on success, so a real save still
+    // re-hydrates from the refreshed profile on the next refetch.
+    if (isDirty) return;
     const key = profile ? String(profile.updatedAt) : "null";
     if (hydratedForProfileRef.current === key) return;
     hydratedForProfileRef.current = key;
     setCategoriesRaw(loadCategories(profile));
-    setIsDirty(false);
-  }, [profile]);
+  }, [profile, isDirty]);
+
+  const doSave = useCallback(async () => {
+    if (saveMutation.isPending) return;
+    if (profileLoading) {
+      toast.error("Still loading your scoring framework — try saving again in a moment.");
+      return;
+    }
+    try {
+      // Preserve sibling keys of `framework` under weights, and full-replace
+      // `framework` itself — it holds only `categories` today (see
+      // loadCategories), so a whole-object replace is equivalent to a
+      // categories-only patch, but the outer spread keeps this safe if weights
+      // ever grows other top-level keys.
+      await saveMutation.mutateAsync({
+        weights: { ...(profile?.weights ?? {}), framework: { categories } },
+      });
+      await queryClient.invalidateQueries({ queryKey: INVESTMENT_PROFILE_QUERY_KEY });
+      setIsDirty(false);
+      toast.success("Scoring framework saved.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save scoring framework.");
+    }
+  }, [saveMutation, queryClient, profile, profileLoading, categories]);
 
   useEffect(() => {
-    onStateChange?.({ dirty: isDirty, saving: false });
-  }, [isDirty, onStateChange]);
+    if (saveRef) saveRef.current = doSave;
+  }, [saveRef, doSave]);
+
+  useEffect(() => {
+    onStateChange?.({ dirty: isDirty, saving: saveMutation.isPending });
+  }, [isDirty, saveMutation.isPending, onStateChange]);
 
   const weightTotal = categories.reduce((sum, c) => sum + c.weight, 0);
   const totalCriteria = categories.reduce((s, c) => s + c.criteria.length, 0);

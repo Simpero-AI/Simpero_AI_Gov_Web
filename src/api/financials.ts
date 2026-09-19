@@ -29,6 +29,10 @@ export interface FinancialFact {
   status: FinancialFactStatus;
   entity: string | null;
   sourceUrl: string | null;
+  /** True when this figure failed the backend's arithmetic consistency check
+   * (SIM-372) — e.g. revenue − cogs ≠ gross_profit. The value still shows (an
+   * operand may be the wrong line, not this one); the tab badges it. */
+  reconciliationMismatch?: boolean;
 }
 
 export interface FinancialTrendPoint {

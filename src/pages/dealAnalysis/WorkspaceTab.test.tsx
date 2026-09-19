@@ -4,11 +4,11 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WorkspaceTab } from "./WorkspaceTab";
 
-// ActivityPane fetches via react-query — mocked so mounting it doesn't hit a
-// real network call; sessionId=null below keeps its query disabled anyway.
+// ActivityPane fetches the deal-scoped audit via react-query — mock it to an
+// empty feed so mounting it doesn't hit a real network call.
 vi.mock("@/api/logs", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/logs")>();
-  return { ...actual, fetchRecentActivity: vi.fn() };
+  return { ...actual, fetchRecentActivity: vi.fn(), fetchDealAudit: vi.fn().mockResolvedValue([]) };
 });
 // OverviewPane (the default pane) also fetches via react-query — same reason.
 vi.mock("@/api/documents", async importOriginal => {
@@ -19,6 +19,11 @@ vi.mock("@/api/documents", async importOriginal => {
 vi.mock("@/api/memoDraft", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/memoDraft")>();
   return { ...actual, fetchMemoDraft: vi.fn().mockResolvedValue({ recommendation: null }) };
+});
+// NotesTranscriptsPane fetches its note logs via react-query — same reason.
+vi.mock("@/api/dealNotes", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/dealNotes")>();
+  return { ...actual, fetchDealNotes: vi.fn().mockResolvedValue([]) };
 });
 
 afterEach(cleanup);
@@ -44,7 +49,9 @@ describe("WorkspaceTab", () => {
     renderWorkspaceTab();
 
     await user.click(screen.getByRole("button", { name: "Data Room" }));
-    expect(screen.getByText("0 documents on file")).toBeInTheDocument();
+    // The Data Room document count now resolves from the documents query
+    // (async), not the synchronous memo fileName — await it.
+    expect(await screen.findByText("0 documents on file")).toBeInTheDocument();
     expect(screen.queryByText("Diligence Progress")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Checklist" }));
@@ -52,7 +59,8 @@ describe("WorkspaceTab", () => {
     expect(screen.queryByText("0 documents on file")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Activity" }));
-    expect(screen.getByText("Deal-scoped activity feed")).toBeInTheDocument();
+    // The audit query settles asynchronously (Loading… -> empty feed header).
+    expect(await screen.findByText("Deal-scoped activity feed")).toBeInTheDocument();
     expect(screen.queryByText("Diligence Checklist")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Notes & Transcripts" }));

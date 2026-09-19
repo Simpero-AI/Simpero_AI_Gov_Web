@@ -1,14 +1,23 @@
-import { useState, useEffect, useRef } from "react";
+import type React from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { INVESTMENT_PROFILE_QUERY_KEY, upsertInvestmentProfile } from "@/api/investmentProfile";
+import { toast } from "@/components/mvp/primitives/sonner";
 import { Textarea } from "@/components/mvp/primitives/textarea";
 import { MANDATE_DEFAULTS, type InvestmentProfile } from "@/data/mandateDefaults";
 import { SimperoMarkIcon } from "@/components/mvp/icons";
 
 interface Props {
   profile: InvestmentProfile | null;
-  /** Fires whenever local dirty state changes — lets the page-level topbar
-   * show a real save-status indicator instead of a fabricated one. `saving`
-   * is always false: this block has no persistence path (see the no-save
-   * comment below). */
+  /** True while the profile GET is still in flight (no data yet). doSave
+   * refuses to run then, so a fast edit-and-save can't full-replace the mandate
+   * blob with an empty one before the real profile has loaded. */
+  profileLoading?: boolean;
+  /** MandateScorecard's topbar Save button calls this to persist Firm Profile
+   * (firmName + the mandate blob's firm fields) via PUT /investment-profile. */
+  saveRef?: React.MutableRefObject<(() => void) | null>;
+  /** Fires whenever local dirty/saving state changes — lets the page-level
+   * topbar show a real save-status indicator instead of a fabricated one. */
   onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
 }
 
@@ -22,17 +31,10 @@ const inp =
 const lbl =
   "block font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[color:var(--rev-text-6)] mb-1.5";
 
-export function FirmProfileBlock({ profile, onStateChange }: Props) {
+export function FirmProfileBlock({ profile, profileLoading, saveRef, onStateChange }: Props) {
   const [isDirty, setIsDirty] = useState(false);
-  // No persistence path: this block used to call
-  // trpc.investmentProfile.upsert.useMutation() to save, but that endpoint
-  // 404s unconditionally — the Express/tRPC server it lived on was removed
-  // with the FastAPI migration and no write endpoint for firm-profile
-  // fields was ever ported (confirmed live: POST
-  // /api/trpc/investmentProfile.upsert?batch=1 → 404). Fields below stay
-  // fully editable (local state + dirty tracking only); Save is disabled
-  // for this tab in MandateScorecard's topbar instead of attempting a call
-  // that can never succeed.
+  const queryClient = useQueryClient();
+  const saveMutation = useMutation({ mutationFn: upsertInvestmentProfile });
 
   const hydratedRef = useRef<string | null>(null);
 
@@ -44,6 +46,12 @@ export function FirmProfileBlock({ profile, onStateChange }: Props) {
   const [investmentThesis, setInvestmentThesis] = useState(() => getStr(profile?.mandate ?? {}, "investmentThesis"));
 
   useEffect(() => {
+    // Never clobber unsaved edits: a background refetch — e.g. the shared
+    // profile query invalidated by *another* always-mounted tab's save, which
+    // bumps updatedAt — must not re-hydrate this tab and silently drop what the
+    // user is typing. doSave clears isDirty on success, so a real save still
+    // re-hydrates from the refreshed profile on the next refetch.
+    if (isDirty) return;
     const key = profile ? String(profile.updatedAt) : "null";
     if (hydratedRef.current === key) return;
     hydratedRef.current = key;
@@ -54,12 +62,56 @@ export function FirmProfileBlock({ profile, onStateChange }: Props) {
     setFundVintage(getStr(m, "fundVintage"));
     setHqLocation(getStr(m, "hqLocation"));
     setInvestmentThesis(getStr(m, "investmentThesis"));
-    setIsDirty(false);
-  }, [profile]);
+  }, [profile, isDirty]);
+
+  const doSave = useCallback(async () => {
+    if (saveMutation.isPending) return;
+    if (profileLoading) {
+      toast.error("Still loading your firm profile — try saving again in a moment.");
+      return;
+    }
+    try {
+      // Merge the five firm fields into the existing mandate blob rather than
+      // replacing it — the mandate column is shared with EditableMandateBlock's
+      // checkMin/checkMax/etc., and the endpoint full-replaces whatever `mandate`
+      // it is handed.
+      await saveMutation.mutateAsync({
+        firmName,
+        mandate: {
+          ...(profile?.mandate ?? {}),
+          firmTypeFreeText: firmType,
+          aum,
+          fundVintage,
+          hqLocation,
+          investmentThesis,
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: INVESTMENT_PROFILE_QUERY_KEY });
+      setIsDirty(false);
+      toast.success("Firm profile saved.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save firm profile.");
+    }
+  }, [
+    saveMutation,
+    queryClient,
+    profile,
+    profileLoading,
+    firmName,
+    firmType,
+    aum,
+    fundVintage,
+    hqLocation,
+    investmentThesis,
+  ]);
 
   useEffect(() => {
-    onStateChange?.({ dirty: isDirty, saving: false });
-  }, [isDirty, onStateChange]);
+    if (saveRef) saveRef.current = doSave;
+  }, [saveRef, doSave]);
+
+  useEffect(() => {
+    onStateChange?.({ dirty: isDirty, saving: saveMutation.isPending });
+  }, [isDirty, saveMutation.isPending, onStateChange]);
 
   const m = profile?.mandate ?? {};
   // checkSize is now stored as numeric checkMin/checkMax (see EditableMandateBlock) —

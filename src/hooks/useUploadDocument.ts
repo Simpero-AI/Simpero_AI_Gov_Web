@@ -1,6 +1,6 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/mvp/primitives/sonner";
-import type { CompletedUpload } from "@/api/documents";
+import { dealDocumentsQueryKey, type CompletedUpload } from "@/api/documents";
 import { runDocumentUpload } from "@/lib/documentUploadPipeline";
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -14,14 +14,18 @@ function successMessage(status: string): string {
 }
 
 export function useUploadDocument(dealId: string, opts?: { maxBytes?: number; allowedExtensions?: string[] }) {
+  const queryClient = useQueryClient();
   return useMutation<CompletedUpload, Error, File>({
     mutationFn: (file: File) => runDocumentUpload(dealId, file, opts),
     onSuccess: (result) => {
-      // TODO: invalidate the per-deal documents list query once one exists.
-      // An over-cap PDF never reaches here at all -- runDocumentUpload
-      // throws PageCountExceededError for it (enforced once, centrally),
-      // which lands in onError below with the same rejection message
-      // instead of this success toast.
+      // Refresh the per-deal documents list (dealDocumentsQueryKey) so the new
+      // row and its verification status surface everywhere that query is read
+      // -- the Step 3 confirm list, Screening Materials, the Data Room -- without
+      // waiting for an unrelated refetch. An over-cap PDF never reaches here at
+      // all: runDocumentUpload throws PageCountExceededError for it (enforced
+      // once, centrally), which lands in onError below with the same rejection
+      // message instead of this success toast.
+      queryClient.invalidateQueries({ queryKey: dealDocumentsQueryKey(dealId) });
       toast.success(successMessage(result.status));
     },
     onError: (error: Error) => {

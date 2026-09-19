@@ -33,14 +33,16 @@ interface WorkspaceTabProps {
  * deep-linking into a specific pane isn't a requirement here.
  *
  * All 6 panes are now wired: Overview / Activity / Draft Memo render real
- * `ICMemoResult`/activity-log data; Data Room renders the deal's one real
- * tracked source file with an honestly-empty review status; Checklist and
- * Notes & Transcripts have no backing data at all, so they render the real,
- * visibly-disabled "add" affordance + explicit empty state rather than
- * fabricated local state or a bare "coming soon" (see each pane's own
- * comment).
+ * `ICMemoResult`/activity-log data; Data Room renders the deal's verified
+ * documents (GET /deals/{id}/documents) with an honestly-empty, unbacked
+ * review status; Notes & Transcripts persists Analyst Notes and the Interview
+ * Log to the deal's append-only note log (Agent-Drafted Questions stays an
+ * honest empty state — a generation feature, not persistence). Checklist has
+ * no backing data yet, so it renders the real, visibly-disabled "add"
+ * affordance + explicit empty state rather than fabricated local state or a
+ * bare "coming soon" (see each pane's own comment).
  */
-export function WorkspaceTab({ memoTyped, dealId, sessionId }: WorkspaceTabProps) {
+export function WorkspaceTab({ memoTyped, dealId }: WorkspaceTabProps) {
   const [pane, setPane] = useState<WorkspacePaneKey>("overview");
 
   return (
@@ -63,10 +65,10 @@ export function WorkspaceTab({ memoTyped, dealId, sessionId }: WorkspaceTabProps
       </div>
 
       {pane === "overview" && <OverviewPane memoTyped={memoTyped} dealId={dealId} />}
-      {pane === "data-room" && <DataRoomPane memoTyped={memoTyped} />}
+      {pane === "data-room" && <DataRoomPane dealId={dealId} />}
       {pane === "checklist" && <ChecklistPane />}
-      {pane === "activity" && <ActivityPane sessionId={sessionId} />}
-      {pane === "notes" && <NotesTranscriptsPane />}
+      {pane === "activity" && <ActivityPane dealId={dealId} />}
+      {pane === "notes" && <NotesTranscriptsPane dealId={dealId} />}
       {pane === "draft-memo" && <DraftMemoPane memoTyped={memoTyped} dealId={dealId} />}
     </div>
   );

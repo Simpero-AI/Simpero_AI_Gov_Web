@@ -298,7 +298,18 @@ describe("NewDealWizard — Step 3 confirm guard (attach mode)", () => {
 describe("NewDealWizard — reissue intake link (F10)", () => {
   function renderReissuable() {
     vi.mocked(fetchDeal).mockResolvedValue(makeDealResponse("Acme Corp"));
-    vi.mocked(fetchDealDocuments).mockResolvedValue([]); // no verified docs -> reissue prompt shows
+    // A submitted response whose only document failed verification — the exact
+    // reachable "no usable documents came back" state the reissue prompt exists
+    // for. It MUST be count>0: the confirm-step gate (confirmStepGate.ts) bounces
+    // a zero-document deal back to upload-files ("Attach a primary document
+    // first"), so a `[]` mock here would race that async navigation and only
+    // catch the reissue button in the brief window before Step 3 unmounts —
+    // the flake this file has repeatedly reddened CI with. One non-verified
+    // document keeps the gate on "allow" so Step 3 (and its prompt) render
+    // deterministically.
+    vi.mocked(fetchDealDocuments).mockResolvedValue([
+      makeDealDocument({ id: "d1", status: "mismatch" }),
+    ]);
     vi.mocked(fetchIntakeLink).mockResolvedValue({
       status: "submitted",
       recipientEmail: "gp@example.com",
