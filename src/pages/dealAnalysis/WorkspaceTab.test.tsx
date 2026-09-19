@@ -15,6 +15,11 @@ vi.mock("@/api/documents", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/documents")>();
   return { ...actual, fetchDealDocuments: vi.fn().mockResolvedValue([]) };
 });
+// DraftMemoPane's editable Recommendation fetches via react-query — same reason.
+vi.mock("@/api/memoDraft", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/api/memoDraft")>();
+  return { ...actual, fetchMemoDraft: vi.fn().mockResolvedValue({ recommendation: null }) };
+});
 // NotesTranscriptsPane fetches its note logs via react-query — same reason.
 vi.mock("@/api/dealNotes", async importOriginal => {
   const actual = await importOriginal<typeof import("@/api/dealNotes")>();

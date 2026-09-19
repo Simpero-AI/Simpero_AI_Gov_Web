@@ -1,17 +1,26 @@
-import { useMemo, type ReactNode } from "react";
-import { FileText, Minus, Plus } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { FileText, Minus, Pencil, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SourcedValue } from "@/components/mvp/primitives/SourcedValue";
 import { MissingDataPlaceholder } from "@/components/mvp/primitives/MissingDataPlaceholder";
 import { EmptyState } from "@/components/mvp/common/EmptyState";
+import { Button } from "@/components/mvp/primitives/button";
+import { Textarea } from "@/components/mvp/primitives/textarea";
 import {
   CorroborationPanel,
   type CorroborationSourceItem,
 } from "@/components/mvp/analysis/CorroborationPanel";
+import {
+  fetchMemoDraft,
+  saveMemoRecommendation,
+  memoDraftQueryKey,
+} from "@/api/memoDraft";
 import { proseFieldToString, type ICMemoResult, type Sourced, type SourcedSentence } from "@shared/simperoTypes";
 
 interface DraftMemoPaneProps {
   memoTyped: Partial<ICMemoResult> | null;
+  dealId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,6 +55,113 @@ function SectionCard({
       </div>
       {children}
     </div>
+  );
+}
+
+// The Recommendation is the one editable memo section: the AI draft
+// (icRecommendation.prose) is the default, and an analyst can override it with
+// their own text, persisted latest-wins (GET/POST /deals/{id}/memo-draft).
+function RecommendationCard({
+  dealId,
+  prose,
+}: {
+  dealId: string;
+  prose: Sourced<string | null> | undefined;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const { data } = useQuery({
+    queryKey: memoDraftQueryKey(dealId),
+    queryFn: () => fetchMemoDraft(dealId),
+  });
+
+  const mutation = useMutation({
+    mutationFn: (content: string) => saveMemoRecommendation(dealId, content),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(memoDraftQueryKey(dealId), { recommendation: saved });
+      setEditing(false);
+    },
+  });
+
+  const override = data?.recommendation ?? null;
+  const hasProse = prose && prose.provenance !== "missing" && prose.value != null;
+  const aiText = hasProse ? proseFieldToString(prose) : "";
+
+  const startEditing = () => {
+    setDraft(override?.content ?? aiText);
+    setEditing(true);
+  };
+
+  const editedOn = override
+    ? new Date(override.createdAt).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : null;
+
+  return (
+    <SectionCard eyebrow="Recommendation" icon={<FileText className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
+      {editing ? (
+        <div>
+          <Textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={8}
+            disabled={mutation.isPending}
+            className="mb-3 text-[13.5px] leading-[1.7]"
+            placeholder="Write the IC recommendation…"
+          />
+          <div className="flex items-center gap-2.5">
+            <Button
+              size="sm"
+              disabled={draft.trim().length === 0 || mutation.isPending}
+              onClick={() => mutation.mutate(draft.trim())}
+            >
+              {mutation.isPending ? "Saving…" : "Save"}
+            </Button>
+            <Button size="sm" variant="outline" disabled={mutation.isPending} onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            {mutation.isError ? (
+              <span className="text-[12px] text-[color:var(--rev-danger)]">Couldn&apos;t save. Try again.</span>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="mb-2 flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              {override ? (
+                <p className="whitespace-pre-line text-[14px] leading-[1.8] text-[color:var(--rev-text-3)]">
+                  {override.content}
+                </p>
+              ) : hasProse ? (
+                <p className="whitespace-pre-line text-[14px] leading-[1.8] text-[color:var(--rev-text-3)]">
+                  <SourcedValue sourced={prose!} fieldLabel="IC Recommendation" />
+                </p>
+              ) : (
+                <MissingDataPlaceholder gapRef={prose?.gapRef} reason={prose?.reason} />
+              )}
+            </div>
+            <Button size="sm" variant="ghost" onClick={startEditing} className="shrink-0">
+              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+              Edit
+            </Button>
+          </div>
+          {override ? (
+            <p className="text-[11px] text-[color:var(--rev-text-7)]">
+              Edited by {override.actorEmail ?? "an analyst"}
+              {editedOn ? ` · ${editedOn}` : ""} · overrides the AI draft
+            </p>
+          ) : hasProse ? (
+            <p className="text-[11px] text-[color:var(--rev-text-7)]">AI draft — edit to override</p>
+          ) : null}
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
@@ -116,12 +232,11 @@ function collectDraftMemoCorroboration(memoTyped: Partial<ICMemoResult> | null):
  *    severity, name + severity chip only, no mitigation detail — distinct
  *    enough to read as a summary rather than a duplicate table.
  */
-export function DraftMemoPane({ memoTyped }: DraftMemoPaneProps) {
+export function DraftMemoPane({ memoTyped, dealId }: DraftMemoPaneProps) {
   const d = memoTyped?.deliverable;
   const corroboration = useMemo(() => collectDraftMemoCorroboration(memoTyped), [memoTyped]);
 
   const prose = d?.icRecommendation?.prose;
-  const hasProse = prose && prose.provenance !== "missing" && prose.value != null;
 
   const thesisCards = (
     d?.investmentThesisCards?.provenance !== "missing" ? d?.investmentThesisCards?.value : []
@@ -146,15 +261,7 @@ export function DraftMemoPane({ memoTyped }: DraftMemoPaneProps) {
         </p>
       </div>
 
-      <SectionCard eyebrow="Recommendation" icon={<FileText className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-        {!hasProse ? (
-          <MissingDataPlaceholder gapRef={prose?.gapRef} reason={prose?.reason} />
-        ) : (
-          <p className="whitespace-pre-line text-[14px] leading-[1.8] text-[color:var(--rev-text-3)]">
-            <SourcedValue sourced={prose!} fieldLabel="IC Recommendation" />
-          </p>
-        )}
-      </SectionCard>
+      <RecommendationCard dealId={dealId} prose={prose} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <SectionCard eyebrow="Key Deal Merits" icon={<Plus className="h-4 w-4 text-[color:var(--rev-success)]" />}>
