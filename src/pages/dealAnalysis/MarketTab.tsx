@@ -130,9 +130,19 @@ function SizingCard({ fact }: { fact: MarketFact }) {
       className="rounded-xl border border-[color:var(--rev-border)] p-5"
       style={{ background: "var(--rev-tint-primary)" }}
     >
-      <p className="mb-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.6px] text-[color:var(--rev-primary)]">
-        {fact.label}
-      </p>
+      <div className="mb-2 flex items-center gap-2">
+        <p className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.6px] text-[color:var(--rev-primary)]">
+          {fact.label}
+        </p>
+        {fact.isWeb ? (
+          <span
+            className="rounded-full border border-[color:var(--rev-border)] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.5px] text-[color:var(--rev-text-6)]"
+            title="Sourced from public research (e.g. SEC, market-research reports), not the deal's own materials"
+          >
+            Public source
+          </span>
+        ) : null}
+      </div>
       <p className="mb-1.5 font-serif text-[28px] leading-tight text-[color:var(--rev-text-1)]">
         {fact.value}
       </p>
@@ -353,7 +363,7 @@ export function MarketTab({ dealId }: MarketTabProps) {
           <UnbackedSection
             icon={BarChart3}
             title="Market sizing not available"
-            description="No addressable-market figures (TAM, SAM, SOM, market size, or growth rate) were extracted from this deal's materials."
+            description="No addressable-market figures (TAM, SAM, SOM, market size, or growth rate) are available for this deal yet — from its materials or public sources."
           />
         ) : (
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">

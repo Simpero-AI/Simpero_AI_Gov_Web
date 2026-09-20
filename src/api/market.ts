@@ -28,6 +28,10 @@ export interface MarketFact {
   status: MarketFactStatus;
   entity: string | null;
   sourceUrl: string | null;
+  /** True for a public-source (web_search_collect) fact — sourced from SEC /
+   * market research rather than the deck. Optional for backward compatibility;
+   * treated as false when absent. */
+  isWeb?: boolean;
 }
 
 export interface MarketView {
