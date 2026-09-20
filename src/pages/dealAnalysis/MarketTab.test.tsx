@@ -115,6 +115,7 @@ describe("MarketTab", () => {
           status: "cited",
           entity: null,
           sourceUrl: "https://example.com/x",
+          isWeb: true,
         },
         {
           label: "SOM",
@@ -123,6 +124,7 @@ describe("MarketTab", () => {
           status: "cited",
           entity: null,
           sourceUrl: null,
+          isWeb: false,
         },
       ],
       marketDefinition: [],
@@ -138,6 +140,10 @@ describe("MarketTab", () => {
     // The deck-sourced fact stays plain text — not wrapped in an anchor.
     const deckCitation = screen.getByText("deck.pdf · p.3");
     expect(deckCitation.closest("a")).toBeNull();
+
+    // The public-source (isWeb) fact is badged; the deck fact is not. Exactly
+    // one badge for the two sizing cards.
+    expect(screen.getAllByText("Public source")).toHaveLength(1);
   });
 
   it("renders a non-acronym sizing label with a null citation cleanly (no blank/doubled caption)", async () => {
