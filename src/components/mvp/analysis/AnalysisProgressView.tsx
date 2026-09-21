@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AgentStatusStepList } from "./AgentStatusStepList";
 import type { PipelineStepWithStatus } from "@shared/pipelineSteps";
 import type { JobComment } from "@shared/dealsStatus";
+import { LLM_CREDIT_EXHAUSTED_CODE } from "@shared/dealsStatus";
 
 export interface AnalysisProgressViewProps {
   fileName: string;
@@ -23,6 +24,13 @@ export interface AnalysisProgressViewProps {
    * right next to the caller's own failure banner.
    */
   failed?: boolean;
+  /**
+   * DealStatusPayload.errorCode. When it's the credit/usage code and `failed` is
+   * set, the framing softens from "Analysis failed" to "Analysis paused" and names
+   * the billing/quota cause, matching the caller's amber banner -- the step area is
+   * where the analyst is already looking, so the reason belongs here too.
+   */
+  errorCode?: string | null;
 }
 
 const PHASE_LABELS: Record<string, string> = {
@@ -71,13 +79,17 @@ export function AnalysisProgressView({
   stepDurations,
   jobComments,
   failed,
+  errorCode,
 }: AnalysisProgressViewProps) {
   const elapsedLabel = useElapsedLabel(startedAt, endedAt, failed);
   const doneCount = steps.filter(s => s.status === "done").length;
   const allDone = doneCount === steps.length;
   const currentStep = steps.find(s => s.status === "current");
+  const isCreditFailure = Boolean(failed) && errorCode === LLM_CREDIT_EXHAUSTED_CODE;
   const subtitle = failed
-    ? "See the failure reason above."
+    ? isCreditFailure
+      ? "Paused on an AI provider credit or usage limit — see above."
+      : "See the failure reason above."
     : currentStep
       ? (PHASE_LABELS[currentStep.phase] ?? currentStep.title)
       : allDone
@@ -96,7 +108,11 @@ export function AnalysisProgressView({
 
         <div className="mt-5">
           <h1 className="text-xl font-bold text-slate-900">
-            {failed ? "Analysis failed" : "Analyzing your document"}
+            {failed
+              ? isCreditFailure
+                ? "Analysis paused"
+                : "Analysis failed"
+              : "Analyzing your document"}
           </h1>
           <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
         </div>

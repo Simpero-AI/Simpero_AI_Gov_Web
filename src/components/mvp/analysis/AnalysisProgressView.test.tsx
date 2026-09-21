@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { AnalysisProgressView } from "./AnalysisProgressView";
 import type { PipelineStepWithStatus } from "@shared/pipelineSteps";
+import { LLM_CREDIT_EXHAUSTED_CODE } from "@shared/dealsStatus";
 
 afterEach(cleanup);
 
@@ -42,5 +43,23 @@ describe("AnalysisProgressView", () => {
     expect(screen.queryByText("Getting started…")).not.toBeInTheDocument();
     expect(screen.queryByText("Can take up to ~15 minutes for large documents")).not.toBeInTheDocument();
     expect(screen.getByText("Acme Corp")).toBeInTheDocument();
+  });
+
+  it("softens the framing to 'paused' and names the cause on a credit/usage-limit failure", () => {
+    render(
+      <AnalysisProgressView
+        fileName="Acme Corp"
+        steps={STEPS}
+        startedAt={new Date(Date.now() - 15_000).toISOString()}
+        endedAt={null}
+        failed
+        errorCode={LLM_CREDIT_EXHAUSTED_CODE}
+      />
+    );
+    expect(screen.getByText("Analysis paused")).toBeInTheDocument();
+    expect(screen.queryByText("Analysis failed")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Paused on an AI provider credit or usage limit — see above.")
+    ).toBeInTheDocument();
   });
 });

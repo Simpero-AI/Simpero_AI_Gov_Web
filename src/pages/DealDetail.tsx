@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Award,
   ClipboardList,
+  CreditCard,
   Download,
   FileText,
   ScrollText,
@@ -82,6 +83,7 @@ import type {
 import { proseFieldToString } from "@shared/simperoTypes";
 import type { FrameworkResult } from "@shared/complianceFrameworks";
 import type { DealStatusPayload } from "@shared/dealsStatus";
+import { LLM_CREDIT_EXHAUSTED_CODE } from "@shared/dealsStatus";
 import { SummaryTab } from "./dealAnalysis/SummaryTab";
 import { ScorecardTab } from "./dealAnalysis/ScorecardTab";
 import { CompanyTab } from "./dealAnalysis/CompanyTab";
@@ -738,12 +740,36 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
       </div>
     );
   } else if (status?.jobStatus === "error") {
+    // A credit/usage-limit failure is a recoverable billing issue, not a bad
+    // document: show an amber "paused" banner with the actionable cause, and drop
+    // the "Re-upload documents" CTA (re-uploading the same file won't help -- the
+    // fix is to top up / raise the limit, then re-run).
+    const isCreditFailure = status.errorCode === LLM_CREDIT_EXHAUSTED_CODE;
     body = (
       <div className="mx-auto max-w-2xl px-6 py-8">
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {status.errorMessage ??
-            "The analysis pipeline failed. Re-upload to retry."}
-        </div>
+        {isCreditFailure ? (
+          <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div>
+              <p className="font-semibold">
+                Analysis paused — AI provider credit or usage limit reached
+              </p>
+              <p className="mt-1 text-amber-800">
+                {status.errorMessage ??
+                  "The AI provider account has reached its credit or usage limit. Add credits (or raise the limit), then re-run the analysis."}
+              </p>
+              <p className="mt-1 text-amber-800">
+                This is a billing/quota issue, not a problem with your documents —
+                they don&apos;t need to be re-uploaded.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {status.errorMessage ??
+              "The analysis pipeline failed. Re-upload to retry."}
+          </div>
+        )}
         <div className="mt-6">
           <AnalysisProgressView
             fileName={latestMemoSession?.fileName ?? deal.name}
@@ -752,14 +778,17 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
             endedAt={status.endedAt}
             stepDurations={status.stepDurations}
             jobComments={status.jobComments}
+            errorCode={status.errorCode}
             failed
           />
         </div>
-        <div className="mt-6 text-center">
-          <Button asChild>
-            <Link to={`/new-deal?dealId=${dealId}`}>Re-upload documents</Link>
-          </Button>
-        </div>
+        {!isCreditFailure && (
+          <div className="mt-6 text-center">
+            <Button asChild>
+              <Link to={`/new-deal?dealId=${dealId}`}>Re-upload documents</Link>
+            </Button>
+          </div>
+        )}
       </div>
     );
   } else if (
