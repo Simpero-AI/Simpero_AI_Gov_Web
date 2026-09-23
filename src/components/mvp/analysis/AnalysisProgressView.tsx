@@ -135,20 +135,36 @@ export function AnalysisProgressView({
             Findings
           </p>
           <ul className="mt-3 space-y-2">
-            {jobComments.map(jc => (
-              <li
-                key={jc.dataSourceId}
-                className="rounded-lg border border-slate-200 bg-slate-50/30 px-4 py-3"
-              >
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-slate-700">
-                    {jc.fileName ?? "Document"}
-                  </p>
-                  <span className="text-xs text-blue-600">{jc.status}</span>
-                </div>
-                <p className="mt-0.5 text-xs text-slate-500">{jc.comment}</p>
-              </li>
-            ))}
+            {jobComments.map(jc => {
+              // A credit/usage-limit pause fails every document identically as an
+              // account issue, not a bad file. The backend now stamps such docs
+              // "paused", but a run that went terminal before that fix still
+              // carries the old "rejected" label — relabel it here so the finding
+              // reads as paused (matching the amber banner) rather than as a
+              // document rejection.
+              const label =
+                isCreditFailure && jc.status === "rejected" ? "paused" : jc.status;
+              return (
+                <li
+                  key={jc.dataSourceId}
+                  className="rounded-lg border border-slate-200 bg-slate-50/30 px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-slate-700">
+                      {jc.fileName ?? "Document"}
+                    </p>
+                    <span
+                      className={`text-xs ${
+                        isCreditFailure ? "text-amber-600" : "text-blue-600"
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-500">{jc.comment}</p>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

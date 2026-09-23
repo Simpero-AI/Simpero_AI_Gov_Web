@@ -62,4 +62,30 @@ describe("AnalysisProgressView", () => {
       screen.getByText("Paused on an AI provider credit or usage limit — see above.")
     ).toBeInTheDocument();
   });
+
+  it("relabels a credit-blocked document's finding as 'paused', not 'rejected'", () => {
+    // A run that went terminal before the backend started stamping such docs
+    // "paused" still carries the raw "rejected" outcome; on a credit failure the
+    // view must render it as paused so it doesn't read as a bad document.
+    render(
+      <AnalysisProgressView
+        fileName="Acme Corp"
+        steps={STEPS}
+        startedAt={new Date(Date.now() - 15_000).toISOString()}
+        endedAt={null}
+        failed
+        errorCode={LLM_CREDIT_EXHAUSTED_CODE}
+        jobComments={[
+          {
+            dataSourceId: "ds-1",
+            fileName: "cim.pdf",
+            status: "rejected",
+            comment: "You have reached your specified API usage limits.",
+          },
+        ]}
+      />
+    );
+    expect(screen.getByText("paused")).toBeInTheDocument();
+    expect(screen.queryByText("rejected")).not.toBeInTheDocument();
+  });
 });
