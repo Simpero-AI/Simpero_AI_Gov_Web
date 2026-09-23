@@ -63,11 +63,26 @@ function claimValueText(value: Record<string, unknown>): string {
   return "—";
 }
 
+// A finite number from the result payload, or null.
+function num(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+// Absolute figures compared with thousands separators. The claim and the source
+// are compared at the SAME magnitude (both absolute USD), so a match reads as
+// equal and a conflict reads as two different NUMBERS -- never as a scale/unit
+// artefact of one side being printed 10^6 smaller than the other.
+function fmtAbs(n: number): string {
+  return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+}
+
 // The external value the source reported, when the result carries a directly
 // comparable one. Keys vary per source, so this is best-effort: the common
 // comparison fields across the registry adapters. Absent -> null (no line).
+// (Numeric magnitude comparisons are rendered by the claim-vs-source line
+// instead; this covers name-matching sources like ISED/trademark.)
 function externalValueText(result: Record<string, unknown>): string | null {
-  for (const key of ["edgar_value", "registry_value", "matched_name", "canonical_name"]) {
+  for (const key of ["registry_value", "matched_name", "canonical_name"]) {
     const v = result?.[key];
     if (typeof v === "string" && v) return v;
     if (typeof v === "number") return String(v);
@@ -78,7 +93,13 @@ function externalValueText(result: Record<string, unknown>): string | null {
 function SourceCheckRow({ event }: { event: CorroborationEvent }) {
   const verdict = verdictConfig(event.agrees);
   const VerdictIcon = verdict.icon;
-  const external = externalValueText(event.result);
+  // A numeric magnitude check (e.g. SEC EDGAR): show the claim and the source at
+  // the SAME absolute scale. result.claim_value is the claim's normalized figure
+  // the engine actually compared (not the deck's raw "10,605"), so a confirmed
+  // match reads as identical numbers and a conflict as genuinely different ones.
+  const claimAbs = num(event.result?.claim_value);
+  const sourceAbs = num(event.result?.edgar_value);
+  const external = claimAbs !== null && sourceAbs !== null ? null : externalValueText(event.result);
   // Only ever link out to an explicit https record -- guards against a bad
   // stored URL becoming a javascript:/data: href.
   const href =
@@ -92,7 +113,14 @@ function SourceCheckRow({ event }: { event: CorroborationEvent }) {
             {sourceLabel(event.outsideSource)}
           </span>
         </div>
-        {external ? (
+        {claimAbs !== null && sourceAbs !== null ? (
+          <p className="mt-1 text-[12.5px] text-[color:var(--rev-text-3)]">
+            Claim{" "}
+            <span className="tabular-nums text-[color:var(--rev-text-1)]">{fmtAbs(claimAbs)}</span>
+            {" · "}record{" "}
+            <span className="tabular-nums text-[color:var(--rev-text-1)]">{fmtAbs(sourceAbs)}</span>
+          </p>
+        ) : external ? (
           <p className="mt-1 text-[12.5px] text-[color:var(--rev-text-3)]">
             External record: <span className="text-[color:var(--rev-text-1)]">{external}</span>
           </p>
