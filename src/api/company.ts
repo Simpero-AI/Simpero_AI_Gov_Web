@@ -28,6 +28,13 @@ export interface CompanyView {
   commercial: CompanyFact[];
   relatedParties: CompanyFact[];
   plans: CompanyFact[];
+  // Firmographic assertion sections (parser emits them when the document states
+  // them; empty for a filing that doesn't, e.g. a public-company 10-K has no
+  // venture co-investors or funding rounds). Backend: build_company_view.
+  coInvestors: CompanyFact[];
+  fundingHistory: CompanyFact[];
+  keyCustomers: CompanyFact[];
+  geographicPresence: CompanyFact[];
 }
 
 export const companyQueryKey = (dealId: string) => ["deals", "company", dealId] as const;

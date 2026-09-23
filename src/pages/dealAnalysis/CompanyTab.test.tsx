@@ -49,6 +49,10 @@ const EMPTY: CompanyView = {
   commercial: [],
   relatedParties: [],
   plans: [],
+  coInvestors: [],
+  fundingHistory: [],
+  keyCustomers: [],
+  geographicPresence: [],
 };
 
 describe("CompanyTab", () => {
@@ -151,6 +155,10 @@ describe("CompanyTab", () => {
       commercial: [],
       relatedParties: [],
       plans: [],
+      coInvestors: [],
+      fundingHistory: [],
+      keyCustomers: [],
+      geographicPresence: [],
     });
     renderCompanyTab();
 
@@ -197,6 +205,10 @@ describe("CompanyTab", () => {
       commercial: [],
       relatedParties: [],
       plans: [],
+      coInvestors: [],
+      fundingHistory: [],
+      keyCustomers: [],
+      geographicPresence: [],
     });
     renderCompanyTab();
 
@@ -226,14 +238,14 @@ describe("CompanyTab", () => {
     expect(screen.queryByText("Company facts not available")).not.toBeInTheDocument();
   });
 
-  it("renders the uniform no-evidence state for not-yet-sourced sections and drops the redundant Technology & Operations box", async () => {
+  it("shows the shared no-evidence state for the firmographic sections when the deal has none, and drops the redundant Technology & Operations box", async () => {
     mockFetchCompany.mockResolvedValue(EMPTY);
     renderCompanyTab();
 
     await screen.findByText("Company facts not available");
-    // Co-Investors, Key Customers, Funding History, and Geographic Presence keep
-    // their eyebrow but show the shared "No evidence found" body, never a per-box
-    // "coming soon" placeholder.
+    // Co-Investors, Key Customers, Funding History, and Geographic Presence are
+    // bound to the claims view; with no data for this deal they keep their eyebrow
+    // but show the shared "No evidence found" body, never a "coming soon" box.
     expect(screen.getAllByText("No evidence found")).toHaveLength(4);
     expect(
       screen.getAllByText("Nothing on this was found in the deal's materials or public sources.").length
@@ -248,6 +260,47 @@ describe("CompanyTab", () => {
     expect(screen.queryByText("Technology & operations details coming soon")).not.toBeInTheDocument();
     // No memo OFAC data -> the compliance section is untouched and shows its own placeholder.
     expect(screen.getByText("IP & compliance data coming soon")).toBeInTheDocument();
+  });
+
+  it("binds the firmographic sections to their claims when the deal has them", async () => {
+    // The four firmographic sections read the parser's assertion classes via
+    // build_company_view (Alpha #209 / Parser #66). When the deal states them,
+    // the extracted assertion renders with its citation — not the no-evidence box.
+    mockFetchCompany.mockResolvedValue({
+      ...EMPTY,
+      keyCustomers: [
+        {
+          label: "AcmeCo",
+          value: "Two customers each account for more than 10% of revenue.",
+          citation: "10-K · p.26",
+          status: "cited",
+          entity: "AcmeCo",
+          sourceUrl: null,
+        },
+      ],
+      geographicPresence: [
+        {
+          label: "AcmeCo",
+          value: "Operations span the Americas, Europe, and Greater China.",
+          citation: "10-K · p.63",
+          status: "verified",
+          entity: "AcmeCo",
+          sourceUrl: null,
+        },
+      ],
+    });
+    renderCompanyTab();
+
+    expect(
+      await screen.findByText("Two customers each account for more than 10% of revenue.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Operations span the Americas, Europe, and Greater China.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("10-K · p.63")).toBeInTheDocument();
+    // Only Co-Investors and Funding History remain empty here, so the shared
+    // no-evidence body appears twice, not four times.
+    expect(screen.getAllByText("No evidence found")).toHaveLength(2);
   });
 
   it("surfaces an OFAC sanctions match from the memo (compliance visibility not dropped)", async () => {

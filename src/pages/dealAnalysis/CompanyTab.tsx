@@ -473,25 +473,41 @@ export function CompanyTab({ dealId, memoTyped }: CompanyTabProps) {
         <OfacScreeningBlock memoTyped={memoTyped} />
       </SectionCard>
 
-      {/* Sections the pipeline has no source for yet — the eyebrow stays so the
-          reader still sees the topic, but the body is the uniform no-evidence
-          state, never a "coming soon" placeholder. */}
+      {/* Firmographic sections, bound to the parser's assertion classes via
+          build_company_view. Each renders its extracted assertions when present
+          and the uniform no-evidence state otherwise — a per-section empty, not a
+          blanket placeholder (a public-company filing legitimately has no
+          co-investors or funding rounds, while it may well state customers and
+          geography). */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <SectionCard eyebrow="Co-Investors" icon={<Handshake className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection icon={Handshake} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
-        </SectionCard>
-
-        <SectionCard eyebrow="Key Customers" icon={<Users className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection icon={Users} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
-        </SectionCard>
-
-        <SectionCard eyebrow="Funding History" icon={<TrendingUp className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection icon={TrendingUp} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
-        </SectionCard>
-
-        <SectionCard eyebrow="Geographic Presence" icon={<Globe className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
-          <UnbackedSection icon={Globe} title={NO_EVIDENCE_TITLE} description={NO_EVIDENCE_DESCRIPTION} />
-        </SectionCard>
+        <AssertionSection
+          eyebrow="Co-Investors"
+          icon={Handshake}
+          facts={company?.coInvestors ?? []}
+          emptyTitle={NO_EVIDENCE_TITLE}
+          emptyDescription={NO_EVIDENCE_DESCRIPTION}
+        />
+        <AssertionSection
+          eyebrow="Key Customers"
+          icon={Users}
+          facts={company?.keyCustomers ?? []}
+          emptyTitle={NO_EVIDENCE_TITLE}
+          emptyDescription={NO_EVIDENCE_DESCRIPTION}
+        />
+        <AssertionSection
+          eyebrow="Funding History"
+          icon={TrendingUp}
+          facts={company?.fundingHistory ?? []}
+          emptyTitle={NO_EVIDENCE_TITLE}
+          emptyDescription={NO_EVIDENCE_DESCRIPTION}
+        />
+        <AssertionSection
+          eyebrow="Geographic Presence"
+          icon={Globe}
+          facts={company?.geographicPresence ?? []}
+          emptyTitle={NO_EVIDENCE_TITLE}
+          emptyDescription={NO_EVIDENCE_DESCRIPTION}
+        />
       </div>
     </div>
   );
