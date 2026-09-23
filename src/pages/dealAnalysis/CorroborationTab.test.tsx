@@ -38,7 +38,7 @@ function event(overrides: Partial<CorroborationEvent> = {}): CorroborationEvent 
     outsideSource: "sec_edgar",
     agrees: true,
     sourceUrl: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000320193",
-    result: { cik: 320193, edgar_value: 15000000 },
+    result: { cik: 320193, claim_value: 15000000, edgar_value: 15000000 },
     createdAt: "2026-02-01T00:00:00Z",
     claimEntity: "Acme Corp",
     claimAttribute: "revenueLatestUsd",
@@ -87,6 +87,25 @@ describe("CorroborationTab", () => {
     // "cite the cite": a real external link with the resolved https href.
     const link = screen.getByRole("link", { name: /View source record/ });
     expect(link).toHaveAttribute("href", event().sourceUrl);
+  });
+
+  it("shows claim and source at the same absolute magnitude so a match doesn't read as a unit mismatch", async () => {
+    // The engine compares the claim's normalized absolute figure against EDGAR's
+    // absolute dollars; render BOTH at that magnitude with separators, so a
+    // confirmed match is visibly equal rather than "10,605" vs "10605000000".
+    mockFetch.mockResolvedValue({
+      events: [event({ result: { cik: 1045810, claim_value: 10605000000, edgar_value: 10605000000 } })],
+      confirmedCount: 1,
+      conflictingCount: 0,
+      totalCount: 1,
+    });
+    renderTab();
+
+    // Both the claim and the record line show the same separated figure...
+    expect(await screen.findByText("SEC EDGAR")).toBeInTheDocument();
+    expect(screen.getAllByText("10,605,000,000")).toHaveLength(2);
+    // ...and never the bare unseparated form that read as a unit mismatch.
+    expect(screen.queryByText("10605000000")).not.toBeInTheDocument();
   });
 
   it("badges a disagreement as Conflicting and flags the claim", async () => {
