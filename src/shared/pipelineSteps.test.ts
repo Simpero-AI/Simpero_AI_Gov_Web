@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import { PIPELINE_STEPS, computeStepStatuses } from "./pipelineSteps";
 
 describe("PIPELINE_STEPS", () => {
-  it("lists the 2 phases the backend can actually report, in pipeline order", () => {
-    expect(PIPELINE_STEPS.map(s => s.phase)).toEqual(["parsing", "verification"]);
+  it("lists the phases the backend can actually report, in pipeline order", () => {
+    expect(PIPELINE_STEPS.map(s => s.phase)).toEqual([
+      "parsing",
+      "verification",
+      "analysis",
+    ]);
   });
 });
 
@@ -23,6 +27,14 @@ describe("computeStepStatuses", () => {
     const result = computeStepStatuses("verification", false);
     expect(result.find(s => s.phase === "parsing")?.status).toBe("done");
     expect(result.find(s => s.phase === "verification")?.status).toBe("current");
+    expect(result.find(s => s.phase === "analysis")?.status).toBe("pending");
+  });
+
+  it("marks parsing + verification done, corroboration & analysis current", () => {
+    const result = computeStepStatuses("analysis", false);
+    expect(result.find(s => s.phase === "parsing")?.status).toBe("done");
+    expect(result.find(s => s.phase === "verification")?.status).toBe("done");
+    expect(result.find(s => s.phase === "analysis")?.status).toBe("current");
   });
 
   it("marks the current phase as 'failed' when failed flag set", () => {
