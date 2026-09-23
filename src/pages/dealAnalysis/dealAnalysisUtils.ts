@@ -3,6 +3,9 @@ import type { ICMemoResult } from "@shared/simperoTypes";
 
 export type TabKey =
   | "summary"
+  // "scorecard" is intentionally hidden from the tab bar (removed from
+  // ANALYSIS_TABS + VALID_TABS below) but kept in the union so the render block
+  // and ScorecardTab stay wired for an easy un-hide.
   | "scorecard"
   | "company"
   | "market"
@@ -15,7 +18,6 @@ export type TabKey =
 
 export const VALID_TABS = new Set<TabKey>([
   "summary",
-  "scorecard",
   "company",
   "market",
   "financials",
@@ -28,7 +30,8 @@ export const VALID_TABS = new Set<TabKey>([
 
 export const ANALYSIS_TABS: Array<{ id: TabKey; label: string; soon?: boolean }> = [
   { id: "summary", label: "Summary" },
-  { id: "scorecard", label: "Scorecard" },
+  // "Scorecard" hidden from the tab bar (kept in TabKey + the render block for
+  // an easy un-hide); a stale ?tab=scorecard URL falls back to Summary.
   { id: "company", label: "Company" },
   { id: "market", label: "Market" },
   { id: "financials", label: "Financials" },
