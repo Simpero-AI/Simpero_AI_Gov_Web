@@ -9,6 +9,7 @@ import {
   CreditCard,
   Download,
   FileText,
+  RotateCw,
   ScrollText,
   ShieldCheck,
   TrendingDown,
@@ -25,14 +26,17 @@ import { StatusChip } from "@/components/mvp/common/StatusChip";
 import { DataTableShell } from "@/components/mvp/common/DataTableShell";
 import { buildMvpNav } from "@/components/mvp/nav/mvpNav";
 import { usePageTitle } from "@/components/mvp/common/usePageTitle";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
+  AnalysisApiError,
   dealQueryKey,
   dealStatusQueryKey,
   fetchDeal,
   fetchDealStatus,
+  startDealAnalysis,
 } from "@/api/deals";
+import { toast } from "@/components/mvp/primitives/sonner";
 import { Button } from "@/components/mvp/primitives/button";
 import { Card, CardContent } from "@/components/mvp/primitives/card";
 import {
@@ -594,6 +598,38 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
   // otherwise the tabs render against the empty pre-pipeline snapshot and
   // the user sees N/A until they manually refresh.
   const queryClient = useQueryClient();
+
+  // Re-run the pipeline against the documents already on file. This is the
+  // recovery path for a credit/usage-limit pause: once the AI-provider account
+  // is topped up (or the cap lifts), the same uploads can be re-analyzed without
+  // re-uploading. POST /deals/{dealId}/analysis re-fans-out over the existing,
+  // already-verified data sources; the failed run is terminal, so the common
+  // case never races. A 409 "already running" means the user's intent is already
+  // met, so it's treated as success (poll takes over from there).
+  const rerunMutation = useMutation({
+    mutationFn: () => startDealAnalysis(dealId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: dealStatusQueryKey(dealId) });
+      void queryClient.invalidateQueries({ queryKey: dealQueryKey(dealId) });
+      toast.success("Re-running analysis", {
+        description: "Your uploaded documents are being re-analyzed.",
+      });
+    },
+    onError: err => {
+      const alreadyRunning =
+        err instanceof AnalysisApiError &&
+        err.status === 409 &&
+        err.message.toLowerCase().includes("already running");
+      if (alreadyRunning) {
+        void queryClient.invalidateQueries({ queryKey: dealStatusQueryKey(dealId) });
+        return;
+      }
+      const message =
+        err instanceof Error ? err.message : "Could not re-run analysis";
+      toast.error("Could not re-run analysis", { description: message });
+    },
+  });
+
   const jobStatus = statusQuery.data?.jobStatus;
   const prevJobStatusRef = useRef(jobStatus);
   const redirectedRef = useRef(false);
@@ -782,7 +818,24 @@ function DealDetailInner({ dealId, tab }: DealDetailProps) {
             failed
           />
         </div>
-        {!isCreditFailure && (
+        {isCreditFailure ? (
+          <div className="mt-6 text-center">
+            <Button
+              onClick={() => rerunMutation.mutate()}
+              disabled={rerunMutation.isPending}
+            >
+              <RotateCw
+                className={`mr-2 h-4 w-4 ${
+                  rerunMutation.isPending ? "animate-spin" : ""
+                }`}
+              />
+              {rerunMutation.isPending ? "Re-running…" : "Re-run analysis"}
+            </Button>
+            <p className="mt-2 text-xs text-slate-500">
+              Uses the documents already uploaded — no need to re-upload.
+            </p>
+          </div>
+        ) : (
           <div className="mt-6 text-center">
             <Button asChild>
               <Link to={`/new-deal?dealId=${dealId}`}>Re-upload documents</Link>
