@@ -56,7 +56,13 @@ export function AgentStatusStepList({
                 </p>
               )}
             </div>
-            {step.status === "done" && duration !== undefined && (
+            {/* Only show a per-step time we can actually measure meaningfully:
+                a real duration (> 0s). Verification is the promoter + roll-up
+                with no model/network work, so it clocks ~0s -- showing "0s"
+                reads as broken; and the corroboration/analysis step spans jobs
+                we don't time individually (no duration is sent for it). Both
+                fall through here and render no time. */}
+            {step.status === "done" && duration !== undefined && duration > 0 && (
               <span className="mt-0.5 flex-shrink-0 text-xs text-emerald-600">
                 {formatDuration(duration)}
               </span>

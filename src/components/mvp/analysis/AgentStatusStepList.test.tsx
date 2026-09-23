@@ -38,4 +38,15 @@ describe("AgentStatusStepList", () => {
     expect(screen.getAllByText(/^\d+(m \d+)?s$/)).toHaveLength(1);
     expect(screen.getByText("20s")).toBeInTheDocument();
   });
+
+  it("hides a zero-second duration (a step we can't meaningfully time, e.g. verification)", () => {
+    const steps = computeStepStatuses("analysis", false); // parsing + verification done
+    render(
+      <AgentStatusStepList steps={steps} stepDurations={{ parsing: 42, verification: 0 }} />
+    );
+    // Parsing's real time shows; verification's 0s is suppressed rather than
+    // rendered as a misleading "0s".
+    expect(screen.getByText("42s")).toBeInTheDocument();
+    expect(screen.queryByText("0s")).not.toBeInTheDocument();
+  });
 });
