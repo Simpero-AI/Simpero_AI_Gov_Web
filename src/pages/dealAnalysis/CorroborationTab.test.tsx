@@ -42,7 +42,7 @@ function event(overrides: Partial<CorroborationEvent> = {}): CorroborationEvent 
     createdAt: "2026-02-01T00:00:00Z",
     claimEntity: "Acme Corp",
     claimAttribute: "revenueLatestUsd",
-    claimValue: { raw: "$15M", normalized: 15000000 },
+    claimValue: { raw: "$15M", normalized: 15000000, value_type: "currency" },
     claimStatus: "cited",
     ...overrides,
   };
@@ -81,8 +81,9 @@ describe("CorroborationTab", () => {
     // so anchor the wait on the unique source label, then assert the pill exists.
     expect(await screen.findByText("SEC EDGAR")).toBeInTheDocument();
     expect(screen.getAllByText("Confirmed").length).toBeGreaterThanOrEqual(1);
-    // Claim context: the deck's value and the entity·attribute header.
-    expect(screen.getByText("$15M")).toBeInTheDocument();
+    // Claim context: the deck's value (shown at its true magnitude from the
+    // normalized figure) and the entity·attribute header.
+    expect(screen.getByText("$15.0M")).toBeInTheDocument();
     expect(screen.getByText(/Acme Corp/)).toBeInTheDocument();
     // "cite the cite": a real external link with the resolved https href.
     const link = screen.getByRole("link", { name: /View source record/ });
@@ -106,6 +107,33 @@ describe("CorroborationTab", () => {
     expect(screen.getAllByText("10,605,000,000")).toHaveLength(2);
     // ...and never the bare unseparated form that read as a unit mismatch.
     expect(screen.queryByText("10605000000")).not.toBeInTheDocument();
+  });
+
+  it("shows the claim headline at its true magnitude, not the deck's unscaled mantissa", async () => {
+    // The deck prints "10,605" (in $M) but the resolved figure is $10.6B. The
+    // headline must reflect the real magnitude, not echo the unscaled raw string.
+    mockFetch.mockResolvedValue({
+      events: [
+        event({
+          claimValue: {
+            raw: "10,605",
+            normalized: 10605000000,
+            unit: null,
+            value_type: "currency",
+          },
+          result: { cik: 1045810, claim_value: 10605000000, edgar_value: 10605000000 },
+        }),
+      ],
+      confirmedCount: 1,
+      conflictingCount: 0,
+      totalCount: 1,
+    });
+    renderTab();
+
+    expect(await screen.findByText("SEC EDGAR")).toBeInTheDocument();
+    // Scaled, currency-signed headline -- never the bare "10,605".
+    expect(screen.getByText("$10.61B")).toBeInTheDocument();
+    expect(screen.queryByText("10,605")).not.toBeInTheDocument();
   });
 
   it("badges a disagreement as Conflicting and flags the claim", async () => {
@@ -156,7 +184,7 @@ describe("CorroborationTab", () => {
     // Both source rows render, but the claim header (its value) appears once.
     expect(await screen.findByText("SEC EDGAR")).toBeInTheDocument();
     expect(screen.getByText("US Federal Register")).toBeInTheDocument();
-    expect(screen.getAllByText("$15M")).toHaveLength(1);
+    expect(screen.getAllByText("$15.0M")).toHaveLength(1);
     // A presence-only check (agrees null) reads as "Recorded".
     expect(screen.getByText("Recorded")).toBeInTheDocument();
   });

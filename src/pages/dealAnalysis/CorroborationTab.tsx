@@ -52,14 +52,32 @@ function verdictConfig(agrees: boolean | null): {
   return { label: "Recorded", icon: HelpCircle, tone: "var(--rev-text-6)", tint: "var(--rev-tint-neutral)" };
 }
 
-// The claim's document-sourced value, as the deck stated it. claimValue is the
-// raw JSONB `value` payload; `raw` is the verbatim string when present, else a
-// compact fallback so the row never renders "[object Object]".
+// The claim's document-sourced value, shown at its TRUE magnitude. Prefer the
+// NORMALIZED absolute figure (e.g. 10,605,000,000) rendered compactly ($10.61B)
+// over the deck's raw mantissa ("10,605"): the raw string is unscaled, so it reads
+// as a tiny number next to the absolute source record on the comparison line below.
+// Falls back to the raw string only when no magnitude was resolved, then to "—".
 function claimValueText(value: Record<string, unknown>): string {
+  const normalized = value?.normalized;
+  if (typeof normalized === "number" && Number.isFinite(normalized)) {
+    if (value?.value_type === "percent") {
+      return `${Number.isInteger(normalized) ? normalized : normalized.toFixed(1)}%`;
+    }
+    const unit = value?.unit;
+    const isCurrency =
+      value?.value_type === "currency" ||
+      (typeof unit === "string" && ["USD", "US$", "USD$", "$"].includes(unit));
+    const sign = normalized < 0 ? "-" : "";
+    const abs = Math.abs(normalized);
+    let magnitude: string;
+    if (abs >= 1_000_000_000) magnitude = `${(abs / 1_000_000_000).toFixed(2)}B`;
+    else if (abs >= 1_000_000) magnitude = `${(abs / 1_000_000).toFixed(1)}M`;
+    else if (abs >= 1_000) magnitude = `${(abs / 1_000).toFixed(0)}k`;
+    else magnitude = abs.toLocaleString("en-US");
+    return isCurrency ? `${sign}$${magnitude}` : `${sign}${magnitude}`;
+  }
   const raw = value?.raw;
   if (typeof raw === "string" && raw) return raw;
-  const normalized = value?.normalized;
-  if (typeof normalized === "number") return String(normalized);
   return "—";
 }
 
