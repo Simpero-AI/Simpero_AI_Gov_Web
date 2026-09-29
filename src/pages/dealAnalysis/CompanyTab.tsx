@@ -142,21 +142,6 @@ function FactCard({ fact }: { fact: CompanyFact }) {
   );
 }
 
-function AssertionRow({ fact }: { fact: CompanyFact }) {
-  return (
-    <div className="rounded-lg border border-[color:var(--rev-border-subtle)] p-4">
-      <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{fact.value}</p>
-      <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-[color:var(--rev-border-subtle)] pt-2.5">
-        <span className="truncate text-[11.5px] text-[color:var(--rev-text-5)]">{fact.entity || "—"}</span>
-        <span className="flex shrink-0 items-center gap-2.5">
-          <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
-          <TrustStatusPill status={fact.status} />
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function AssertionSection({
   eyebrow,
   icon: Icon,
@@ -175,10 +160,40 @@ function AssertionSection({
       {facts.length === 0 ? (
         <UnbackedSection icon={Icon} title={emptyTitle} description={emptyDescription} />
       ) : (
-        <div className="space-y-3">
-          {facts.map((f, i) => (
-            <AssertionRow key={i} fact={f} />
-          ))}
+        // A scannable table (Subject · Notes · Source) rather than a stack of
+        // full-sentence paragraphs: the subject is the scan target, the assertion is
+        // a two-line clamped note (full text on hover), and the source + trust status
+        // sit in their own column. Same DenseTable primitive as the OFAC block.
+        <div className="overflow-hidden rounded-lg border border-[color:var(--rev-border-subtle)]">
+          <DenseTable>
+            <DenseTableHeaderRow>
+              <DenseTableRow>
+                <DenseTableHead>Subject</DenseTableHead>
+                <DenseTableHead>Notes</DenseTableHead>
+                <DenseTableHead className="text-right">Source</DenseTableHead>
+              </DenseTableRow>
+            </DenseTableHeaderRow>
+            <DenseTableBody>
+              {facts.map((f, i) => (
+                <DenseTableRow key={i}>
+                  <DenseTableCell className="whitespace-nowrap font-medium text-[color:var(--rev-text-1)]">
+                    {f.entity || "—"}
+                  </DenseTableCell>
+                  <DenseTableCell className="text-[color:var(--rev-text-2)]">
+                    <span className="line-clamp-2" title={f.value}>
+                      {f.value}
+                    </span>
+                  </DenseTableCell>
+                  <DenseTableCell numeric>
+                    <div className="flex items-center justify-end gap-2.5">
+                      <Citation citation={f.citation} sourceUrl={f.sourceUrl} />
+                      <TrustStatusPill status={f.status} />
+                    </div>
+                  </DenseTableCell>
+                </DenseTableRow>
+              ))}
+            </DenseTableBody>
+          </DenseTable>
         </div>
       )}
     </SectionCard>
