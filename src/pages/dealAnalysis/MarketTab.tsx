@@ -180,6 +180,48 @@ function AssertionRow({ fact }: { fact: MarketFact }) {
   );
 }
 
+// Competitors as a scannable TABLE (name · notes · source) rather than a stack of
+// paragraphs: the named competitor is the scan target, the assertion is a clamped
+// note, and the source + trust status sit in their own column. `label` is the
+// backend-computed row header (the competitor name, or "Competitor" when unnamed).
+function CompetitorTable({ facts }: { facts: MarketFact[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-left text-[13px]">
+        <thead>
+          <tr className="border-b border-[color:var(--rev-border)] text-[10.5px] uppercase tracking-[0.4px] text-[color:var(--rev-text-6)]">
+            <th scope="col" className="py-2 pr-4 font-medium">Competitor</th>
+            <th scope="col" className="py-2 pr-4 font-medium">Notes</th>
+            <th scope="col" className="py-2 font-medium">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          {facts.map((fact, i) => (
+            <tr key={i} className="border-b border-[color:var(--rev-border-subtle)] align-top">
+              <td className="whitespace-nowrap py-2.5 pr-4 font-medium text-[color:var(--rev-text-1)]">
+                {fact.label || "—"}
+              </td>
+              <td className="py-2.5 pr-4 text-[color:var(--rev-text-2)]">
+                {/* Clamp the assertion to two lines so the table stays scannable;
+                    the full text is available on hover via the title attribute. */}
+                <span className="line-clamp-2" title={fact.value}>
+                  {fact.value}
+                </span>
+              </td>
+              <td className="py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
+                  <TrustStatusPill status={fact.status} />
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // A market section backed by the grounded field-synthesis pass (GET
 // /deals/{id}/company-synthesis, keyed market_risks / market_growth_strategy) --
 // the Market Risks and Growth Strategy sections the claims spine has no producer
@@ -400,11 +442,7 @@ export function MarketTab({ dealId }: MarketTabProps) {
             description="No assertions about competitors, market share, or competitive advantage were extracted from this deal's materials."
           />
         ) : (
-          <div className="space-y-3">
-            {competition.map((f, i) => (
-              <AssertionRow key={i} fact={f} />
-            ))}
-          </div>
+          <CompetitorTable facts={competition} />
         )}
       </SectionCard>
 

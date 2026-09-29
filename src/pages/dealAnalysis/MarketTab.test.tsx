@@ -102,6 +102,25 @@ describe("MarketTab", () => {
     expect(screen.queryByText("Competitive position not available")).not.toBeInTheDocument();
   });
 
+  it("renders competitors as a scannable table (name · notes · source), not paragraphs", async () => {
+    mockFetchMarket.mockResolvedValue({
+      sizing: [],
+      marketDefinition: [],
+      competitivePosition: [
+        { label: "AMD", value: "Sells Instinct data-center GPUs.", citation: null, status: "cited", entity: "AMD", sourceUrl: "https://www.sec.gov/x" },
+        { label: "Intel", value: "Sells Gaudi AI accelerators.", citation: null, status: "cited", entity: "Intel", sourceUrl: "https://www.techcrunch.com/y" },
+      ],
+    });
+    renderMarketTab();
+
+    // Table column headers + each competitor name in its own cell.
+    expect(await screen.findByRole("columnheader", { name: "Competitor" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Notes" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "AMD" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Intel" })).toBeInTheDocument();
+    expect(screen.getByText("Sells Instinct data-center GPUs.")).toBeInTheDocument();
+  });
+
   it("renders a web sourceUrl as a link and a deck citation as plain text", async () => {
     // A fact with a valid http(s) sourceUrl renders a hostname link (new tab,
     // noopener), mirroring the Financials tab; a deck-sourced fact with no URL
