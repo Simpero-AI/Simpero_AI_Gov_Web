@@ -88,6 +88,10 @@ describe("FinancialsTab", () => {
     expect(
       screen.queryByText("Multi-year financial trend not yet available")
     ).not.toBeInTheDocument();
+    // These points carry no status (older backend) — no status dots, so the legend
+    // is gated off rather than showing an orphan key.
+    expect(screen.queryByText("Partial")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Verified")).not.toBeInTheDocument();
   });
 
   it("badges each 3-Year Trend figure with its per-year corroboration status", async () => {

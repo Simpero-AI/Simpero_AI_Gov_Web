@@ -321,6 +321,9 @@ function TrendTable({ trend }: { trend: FinancialTrendMetric[] }) {
   for (const m of trend) {
     for (const p of m.points) if (!periodLabel.has(p.year)) periodLabel.set(p.year, p.period);
   }
+  // Only key the badges when the backend actually sent per-point statuses (an older
+  // backend omits them, so the grid shows no dots and the legend would be an orphan).
+  const anyStatus = trend.some((m) => m.points.some((p) => Boolean(p.status)));
   return (
     <div className="overflow-x-auto">
       <DenseTable>
@@ -356,7 +359,7 @@ function TrendTable({ trend }: { trend: FinancialTrendMetric[] }) {
           })}
         </DenseTableBody>
       </DenseTable>
-      <TrustStatusDotLegend className="mt-2 px-1" />
+      {anyStatus ? <TrustStatusDotLegend className="mt-2 px-1" /> : null}
     </div>
   );
 }
@@ -527,6 +530,9 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
           kind === "A"
             ? { background: "var(--rev-tint-neutral)", color: "var(--rev-text-6)" }
             : { background: "var(--rev-tint-success)", color: "var(--rev-success)" };
+        // Key the badges only when the backend sent per-cell statuses (an older
+        // backend omits `cells`, so no dots render and the legend would be an orphan).
+        const anyCellStatus = proj.rows.some((r) => r.cells?.some((c) => Boolean(c.status)));
         return (
           <SectionCard
             eyebrow="Financial Projections"
@@ -573,7 +579,7 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
                 </DenseTable>
               </div>
             </div>
-            <TrustStatusDotLegend className="mt-2 px-1" />
+            {anyCellStatus ? <TrustStatusDotLegend className="mt-2 px-1" /> : null}
           </SectionCard>
         );
       })()}

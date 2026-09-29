@@ -98,11 +98,29 @@ export function TrustStatusPill({ status }: { status: string }) {
   );
 }
 
+// Per-status glyph so the compact badge conveys the status by SHAPE as well as
+// colour (WCAG 1.4.1 — colour alone must not be the only cue; green-verified vs
+// red-conflicted is the classic colour-blind pair). Kept to widely-supported
+// characters so no font renders tofu. Unknown status falls back to a neutral dot.
+const TRUST_STATUS_GLYPH: Record<string, string> = {
+  verified: "✓",
+  partially_verified: "~",
+  cited: "•",
+  conflicted: "!",
+  inconclusive: "?",
+  derived: "·",
+};
+
+function trustStatusGlyph(status: string): string {
+  return TRUST_STATUS_GLYPH[status] ?? "•";
+}
+
 // Compact variant for dense grids (the 3-Year Trend and Projections cells), where
-// a full pill per figure would overwhelm the numbers. A single coloured dot in the
-// SAME palette as the pill, with the pill's plain-language meaning on hover and an
-// aria-label for screen readers, so the same corroboration ladder reads identically
-// on a per-cell basis. Render it only when a figure has a status.
+// a full pill per figure would overwhelm the numbers. A small coloured GLYPH in the
+// SAME palette as the pill (shape + colour, not colour alone), with the pill's
+// plain-language meaning on hover and an aria-label for screen readers, so the same
+// corroboration ladder reads identically on a per-cell basis. Render it only when a
+// figure has a status.
 export function TrustStatusDot({ status }: { status: string }) {
   const s = trustStatusMeta(status);
   return (
@@ -110,15 +128,17 @@ export function TrustStatusDot({ status }: { status: string }) {
       title={s.title}
       aria-label={s.label}
       role="img"
-      className="ml-1 inline-block size-1.5 shrink-0 rounded-full align-middle"
-      style={{ background: s.color }}
-    />
+      className="ml-1 inline-block shrink-0 align-middle font-mono text-[11px] font-bold leading-none"
+      style={{ color: s.color }}
+    >
+      {trustStatusGlyph(status)}
+    </span>
   );
 }
 
-// The dots' key, shown once beneath a grid that uses TrustStatusDot so the colours
-// are legible without hovering every cell. Fixed to the statuses that actually
-// appear on financial figures, in ladder order.
+// The glyphs' key, shown once beneath a grid that uses TrustStatusDot so the
+// shapes/colours are legible without hovering every cell. Fixed to the statuses
+// that appear on financial figures, in ladder order.
 export function TrustStatusDotLegend({ className }: { className?: string }) {
   const shown = ["verified", "partially_verified", "cited", "conflicted"] as const;
   return (
@@ -130,9 +150,12 @@ export function TrustStatusDotLegend({ className }: { className?: string }) {
         return (
           <span key={status} className="inline-flex items-center gap-1" title={s.title}>
             <span
-              className="inline-block size-1.5 rounded-full"
-              style={{ background: s.color }}
-            />
+              aria-hidden="true"
+              className="font-mono text-[11px] font-bold leading-none"
+              style={{ color: s.color }}
+            >
+              {trustStatusGlyph(status)}
+            </span>
             {s.label}
           </span>
         );
