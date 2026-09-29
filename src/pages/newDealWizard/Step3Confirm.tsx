@@ -110,8 +110,8 @@ export function Step3Confirm({
             <span className="font-semibold">
               Analysis runs in the background.
             </span>{" "}
-            You can close this tab. Simpero notifies you by email when the
-            report is ready.
+            You can close this tab and reopen the deal from your pipeline — the
+            report appears there once it's ready.
           </p>
           <p className="text-xs text-blue-700/80">
             This is not regulator approval or legal advice. It is a structured
