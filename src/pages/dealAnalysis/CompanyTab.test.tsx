@@ -68,6 +68,29 @@ describe("CompanyTab", () => {
     expect(screen.getByText("Plans & commitments not available")).toBeInTheDocument();
   });
 
+  it("renders firmographic sections (e.g. Geographic Presence) as a scannable table", async () => {
+    mockFetchCompany.mockResolvedValue({
+      ...EMPTY,
+      geographicPresence: [
+        {
+          label: "ACEP",
+          value: "Owns and operates four gaming properties in the Las Vegas area.",
+          citation: "cim.pdf · p.19",
+          status: "cited",
+          entity: "ACEP",
+          sourceUrl: null,
+        },
+      ],
+    });
+    renderCompanyTab();
+
+    expect(await screen.findByRole("columnheader", { name: "Subject" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "ACEP" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Owns and operates four gaming properties in the Las Vegas area.")
+    ).toBeInTheDocument();
+  });
+
   it("prefers the grounded AI synthesis for the narrative sections, with citations", async () => {
     mockFetchCompany.mockResolvedValue(EMPTY);
     mockFetchCompanySynthesis.mockResolvedValue({
