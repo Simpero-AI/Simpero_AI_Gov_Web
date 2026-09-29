@@ -4,6 +4,7 @@ import { Step3Confirm } from "./Step3Confirm";
 import { initialWizardState } from "./newDealWizardReducer";
 import type { DealDocument } from "@/api/documents";
 import type { IntakeResponse } from "@/api/intakeLink";
+import type { IntakeActivityRow } from "@/api/intakeActivity";
 
 afterEach(cleanup);
 
@@ -23,6 +24,80 @@ function doc(id: string, filename: string, status: string): DealDocument {
 function noop() {
   /* unused test callback */
 }
+
+describe("Step3Confirm — P5-10 intake activity panel", () => {
+  const row: IntakeActivityRow = {
+    id: 1,
+    createdAt: "2026-08-29T09:20:00Z",
+    eventType: "intake_submitted",
+    actorEmail: "gp@example.com",
+    payload: null,
+  };
+
+  it("is not rendered on the frozen path, even with rows supplied", () => {
+    // The prop wiring alone must not put this on the pre-existing three-step
+    // path -- it is gated on intakeStatus, matching the answers/documents
+    // panels above it.
+    render(
+      <Step3Confirm
+        state={baseState()}
+        dispatch={noop}
+        onBack={noop}
+        onSubmit={noop}
+        documents={[]}
+        documentsLoading={false}
+        intakeStatus={null}
+        intakeResponse={null}
+        onReissue={noop}
+        intakeActivity={[row]}
+        intakeActivityLoading={false}
+      />
+    );
+    expect(screen.queryByTestId("wizard-intake-activity")).not.toBeInTheDocument();
+  });
+
+  it("renders on the intake branch once a link exists, even before submission", () => {
+    // Deliberately status "pending", not "submitted": the panel's whole point
+    // is to show history on a link that has not (or never) completed --
+    // gating it on submission would hide exactly that.
+    render(
+      <Step3Confirm
+        state={baseState()}
+        dispatch={noop}
+        onBack={noop}
+        onSubmit={noop}
+        documents={[]}
+        documentsLoading={false}
+        intakeStatus="pending"
+        intakeResponse={null}
+        onReissue={noop}
+        intakeActivity={[row]}
+        intakeActivityLoading={false}
+      />
+    );
+    const panel = screen.getByTestId("wizard-intake-activity");
+    expect(within(panel).getByText("Responses submitted")).toBeInTheDocument();
+  });
+
+  it("defaults to an empty, not-loading panel when the caller supplies nothing", () => {
+    // Every existing render call in this file predates P5-10 and supplies
+    // none of the three new props; none of them should crash or regress.
+    render(
+      <Step3Confirm
+        state={baseState()}
+        dispatch={noop}
+        onBack={noop}
+        onSubmit={noop}
+        documents={[]}
+        documentsLoading={false}
+        intakeStatus="pending"
+        intakeResponse={null}
+        onReissue={noop}
+      />
+    );
+    expect(screen.getByTestId("wizard-intake-activity-empty")).toBeInTheDocument();
+  });
+});
 
 describe("Step3Confirm — non-intake path (frozen)", () => {
   it("intakeStatus: null renders the exact existing Documents summary row and no document list", () => {

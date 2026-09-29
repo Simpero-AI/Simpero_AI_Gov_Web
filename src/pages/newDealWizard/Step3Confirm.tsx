@@ -3,6 +3,8 @@ import { PIPELINE_STEPS } from "@shared/pipelineSteps";
 import { Switch } from "@/components/mvp/primitives/switch";
 import type { DealDocument } from "@/api/documents";
 import type { IntakeLinkStatus, IntakeResponse } from "@/api/intakeLink";
+import type { IntakeActivityRow } from "@/api/intakeActivity";
+import { IntakeActivityPanel } from "./IntakeActivityPanel";
 import { documentStatusMeta } from "./documentStatus";
 import type { WizardState, WizardAction } from "./newDealWizardReducer";
 
@@ -27,6 +29,18 @@ interface Step3ConfirmProps {
   intakeResponse: IntakeResponse | null;
   /** F10 fix: regenerate a link when a submitted response left no usable documents. */
   onReissue: () => void;
+  /**
+   * P5-10 — GET /deals/{dealId}/intake-activity rows, newest first. Only
+   * rendered on the intake branch: a deal that never had a link has no intake
+   * history to show, and an empty panel on the frozen three-step path would
+   * breach the pixel-identical obligation for no benefit.
+   */
+  /** Defaults to [] / not-loading so call sites unrelated to P5-10 (and the
+   * existing test suite) don't have to thread three new required props
+   * through every render just to keep compiling. */
+  intakeActivity?: IntakeActivityRow[];
+  intakeActivityLoading?: boolean;
+  intakeActivityErrored?: boolean;
 }
 
 export function Step3Confirm({
@@ -39,6 +53,9 @@ export function Step3Confirm({
   intakeStatus,
   intakeResponse,
   onReissue,
+  intakeActivity = [],
+  intakeActivityLoading = false,
+  intakeActivityErrored = false,
 }: Step3ConfirmProps) {
   const dealSizeLabel = formatDealSize(state.dealSizeMinM, state.dealSizeMaxM);
   const sectorsLabel =
@@ -222,6 +239,14 @@ export function Step3Confirm({
             ))}
           </dl>
         </div>
+      )}
+
+      {intakeStatus != null && (
+        <IntakeActivityPanel
+          rows={intakeActivity}
+          loading={intakeActivityLoading}
+          errored={intakeActivityErrored}
+        />
       )}
 
       <div className="bg-white rounded-xl border border-gray-200 p-6">
