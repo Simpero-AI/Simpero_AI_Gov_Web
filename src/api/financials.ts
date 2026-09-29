@@ -39,6 +39,13 @@ export interface FinancialTrendPoint {
   period: string; // "FY2023" / "FY2024E"
   value: string; // pre-formatted, e.g. "$497.20M" / "42%"
   year: number; // raw period year, for x-axis ordering
+  /** Per-year trust status (folds in the year's external corroboration verdict),
+   * so a corroborated year is badged the same as the statement rows. Optional for
+   * deploy-order tolerance with an older backend that omits it. */
+  status?: FinancialFactStatus;
+  citation?: string | null;
+  sourceUrl?: string | null;
+  reconciliationMismatch?: boolean;
 }
 
 export interface FinancialTrendMetric {
@@ -51,9 +58,23 @@ export interface FinancialProjectionColumn {
   kind: "A" | "E" | "P"; // Actual / management Estimate / Projected
 }
 
+/** Per-cell provenance for one projection figure, aligned by index to
+ * `FinancialProjectionRow.values`. `status` is null for an absent cell (its value
+ * is null too). Lets the grid badge a corroborated actual distinctly from a
+ * forward projection no historical registry can confirm. */
+export interface FinancialProjectionCell {
+  status: FinancialFactStatus | null;
+  citation?: string | null;
+  sourceUrl?: string | null;
+  reconciliationMismatch?: boolean;
+}
+
 export interface FinancialProjectionRow {
   label: string; // metric name, e.g. "Revenue"
   values: (string | null)[]; // aligned to columns; pre-formatted figure or null (never interpolated)
+  /** Per-cell provenance aligned by index to `values`. Optional for deploy-order
+   * tolerance with an older backend that omits it. */
+  cells?: FinancialProjectionCell[];
 }
 
 export interface FinancialProjections {

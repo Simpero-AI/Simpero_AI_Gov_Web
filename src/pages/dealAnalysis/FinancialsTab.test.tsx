@@ -90,6 +90,31 @@ describe("FinancialsTab", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("badges each 3-Year Trend figure with its per-year corroboration status", async () => {
+    mockFetchFinancials.mockResolvedValue({
+      ...EMPTY_FINANCIALS,
+      trend: [
+        {
+          label: "Revenue",
+          points: [
+            { period: "FY2022", value: "$400.00M", year: 2022, status: "cited" },
+            { period: "FY2023", value: "$497.20M", year: 2023, status: "verified" },
+          ],
+        },
+      ],
+    });
+    renderFinancialsTab({ memoTyped: null, dealMetrics: undefined, dealMetricDiscrepancies: [] });
+
+    // A per-figure status dot (role=img, aria-labelled by the status) rides next to
+    // each value — the trend now shows corroboration, not just numbers.
+    expect(await screen.findByText("$497.20M")).toBeInTheDocument();
+    expect(screen.getByLabelText("Verified")).toBeInTheDocument();
+    expect(screen.getByLabelText("Cited")).toBeInTheDocument();
+    // The legend keys the dots' colours (Partial appears there even when no figure
+    // carries it, so the ladder reads consistently).
+    expect(screen.getByText("Partial")).toBeInTheDocument();
+  });
+
   it("renders real DealMetrics headline rows plus a discrepancy chip when cross-source values disagree", () => {
     mockFetchFinancials.mockResolvedValue(EMPTY_FINANCIALS);
     const dealMetrics: DealMetrics = {
@@ -129,6 +154,33 @@ describe("FinancialsTab", () => {
     expect(screen.getByText("Actual")).toBeInTheDocument();
     expect(screen.getByText("Mgmt est.")).toBeInTheDocument();
     expect(screen.queryByText("Financial projections not yet extracted")).not.toBeInTheDocument();
+  });
+
+  it("badges each projection cell with its status — actuals corroborated, forecasts not", async () => {
+    // The actual column carries a corroboration status; the forward projection is
+    // honestly un-corroborated (a historical registry can't confirm a forecast).
+    mockFetchFinancials.mockResolvedValue({
+      ...EMPTY_FINANCIALS,
+      projections: {
+        columns: [
+          { year: 2023, kind: "A" },
+          { year: 2025, kind: "P" },
+        ],
+        rows: [
+          {
+            label: "Revenue",
+            values: ["$400.00M", "$620.00M"],
+            cells: [{ status: "verified" }, { status: "cited" }],
+          },
+        ],
+      },
+    });
+    renderFinancialsTab({ memoTyped: undefined, dealMetrics: undefined, dealMetricDiscrepancies: [] });
+
+    expect(await screen.findByText("$620.00M")).toBeInTheDocument();
+    // The corroborated actual is badged Verified; the forward projection stays Cited.
+    expect(screen.getByLabelText("Verified")).toBeInTheDocument();
+    expect(screen.getByLabelText("Cited")).toBeInTheDocument();
   });
 
   it("renders unit economics, retention, and sales-efficiency fields from the memo instead of the empty-states", () => {
