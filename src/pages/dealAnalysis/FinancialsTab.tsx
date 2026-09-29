@@ -496,28 +496,34 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
         <HeadlineMetricsCard metrics={dealMetrics} discrepancies={dealMetricDiscrepancies} />
       )}
 
-      {/* Financial Projections */}
+      {/* Financial Projections — claims-driven grid (GET /deals/{id}/financials →
+          projections), replacing the unwritten memo_json path. */}
       {(() => {
-        const grid = d?.financialGrid;
-        if (!grid || grid.provenance === "missing" || !grid.value) {
+        const proj = financialsQuery.data?.projections;
+        if (!proj || proj.rows.length === 0) {
           return (
             <SectionCard eyebrow="Financial Projections" icon={<LineChart className="h-4 w-4 text-[color:var(--rev-primary)]" />}>
               <UnbackedSection
                 icon={LineChart}
                 title="Financial projections not yet extracted"
-                description="Year-by-year actuals, management estimates, and projections will appear here once the source document is processed."
+                description="Year-by-year actuals, management estimates, and projections appear here when the deal's documents report figures across multiple periods."
               />
             </SectionCard>
           );
         }
-        const gv = grid.value as { columns: Array<{ year: number; kind: "A" | "E" | "P" }>; rows: Array<{ metric: string; values: (number | null)[]; unit: string }> };
-        const kindLabel = (kind: "A" | "E" | "P") => kind === "A" ? "Actual" : kind === "E" ? "Mgmt est." : "Projected";
+        const kindLabel = (kind: "A" | "E" | "P") =>
+          kind === "E" ? "Mgmt est." : kind === "P" ? "Projected" : "Actual";
+        // Actuals read as neutral; a forward column (estimate/projected) is tinted.
+        const kindStyle = (kind: "A" | "E" | "P") =>
+          kind === "A"
+            ? { background: "var(--rev-tint-neutral)", color: "var(--rev-text-6)" }
+            : { background: "var(--rev-tint-success)", color: "var(--rev-success)" };
         return (
           <SectionCard
             eyebrow="Financial Projections"
             icon={<LineChart className="h-4 w-4 text-[color:var(--rev-primary)]" />}
             action={
-              <span className="text-[11px] text-[color:var(--rev-text-7)]">Management case — unaudited forward estimates</span>
+              <span className="text-[11px] text-[color:var(--rev-text-7)]">From the deal&apos;s reported figures — unaudited</span>
             }
           >
             <div className="overflow-hidden rounded-lg border border-[color:var(--rev-border-subtle)]">
@@ -526,12 +532,12 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
                   <DenseTableHeaderRow>
                     <DenseTableRow>
                       <DenseTableHead>Metric</DenseTableHead>
-                      {gv.columns.map((col, ci) => (
+                      {proj.columns.map((col, ci) => (
                         <DenseTableHead key={ci} className="text-right">
-                          {col.year}{" "}
+                          FY{col.year}{" "}
                           <span
                             className="ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold normal-case"
-                            style={{ background: "var(--rev-tint-success)", color: "var(--rev-success)" }}
+                            style={kindStyle(col.kind)}
                           >
                             {kindLabel(col.kind)}
                           </span>
@@ -540,21 +546,18 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
                     </DenseTableRow>
                   </DenseTableHeaderRow>
                   <DenseTableBody>
-                    {gv.rows.map((row, ri) => (
+                    {proj.rows.map((row, ri) => (
                       <DenseTableRow key={ri}>
-                        <DenseTableCell className="font-medium text-[color:var(--rev-text-1)]">{row.metric}</DenseTableCell>
+                        <DenseTableCell className="font-medium text-[color:var(--rev-text-1)]">{row.label}</DenseTableCell>
                         {row.values.map((val, vi) => (
                           <DenseTableCell key={vi} numeric>
-                            {val == null ? "—" : row.unit === "usdCents" ? formatUsdShort(val) : row.unit === "pct" ? formatBpAsPct(val) : row.unit === "ratio" ? formatRatio(val) : val.toLocaleString()}
+                            {val ?? "—"}
                           </DenseTableCell>
                         ))}
                       </DenseTableRow>
                     ))}
                   </DenseTableBody>
                 </DenseTable>
-              </div>
-              <div className="flex items-center justify-end border-t border-[color:var(--rev-border-subtle)] bg-[color:var(--rev-tint-neutral)] px-4 py-2">
-                <ProvenanceAction sourced={grid} fieldLabel="Financial Projections" />
               </div>
             </div>
           </SectionCard>

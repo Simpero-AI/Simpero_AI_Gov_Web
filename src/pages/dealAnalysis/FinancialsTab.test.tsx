@@ -108,17 +108,33 @@ describe("FinancialsTab", () => {
     expect(screen.getByRole("button", { name: "Discrepancy on revenueLatestUsd" })).toBeInTheDocument();
   });
 
-  it("renders the real financialGrid, unit economics, retention, and sales-efficiency fields from the memo instead of the empty-states", () => {
-    mockFetchFinancials.mockResolvedValue(EMPTY_FINANCIALS);
-    const memo = buildE2eDeliverableMemo();
-    renderFinancialsTab({ memoTyped: memo, dealMetrics: undefined, dealMetricDiscrepancies: [] });
+  it("renders a claims-driven Financial Projections grid from the financials view", async () => {
+    // Financial Projections is now claims-driven (GET /deals/{id}/financials → projections),
+    // not the memo. A grid with an actual + a management-estimate column renders as a table.
+    mockFetchFinancials.mockResolvedValue({
+      ...EMPTY_FINANCIALS,
+      projections: {
+        columns: [
+          { year: 2023, kind: "A" },
+          { year: 2024, kind: "E" },
+        ],
+        rows: [{ label: "Revenue", values: ["$400.00M", "$465.60M"] }],
+      },
+    });
+    renderFinancialsTab({ memoTyped: undefined, dealMetrics: undefined, dealMetricDiscrepancies: [] });
 
-    expect(screen.getByText("Revenue (ARR)")).toBeInTheDocument();
-    expect(screen.getByText(formatUsdShort(12_000_000))).toBeInTheDocument();
-    expect(screen.getByText(formatUsdShort(24_000_000))).toBeInTheDocument();
+    expect(await screen.findByText("Revenue")).toBeInTheDocument();
+    expect(screen.getByText("$400.00M")).toBeInTheDocument();
+    expect(screen.getByText("$465.60M")).toBeInTheDocument();
     expect(screen.getByText("Actual")).toBeInTheDocument();
     expect(screen.getByText("Mgmt est.")).toBeInTheDocument();
     expect(screen.queryByText("Financial projections not yet extracted")).not.toBeInTheDocument();
+  });
+
+  it("renders unit economics, retention, and sales-efficiency fields from the memo instead of the empty-states", () => {
+    mockFetchFinancials.mockResolvedValue(EMPTY_FINANCIALS);
+    const memo = buildE2eDeliverableMemo();
+    renderFinancialsTab({ memoTyped: memo, dealMetrics: undefined, dealMetricDiscrepancies: [] });
 
     expect(screen.getByText("LTV/CAC")).toBeInTheDocument();
     expect(screen.getByText("4.2x")).toBeInTheDocument();
