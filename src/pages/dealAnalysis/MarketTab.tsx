@@ -159,38 +159,19 @@ function SizingCard({ fact }: { fact: MarketFact }) {
   );
 }
 
-function AssertionRow({ fact }: { fact: MarketFact }) {
-  return (
-    <div className="rounded-lg border border-[color:var(--rev-border-subtle)] p-4">
-      <p className="text-[13.5px] leading-[1.65] text-[color:var(--rev-text-2)]">{fact.value}</p>
-      <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-[color:var(--rev-border-subtle)] pt-2.5">
-        <span className="truncate text-[11.5px] text-[color:var(--rev-text-5)]">
-          {/* label is the row header the backend computes: the named entity, or a
-              class-appropriate fallback ("The market" / "Competitor") when the
-              assertion has no entity. Rendering the raw `entity` here dropped that
-              fallback and showed a bare em-dash for every unattributed assertion. */}
-          {fact.label || "—"}
-        </span>
-        <span className="flex shrink-0 items-center gap-2.5">
-          <Citation citation={fact.citation} sourceUrl={fact.sourceUrl} />
-          <TrustStatusPill status={fact.status} />
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// Competitors as a scannable TABLE (name · notes · source) rather than a stack of
-// paragraphs: the named competitor is the scan target, the assertion is a clamped
-// note, and the source + trust status sit in their own column. `label` is the
-// backend-computed row header (the competitor name, or "Competitor" when unnamed).
-function CompetitorTable({ facts }: { facts: MarketFact[] }) {
+// A scannable TABLE (subject · notes · source) for the qualitative market sections,
+// rather than a stack of paragraphs: the named subject (competitor / market segment)
+// is the scan target, the assertion is a clamped note, and the source + trust status
+// sit in their own column. `label` is the backend-computed row header (the entity, or
+// a class fallback like "Competitor" / "The market" when unnamed). `subjectHeader`
+// labels the first column per section.
+function AssertionTable({ facts, subjectHeader }: { facts: MarketFact[]; subjectHeader: string }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-left text-[13px]">
         <thead>
           <tr className="border-b border-[color:var(--rev-border)] text-[10.5px] uppercase tracking-[0.4px] text-[color:var(--rev-text-6)]">
-            <th scope="col" className="py-2 pr-4 font-medium">Competitor</th>
+            <th scope="col" className="py-2 pr-4 font-medium">{subjectHeader}</th>
             <th scope="col" className="py-2 pr-4 font-medium">Notes</th>
             <th scope="col" className="py-2 font-medium">Source</th>
           </tr>
@@ -425,11 +406,7 @@ export function MarketTab({ dealId }: MarketTabProps) {
             description="No market-structure, sizing-narrative, or demand-driver assertions were extracted from this deal's materials."
           />
         ) : (
-          <div className="space-y-3">
-            {definition.map((f, i) => (
-              <AssertionRow key={i} fact={f} />
-            ))}
-          </div>
+          <AssertionTable facts={definition} subjectHeader="Segment" />
         )}
       </SectionCard>
 
@@ -442,7 +419,7 @@ export function MarketTab({ dealId }: MarketTabProps) {
             description="No assertions about competitors, market share, or competitive advantage were extracted from this deal's materials."
           />
         ) : (
-          <CompetitorTable facts={competition} />
+          <AssertionTable facts={competition} subjectHeader="Competitor" />
         )}
       </SectionCard>
 
