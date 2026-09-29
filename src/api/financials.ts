@@ -46,6 +46,21 @@ export interface FinancialTrendMetric {
   points: FinancialTrendPoint[]; // ascending by year; only metrics with >= 2 years appear
 }
 
+export interface FinancialProjectionColumn {
+  year: number;
+  kind: "A" | "E" | "P"; // Actual / management Estimate / Projected
+}
+
+export interface FinancialProjectionRow {
+  label: string; // metric name, e.g. "Revenue"
+  values: (string | null)[]; // aligned to columns; pre-formatted figure or null (never interpolated)
+}
+
+export interface FinancialProjections {
+  columns: FinancialProjectionColumn[];
+  rows: FinancialProjectionRow[];
+}
+
 export interface FinancialsView {
   incomeStatement: FinancialFact[];
   profitability: FinancialFact[];
@@ -54,6 +69,8 @@ export interface FinancialsView {
   operating: FinancialFact[];
   /** Multi-year series per headline P&L metric, from the claims spine. */
   trend?: FinancialTrendMetric[];
+  /** Year-by-year grid (actuals/estimates/projections) from the claims spine; null below two periods. */
+  projections?: FinancialProjections | null;
 }
 
 export const financialsQueryKey = (dealId: string) => ["deals", "financials", dealId] as const;
