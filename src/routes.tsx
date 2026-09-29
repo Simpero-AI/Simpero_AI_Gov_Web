@@ -15,6 +15,7 @@ import SharedMemo from "./pages/SharedMemo";
 import MethodologyDashboard from "./pages/MethodologyDashboard";
 import ProductUsage from "./pages/ProductUsage";
 import DealDetail from "./pages/DealDetail";
+import DealReport from "./pages/DealReport";
 import AnalysisRedirect from "./pages/AnalysisRedirect";
 import ScreeningRedirect from "./pages/ScreeningRedirect";
 import MandateScorecard from "./pages/MandateScorecard";
@@ -79,6 +80,12 @@ function DealAnalysisRoute() {
   const params = useParams();
   if (!params.dealId) return <NotFound />;
   return <DealDetail dealId={params.dealId} tab="analysis" />;
+}
+
+function DealReportRoute() {
+  const params = useParams();
+  if (!params.dealId) return <NotFound />;
+  return <DealReport dealId={params.dealId} />;
 }
 
 function LegacyAnalysisRedirectRoute() {
@@ -171,6 +178,7 @@ export const routes: RouteObject[] = [
           { path: "/screening", element: <ScreeningRedirect /> },
           { path: "/deals/:dealId/screening", element: <DealScreeningRoute /> },
           { path: "/deals/:dealId/analysis/:sub?", element: <DealAnalysisRoute /> },
+          { path: "/deals/:dealId/report", element: <DealReportRoute /> },
           { path: "/analysis", element: <AnalysisRedirect /> },
           // Permanent redirect for the pre-Phase-4 route — NewDealWizard still
           // navigates here unconditionally on submit (frozen, not touched by

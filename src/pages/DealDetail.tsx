@@ -390,9 +390,11 @@ function AnalysisTabs({
             <ScrollText className="mr-1.5 h-4 w-4" />
             Logs
           </Button>
-          <Button variant="outline" disabled title="Coming soon">
-            <Download className="mr-1.5 h-4 w-4" />
-            Export PDF
+          <Button variant="outline" asChild title="Open a print-ready report and save it as PDF">
+            <Link to={`/deals/${dealId}/report`} target="_blank" rel="noopener noreferrer">
+              <Download className="mr-1.5 h-4 w-4" />
+              Export PDF
+            </Link>
           </Button>
         </div>
       </div>
