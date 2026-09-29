@@ -97,3 +97,46 @@ export function TrustStatusPill({ status }: { status: string }) {
     </span>
   );
 }
+
+// Compact variant for dense grids (the 3-Year Trend and Projections cells), where
+// a full pill per figure would overwhelm the numbers. A single coloured dot in the
+// SAME palette as the pill, with the pill's plain-language meaning on hover and an
+// aria-label for screen readers, so the same corroboration ladder reads identically
+// on a per-cell basis. Render it only when a figure has a status.
+export function TrustStatusDot({ status }: { status: string }) {
+  const s = trustStatusMeta(status);
+  return (
+    <span
+      title={s.title}
+      aria-label={s.label}
+      role="img"
+      className="ml-1 inline-block size-1.5 shrink-0 rounded-full align-middle"
+      style={{ background: s.color }}
+    />
+  );
+}
+
+// The dots' key, shown once beneath a grid that uses TrustStatusDot so the colours
+// are legible without hovering every cell. Fixed to the statuses that actually
+// appear on financial figures, in ladder order.
+export function TrustStatusDotLegend({ className }: { className?: string }) {
+  const shown = ["verified", "partially_verified", "cited", "conflicted"] as const;
+  return (
+    <div
+      className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-[color:var(--rev-text-6)] ${className ?? ""}`}
+    >
+      {shown.map((status) => {
+        const s = trustStatusMeta(status);
+        return (
+          <span key={status} className="inline-flex items-center gap-1" title={s.title}>
+            <span
+              className="inline-block size-1.5 rounded-full"
+              style={{ background: s.color }}
+            />
+            {s.label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}

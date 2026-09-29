@@ -42,7 +42,11 @@ import {
   type FinancialFact,
   type FinancialTrendMetric,
 } from "@/api/financials";
-import { TrustStatusPill } from "@/components/mvp/primitives/TrustStatusPill";
+import {
+  TrustStatusDot,
+  TrustStatusDotLegend,
+  TrustStatusPill,
+} from "@/components/mvp/primitives/TrustStatusPill";
 import type { ICMemoResult, DealMetrics, MetricDiscrepancy, MetricValue, Sourced } from "@shared/simperoTypes";
 
 interface FinancialsTabProps {
@@ -332,22 +336,27 @@ function TrendTable({ trend }: { trend: FinancialTrendMetric[] }) {
         </DenseTableHeaderRow>
         <DenseTableBody>
           {trend.map((m) => {
-            const byYear = new Map(m.points.map((p) => [p.year, p.value]));
+            const byYear = new Map(m.points.map((p) => [p.year, p]));
             return (
               <DenseTableRow key={m.label}>
                 <DenseTableCell className="font-medium text-[color:var(--rev-text-1)]">
                   {m.label}
                 </DenseTableCell>
-                {years.map((y) => (
-                  <DenseTableCell key={y} className="text-right tabular-nums">
-                    {byYear.get(y) ?? "—"}
-                  </DenseTableCell>
-                ))}
+                {years.map((y) => {
+                  const point = byYear.get(y);
+                  return (
+                    <DenseTableCell key={y} className="text-right tabular-nums">
+                      {point ? point.value : "—"}
+                      {point?.status ? <TrustStatusDot status={point.status} /> : null}
+                    </DenseTableCell>
+                  );
+                })}
               </DenseTableRow>
             );
           })}
         </DenseTableBody>
       </DenseTable>
+      <TrustStatusDotLegend className="mt-2 px-1" />
     </div>
   );
 }
@@ -549,17 +558,22 @@ export function FinancialsTab({ dealId, memoTyped, dealMetrics, dealMetricDiscre
                     {proj.rows.map((row, ri) => (
                       <DenseTableRow key={ri}>
                         <DenseTableCell className="font-medium text-[color:var(--rev-text-1)]">{row.label}</DenseTableCell>
-                        {row.values.map((val, vi) => (
-                          <DenseTableCell key={vi} numeric>
-                            {val ?? "—"}
-                          </DenseTableCell>
-                        ))}
+                        {row.values.map((val, vi) => {
+                          const cellStatus = row.cells?.[vi]?.status;
+                          return (
+                            <DenseTableCell key={vi} numeric>
+                              {val ?? "—"}
+                              {cellStatus ? <TrustStatusDot status={cellStatus} /> : null}
+                            </DenseTableCell>
+                          );
+                        })}
                       </DenseTableRow>
                     ))}
                   </DenseTableBody>
                 </DenseTable>
               </div>
             </div>
+            <TrustStatusDotLegend className="mt-2 px-1" />
           </SectionCard>
         );
       })()}
